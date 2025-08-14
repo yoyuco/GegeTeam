@@ -1,0 +1,8 @@
+// tsconfig.json  (GỐC - CHỈ GIỮ REFERENCES)
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

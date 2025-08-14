@@ -1,0 +1,11 @@
+// tsconfig.node.json  (CHO FILE CẤU HÌNH VITE/Vitest, v.v.)
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts"]
+}
