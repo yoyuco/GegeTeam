@@ -5,10 +5,5 @@ import path from 'node:path'
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
-  resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
-  },
-  server: {
-    proxy: { '/functions': { target: 'http://127.0.0.1:54321', changeOrigin: true } }
-  }
+  resolve: { alias: { '@': path.resolve(__dirname, 'src') } }
 })

@@ -1,43 +1,36 @@
-// src/stores/auth.ts
+// path: src/stores/auth.ts
 import { defineStore } from 'pinia'
 import { supabase } from '@/lib/supabase'
-import type { User, Session } from '@supabase/supabase-js'
 
 export const useAuth = defineStore('auth', {
   state: () => ({
-    user: null as User | null,
-    subscription: null as any, // giữ ref để huỷ nếu cần
+    user: null as any,
+    session: null as any,
+    loading: false
   }),
-
   actions: {
     async init() {
-      // lấy user hiện tại
-      const { data: { user } } = await supabase.auth.getUser()
-      this.user = user ?? null
+      // Khởi động: lấy session đã lưu
+      const { data: { session } } = await supabase.auth.getSession()
+      this.session = session
+      this.user = session?.user ?? null
 
-      // lắng nghe thay đổi session (KHÔNG trả về giá trị)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (_event, session: Session | null) => {
-          this.user = session?.user ?? null
-        }
-      )
-      this.subscription = subscription
-    },
-
-    async signIn(email: string, password: string) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      this.user = data.user
+      // Lắng nghe thay đổi đăng nhập/đăng xuất
+      supabase.auth.onAuthStateChange((_event, session) => {
+        this.session = session
+        this.user = session?.user ?? null
+      })
     },
 
     async signOut() {
-      await supabase.auth.signOut()
-      this.user = null
-    },
-
-    dispose() {
-      this.subscription?.unsubscribe?.()
-      this.subscription = null
-    },
-  },
+      this.loading = true
+      try {
+        await supabase.auth.signOut()
+      } finally {
+        this.loading = false
+        // về trang đăng nhập
+        window.location.href = '/login'
+      }
+    }
+  }
 })
