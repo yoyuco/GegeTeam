@@ -22,3 +22,25 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+
+.env*
+!.env.example
+
+# TypeScript incremental build caches
+*.tsbuildinfo
+
+# Chọn pnpm -> chặn lockfile khác
+package-lock.json
+yarn.lock
+npm-shrinkwrap.json
+
+# Secrets/phím riêng lẻ (phòng lỡ tạo ra)
+client_secret_*.json
+*.pem
+*.p12
+
+# Supabase local artifacts (không cần commit)
+supabase/.branches
+supabase/.temp
