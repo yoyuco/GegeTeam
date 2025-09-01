@@ -1,16 +1,16 @@
+/// <reference path="../deno-shim.d.ts" />
+/// <reference lib="dom" />
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// deno run -A --watch=static/,src/ dev.ts (nếu chạy local với deno)
 
-Deno.serve((req: Request): Response => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+Deno.serve(async (req) => {
+  try {
+    // TODO: query VIEW/MV như farmer_kpi/daily_totals
+    return new Response(JSON.stringify({ ok: true, at: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 })
   }
-  const now = new Date().toISOString()
-  return new Response(`KPI recalculated at ${now}`, {
-    headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
-  })
 })

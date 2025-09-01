@@ -10,12 +10,15 @@
             <RouterLink to="/" class="block">🏠 Dashboard</RouterLink>
             <RouterLink to="/sales" class="block">💰 Bán hàng</RouterLink>
             <RouterLink to="/orders" class="block">📦 Đơn hàng</RouterLink>
+
+            <!-- 🔥 MỤC MỚI -->
+            <RouterLink to="/service-boosting" class="block">🚀 Service – Boosting</RouterLink>
+
             <RouterLink to="/customers" class="block">👥 Khách hàng</RouterLink>
             <RouterLink to="/employees" class="block">🧑‍💼 Nhân viên</RouterLink>
             <RouterLink to="/tasks" class="block">🗂️ Kanban</RouterLink>
             <RouterLink to="/kpi" class="block">📈 KPI</RouterLink>
 
-            <!-- Nếu có user => nút Đăng xuất ; ngược lại => link Đăng nhập -->
             <button
               v-if="auth.user"
               class="block text-left text-red-600 hover:underline"
@@ -26,9 +29,22 @@
             <RouterLink v-else to="/login" class="block">🔐 Đăng nhập</RouterLink>
           </nav>
 
-          <!-- hiển thị email user -->
-          <div v-if="auth.user" class="mt-6 text-xs text-neutral-500 break-all">
-            {{ auth.user.email }}
+          <!-- Thông tin người dùng -->
+          <div v-if="auth.user" class="mt-6 space-y-1">
+            <!-- Roles -->
+            <div v-if="roleLabels.length" class="flex flex-wrap gap-1">
+              <n-tag v-for="r in roleLabels" :key="r" size="small" round>{{ r }}</n-tag>
+            </div>
+
+            <!-- DisplayName -> full_name (metadata) -> email -->
+            <div class="text-sm font-medium">
+              {{ displayName || auth.user.user_metadata?.full_name || auth.user.email }}
+            </div>
+
+            <!-- Email -->
+            <div class="text-xs text-neutral-500 break-all">
+              {{ auth.user.email }}
+            </div>
           </div>
         </aside>
 
@@ -42,18 +58,73 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { NConfigProvider, NMessageProvider, createDiscreteApi } from 'naive-ui'
+import { ref, watch } from 'vue'
+import { NConfigProvider, NMessageProvider, NTag, createDiscreteApi } from 'naive-ui'
 import { useAuth } from '@/stores/auth'
+import { supabase } from '@/lib/supabase'
 
 const router = useRouter()
 const auth = useAuth()
-
-// ✅ Dùng discrete api để có `message` mà không cần provider bọc *bên trên* component hiện tại
 const { message } = createDiscreteApi(['message'])
+
+/** UI state */
+const displayName = ref<string | null>(null)
+const roleLabels = ref<string[]>([])
+
+/**
+ * Load thông tin phụ của user (display_name, roles)
+ */
+async function loadUserExtras(uid: string) {
+  displayName.value = null
+  roleLabels.value = []
+
+  // B1: Display name từ profiles
+  const { data: prof, error: profileErr } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', uid)
+    .maybeSingle()
+
+  if (!profileErr) displayName.value = prof?.display_name ?? null
+
+  // B2: role_id từ user_roles
+  const { data: urs } = await supabase
+    .from('user_roles')
+    .select('role_id')
+    .eq('user_id', uid)
+
+  const roleIds = (urs ?? []).map(r => r.role_id).filter(Boolean)
+  if (roleIds.length === 0) { roleLabels.value = []; return }
+
+  // B3: tên role từ roles
+  const { data: rs } = await supabase
+    .from('roles')
+    .select('id, name, code')
+    .in('id', roleIds)
+
+  const set = new Set<string>()
+  for (const r of rs ?? []) {
+    if (r?.name) set.add(r.name)
+    else if (r?.code) set.add(r.code)
+  }
+  roleLabels.value = Array.from(set)
+}
+
+/** Đăng nhập/đăng xuất -> nạp lại thông tin phụ */
+watch(
+  () => auth.user?.id,
+  (uid) => {
+    if (uid) loadUserExtras(uid)
+    else {
+      displayName.value = null
+      roleLabels.value = []
+    }
+  },
+  { immediate: true }
+)
 
 const logout = async () => {
   try {
-    // Đảm bảo trong store có hàm signOut()
     await auth.signOut()
     message.success('Đã đăng xuất')
   } catch (e: any) {

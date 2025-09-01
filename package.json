@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.55.0",
     "chart.js": "^4.5.0",
     "naive-ui": "^2.42.0",
     "pinia": "^3.0.3",
@@ -18,11 +17,13 @@
     "vue-router": "^4"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.55.0",
     "@tailwindcss/vite": "^4.1.11",
     "@types/node": "^24.2.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
     "tailwindcss": "^4.1.12",
+    "tsx": "^4.20.4",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vue-tsc": "^3.0.5"

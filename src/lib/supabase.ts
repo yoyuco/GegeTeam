@@ -12,6 +12,6 @@ export const supabase = createClient(url, anon, {
     storageKey: 'gege-auth'      // key riêng để tránh xung đột
   },
   global: {
-    headers: { 'x-application-name': 'my-admin' }
+    headers: { 'x-application-name': 'gegeteam' }
   }
 })

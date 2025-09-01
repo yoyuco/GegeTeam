@@ -130,6 +130,15 @@
           label-placement="top"
           @keyup.enter.prevent="handleSignup"
         >
+          <n-form-item label="Tên hiển thị" path="displayName">
+            <n-input
+              v-model:value="signup.displayName"
+              type="text"
+              placeholder="Ví dụ: Gege Team"
+              :input-props="{ autocomplete: 'name' }"
+            />
+          </n-form-item>
+
           <n-form-item label="Email" path="email">
             <n-input
               v-model:value="signup.email"
@@ -188,7 +197,7 @@ import { useAuth } from '@/stores/auth'
 
 type Provider = 'google' | 'github'
 type SigninModel = { email: string; password: string }
-type SignupModel = { email: string; password: string }
+type SignupModel = { displayName: string; email: string; password: string }
 
 const router = useRouter()
 const route = useRoute()
@@ -211,7 +220,7 @@ const rememberEmail = ref(false)
 
 // models
 const signin = ref<SigninModel>({ email: '', password: '' })
-const signup = ref<SignupModel>({ email: '', password: '' })
+const signup = ref<SignupModel>({ displayName: '', email: '', password: '' })
 
 // form refs
 const formSignin = ref<FormInst | null>(null)
@@ -223,6 +232,7 @@ const rulesSignin: FormRules = {
   password: [{ required: true, message: 'Vui lòng nhập mật khẩu', trigger: 'blur' }]
 }
 const rulesSignup: FormRules = {
+  displayName: [{ required: true, message: 'Vui lòng nhập tên hiển thị', trigger: 'blur' }],
   email: [{ required: true, message: 'Vui lòng nhập email', trigger: 'blur' }],
   password: [{ required: true, message: 'Ít nhất 6 ký tự', trigger: 'blur' }]
 }
@@ -283,12 +293,25 @@ async function handleSignup() {
   await formSignup.value?.validate?.()
   loading.value = true
   try {
+    // Lấy display_name (ưu tiên người dùng nhập; fallback phần trước @ của email)
+    const displayName =
+      signup.value.displayName?.trim() ||
+      signup.value.email.trim().split('@')[0] ||
+      'User'
+
     const { data, error } = await supabase.auth.signUp({
       email: signup.value.email.trim(),
-      password: signup.value.password
+      password: signup.value.password,
+      options: {
+        // 🚀 Gửi metadata để trigger DB tạo profiles + gán role mặc định 'farmer'
+        data: { display_name: displayName },
+        // Nếu có trang callback, mở chú thích dòng dưới:
+        // emailRedirectTo: new URL('/auth/callback', window.location.origin).toString()
+      }
     })
     if (error) throw error
-    message?.success?.('Tạo tài khoản thành công! Vui lòng kiểm tra email để xác minh.')
+
+    message?.success?.('Tạo tài khoản thành công! Vui lòng kiểm tra email để xác minh (nếu cần).')
     // chuyển sang tab đăng nhập
     tab.value = 'signin'
     signin.value.email = signup.value.email
@@ -310,7 +333,6 @@ async function oauth(provider: Provider) {
       options: { redirectTo }
     })
     if (error) throw error
-    // Với PKCE/popup, Supabase sẽ tự điều hướng.
   } catch (err: any) {
     console.error(err)
     message?.error?.(err?.message || 'Không thể đăng nhập với OAuth')
