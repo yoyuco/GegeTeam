@@ -1,4 +1,3 @@
-<!-- path: src/pages/AuthCallback.vue -->
 <template>
     <div class="min-h-screen grid place-items-center">
       <div class="text-center text-neutral-600 dark:text-neutral-300">
@@ -17,7 +16,7 @@
   const route = useRoute()
   
   onMounted(async () => {
-    // Supabase sẽ tự đọc token trên URL (vì detectSessionInUrl: true)
+    // Supabase sẽ tự đọc token trên URL
     setTimeout(async () => {
       const { data: { session } } = await supabase.auth.getSession()
       const redirect = (route.query.redirect as string) || '/'
@@ -25,4 +24,3 @@
     }, 600)
   })
   </script>
-  
