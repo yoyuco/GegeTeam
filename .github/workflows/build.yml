@@ -10,21 +10,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
+      # Cài pnpm TRƯỚC để setup-node có thể dùng cache: 'pnpm'
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'   # giờ pnpm đã có, cache hoạt động
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -32,8 +36,7 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      # (tuỳ chọn) lưu artifact để debug
-      - name: Upload dist
+      - name: Upload dist (artifact)
         if: success()
         uses: actions/upload-artifact@v4
         with:
