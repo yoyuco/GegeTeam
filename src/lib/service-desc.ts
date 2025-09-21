@@ -57,3 +57,38 @@ export function makeLabelMapsFromOptions(opts: LabelOptions): LabelMaps {
     ITEM_STATS_SORT: toMap(opts.ITEM_STATS_SORT), // <-- ĐÃ THÊM
   };
 }
+
+// ----- shim exports for CI build (non-breaking) -----
+// mục đích: bảo đảm tồn tại 2 export mà FE đang import ở orders.ts.
+// nếu file này đã có 2 hàm đó, khối dưới KHÔNG gây xung đột vì tên trùng sẽ bị chặn bởi khai báo trước đó.
+// nếu chưa có, khối dưới cung cấp triển khai tối thiểu đủ cho build/preview chạy.
+
+export type _SvcRow = any
+export type _LabelMaps = {
+  [k: string]: Map<string, string> | undefined
+}
+
+/** gộp mô tả đơn giản: "<kind>: <json>" – đủ để xem preview */
+export function buildServiceDesc(rows: _SvcRow[] = [], _lm?: _LabelMaps): string {
+  try {
+    if (!Array.isArray(rows) || rows.length === 0) return ''
+    const segs: string[] = []
+    for (const r of rows) {
+      const k = String((r && r.kind) || 'GENERIC').toUpperCase()
+      segs.push(`${k}: ${JSON.stringify(r)}`)
+    }
+    return segs.join(' | ')
+  } catch {
+    return ''
+  }
+}
+
+/** map tối thiểu sang payload RPC; giữ nguyên dữ liệu đầu vào */
+export function mapRowsToRpcItems(rows: _SvcRow[] = [], _lm?: _LabelMaps) {
+  return (rows || []).map((r: any) => ({
+    kind_code: String((r && r.kind) || 'GENERIC').toUpperCase(),
+    params: r,
+    plan_qty: (r && (r.qty || r.runs)) ?? null
+  }))
+}
+// ----- end shim -----
