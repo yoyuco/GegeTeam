@@ -19,7 +19,17 @@
       </template>
 
       <template v-else>
-        <n-form
+        <div v-if="auth.loading" class="text-center p-4 text-neutral-500">
+          Đang kiểm tra quyền...
+        </div>
+        <div v-else-if="!canCreateOrder">
+          <n-alert type="error" title="Không có quyền">
+            Bạn không có quyền tạo đơn hàng trong khu vực này.
+          </n-alert>
+        </div>
+
+       <n-form
+          v-else 
           ref="formRef"
           :model="form"
           :rules="rules"
@@ -30,7 +40,6 @@
         >
           <n-divider title-placement="center">Bán Service - Boosting</n-divider>
 
-          <!-- Loại hình dịch vụ -->
           <n-form-item path="service_type">
             <template #label><span :id="lid('service_type')">Loại hình dịch vụ</span></template>
             <n-radio-group
@@ -45,7 +54,6 @@
             </n-radio-group>
           </n-form-item>
 
-          <!-- Nguồn bán -->
           <n-form-item path="channel_code">
             <template #label><span :id="lid('channel')">Nguồn bán</span></template>
             <n-auto-complete
@@ -61,7 +69,6 @@
             />
           </n-form-item>
 
-          <!-- Tên khách hàng -->
           <n-form-item path="customer_name">
             <template #label><span :id="lid('customer_name')">Tên khách hàng</span></template>
             <n-auto-complete
@@ -80,47 +87,44 @@
             />
           </n-form-item>
 
-          <!-- Btag / ID + Pwd -->
-          <template v-if="form.service_type === 'selfplay'">
-            <n-form-item path="btag">
-              <template #label><span :id="lid('btag')">Btag (selfplay)</span></template>
-              <n-auto-complete
-                v-model:value="form.btag"
-                :options="btagACOptions"
-                placeholder="VD: Player#1234 (lọc theo chuỗi con)"
-                :get-show="() => acOpen.btag"
-                :input-props="acInputProps('btag','btag','btag', lid('btag'))"
-                class="w-full"
-                @focus="() => { acOpen.btag = true; ensureBtgsForCustomer(); }"
-                @blur="() => acOpen.btag = false"
-                @update:value="(v:string)=> (search.btag = v)"
+          <n-form-item 
+            v-if="form.customer_name" 
+            :label="form.service_type === 'selfplay' ? 'Chọn Btag' : 'Chọn Tài khoản Login'" 
+            path="selectedAccountId"
+          >
+            <div class="w-full space-y-3">
+              <n-select
+                v-model:value="form.selectedAccountId" 
+                filterable
+                placeholder="Chọn tài khoản đã lưu hoặc thêm mới..."
+                :options="accountOptions"
+                :loading="loadingAccounts"
               />
-            </n-form-item>
-          </template>
-          <template v-else>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <n-form-item path="login_id">
-                <template #label><span :id="lid('login_id')">ID đăng nhập (pilot)</span></template>
-                <n-input
-                  v-model:value="form.login_id"
-                  placeholder="Login ID"
-                  :input-props="{ id: fid('login_id'), name: 'login_id', autocomplete: 'username', 'aria-labelledby': lid('login_id') }"
-                />
-              </n-form-item>
-              <n-form-item path="login_pwd">
-                <template #label><span :id="lid('login_pwd')">Mật khẩu (pilot)</span></template>
-                <n-input
-                  v-model:value="form.login_pwd"
-                  type="password"
-                  show-password-on="mousedown"
-                  placeholder="********"
-                  :input-props="{ id: fid('login_pwd'), name: 'login_pwd', autocomplete: 'current-password', 'aria-labelledby': lid('login_pwd') }"
-                />
-              </n-form-item>
-            </div>
-          </template>
 
-          <!-- GÓI DỊCH VỤ -->
+              <div v-if="isAddingNewAccount" class="p-3 border border-neutral-200/60 rounded-lg">
+                <div class="grid gap-x-4" :class="form.service_type === 'selfplay' ? 'grid-cols-2' : 'grid-cols-3'">
+                  <n-form-item label="Nhãn gợi nhớ" path="newAccount.label" :show-feedback="false">
+                    <n-input v-model:value="newAccount.label" placeholder="VD: Acc chính"/>
+                  </n-form-item>
+
+                  <template v-if="form.service_type === 'selfplay'">
+                    <n-form-item label="Btag mới" path="newAccount.btag" :show-feedback="false">
+                      <n-input v-model:value="newAccount.btag" placeholder="Player#1234"/>
+                    </n-form-item>
+                  </template>
+                  <template v-else>
+                    <n-form-item label="Login ID mới" path="newAccount.login_id" :show-feedback="false">
+                      <n-input v-model:value="newAccount.login_id" placeholder="Login ID"/>
+                    </n-form-item>
+                    <n-form-item label="Mật khẩu mới" path="newAccount.login_pwd" :show-feedback="false">
+                      <n-input v-model:value="newAccount.login_pwd" type="password" show-password-on="mousedown" placeholder="••••••"/>
+                    </n-form-item>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </n-form-item>
+
           <n-form-item>
             <template #label><span :id="lid('pkg')">Gói dịch vụ</span></template>
             <div class="space-y-2 w-full">
@@ -136,7 +140,6 @@
                 <n-radio-button value="BUILD">Build service</n-radio-button>
               </n-radio-group>
 
-              <!-- ghi chú cho gói hiện tại -->
               <n-input
                 v-model:value="form.package_note"
                 type="textarea"
@@ -147,71 +150,64 @@
             </div>
           </n-form-item>
 
-          <!-- ========== DỊCH VỤ ========== -->
           <n-form-item>
             <template #label><span :id="lid('svc')">Dịch vụ</span></template>
             <div class="space-y-3 w-full">
               <n-checkbox-group v-model:value="svc.selected" :max="16">
-                <div class="flex flex-wrap gap-3">
-                  <n-checkbox value="GENERIC">Generic</n-checkbox>
-                  <n-checkbox value="LEVELING">Leveling / Paragon</n-checkbox>
-                  <n-checkbox value="BOSS">Boss</n-checkbox>
-                  <n-checkbox value="PIT">The Pit</n-checkbox>
-                  <n-checkbox value="MATERIAL">Materials</n-checkbox>
-                  <n-checkbox value="MYTHIC">Mythic</n-checkbox>
-                  <n-checkbox value="MASTERWORKING">Masterworking</n-checkbox>
-                  <n-checkbox value="ALTARS">Altars of Lilith</n-checkbox>
-                  <n-checkbox value="RENOWN">Renown</n-checkbox>
-                  <n-checkbox value="NIGHTMARE">Nightmare</n-checkbox>
-                </div>
+                <div class="flex flex-wrap gap-4">
+                  <n-checkbox value="GENERIC" label="Generic" />
+                  <n-checkbox value="LEVELING" label="Leveling" />
+                  <n-checkbox value="THE_PIT" label="The Pit" /> <n-checkbox value="BOSS" label="Boss" />
+                  <n-checkbox value="MYTHIC" label="Mythic" />
+                  <n-checkbox value="MASTERWORKING" label="Masterworking" />
+                  <n-checkbox value="MATERIALS" label="Materials" />
+                  <n-checkbox value="INFERNAL_HORDES" label="Infernal Hordes" />
+                  <n-checkbox value="NIGHTMARE" label="Nightmare" />
+                  <n-checkbox value="RENOWN" label="Renown" />
+                  <n-checkbox value="ALTARS_OF_LILITH" label="Altars of Lilith" /> </div>
               </n-checkbox-group>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <!-- Generic -->
-                <div v-if="svc.selected.includes('GENERIC')">
-                  <div class="text-sm font-medium mb-1">Generic</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div v-if="svc.selected.includes('GENERIC')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Generic</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.generic.offers" :key="'g-'+i" class="flex items-center gap-2">
-                      <n-input v-model:value="row.desc" placeholder="Mô tả ngắn" />
+                    <div v-for="(row,i) in svc.generic.offers" :key="'g-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-input v-model:value="row.desc" placeholder="Mô tả ngắn" class="flex-grow" />
                       <n-button size="tiny" tertiary @click="removeGeneric(i)" :disabled="svc.generic.offers.length===1">Xoá</n-button>
                     </div>
                     <n-button size="tiny" tertiary @click="addGeneric()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Leveling -->
-                <div v-if="svc.selected.includes('LEVELING')">
-                  <div class="text-sm font-medium mb-1">Leveling / Paragon</div>
+                <div v-if="svc.selected.includes('LEVELING')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Leveling / Paragon</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.leveling.offers" :key="'lv-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.kind" :options="levelKinds" style="width:140px" />
-                      <n-input-number v-model:value="row.start" placeholder="Start" style="width:110px"/>
-                      <span>→</span>
-                      <n-input-number v-model:value="row.end" placeholder="End" style="width:110px"/>
+                    <div v-for="(row, i) in svc.leveling.offers" :key="'lv-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <div class="grid grid-cols-3 gap-3 flex-grow">
+                        <n-select v-model:value="row.kind" :options="levelKinds" />
+                        <n-input-number 
+                          v-model:value="row.start" 
+                          placeholder="Start"
+                          :min="1"
+                          :max="row.kind === 'PARAGON' ? 300 : 60"
+                        />
+                        <n-input-number
+                          v-model:value="row.end"
+                          placeholder="End"
+                          :min="1"
+                          :max="row.kind === 'PARAGON' ? 300 : 60"
+                        />
+                      </div>
                       <n-button size="tiny" tertiary @click="removeLv(i)" :disabled="svc.leveling.offers.length===1">Xoá</n-button>
                     </div>
                     <n-button size="tiny" tertiary @click="addLv()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Boss -->
-                <div v-if="svc.selected.includes('BOSS')">
-                  <div class="text-sm font-medium mb-1">Boss</div>
+                <div v-if="svc.selected.includes('THE_PIT')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">The Pit</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.boss.offers" :key="'boss-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.code" :options="bossDict" filterable placeholder="Chọn boss" style="width:220px"/>
-                      <n-input-number v-model:value="row.runs" :min="1" placeholder="Số lần" style="width:120px"/>
-                      <n-button size="tiny" tertiary @click="removeBoss(i)" :disabled="svc.boss.offers.length===1">Xoá</n-button>
-                    </div>
-                    <n-button size="tiny" tertiary @click="addBoss()">Thêm offer</n-button>
-                  </div>
-                </div>
-
-                <!-- The Pit -->
-                <div v-if="svc.selected.includes('PIT')">
-                  <div class="text-sm font-medium mb-1">The Pit</div>
-                  <div class="space-y-2">
-                    <div v-for="(row,i) in svc.pit.offers" :key="'pit-'+i" class="flex items-center gap-2">
+                    <div v-for="(row,i) in svc.pit.offers" :key="'pit-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
                       <n-select v-model:value="row.tier" :options="pitTierDict" filterable placeholder="Tier" style="width:160px"/>
                       <n-input-number v-model:value="row.runs" :min="1" placeholder="Số lần" style="width:120px"/>
                       <n-button size="tiny" tertiary @click="removePit(i)" :disabled="svc.pit.offers.length===1">Xoá</n-button>
@@ -220,44 +216,60 @@
                   </div>
                 </div>
 
-                <!-- Materials -->
-                <div v-if="svc.selected.includes('MATERIAL')">
-                  <div class="text-sm font-medium mb-1">Materials</div>
+                <div v-if="svc.selected.includes('BOSS')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Boss</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.materials.offers" :key="'mat-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.code" :options="materialDict" placeholder="Chọn material" style="width:260px"/>
-                      <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
-                      <n-button size="tiny" tertiary @click="removeMat(i)" :disabled="svc.materials.offers.length===1">Xoá</n-button>
+                    <div v-for="(row,i) in svc.boss.offers" :key="'boss-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-select v-model:value="row.code" :options="bossDict" filterable placeholder="Chọn boss" style="width:220px"/>
+                      <n-input-number v-model:value="row.runs" :min="1" placeholder="Số lần" style="width:120px"/>
+                      <n-button size="tiny" tertiary @click="removeBoss(i)" :disabled="svc.boss.offers.length===1">Xoá</n-button>
                     </div>
-                    <n-button size="tiny" tertiary @click="addMat()">Thêm offer</n-button>
+                    <n-button size="tiny" tertiary @click="addBoss()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Mythic -->
-                <div v-if="svc.selected.includes('MYTHIC')">
-                  <div class="text-sm font-medium mb-1">Mythic</div>
+                <div v-if="svc.selected.includes('MYTHIC')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Mythic</div>
                   <div class="space-y-2">
-                    <div v-for="(row, i) in svc.mythic.offers" :key="'myth-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.item" :options="mythicItemDict" filterable placeholder="Mythic item" style="width:280px"/>
-                      <n-select v-model:value="row.ga"   :options="mythicGADict"   placeholder="GA"          style="width:180px"/>
-                      <n-input
-                        v-if="isGARequest(row.ga)"
-                        v-model:value="row.ga_note"
-                        placeholder="Tên GA (Request)"
-                        style="width:220px"
-                      />
-                      <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
-                      <n-button size="tiny" tertiary @click="removeMyth(i)" :disabled="svc.mythic.offers.length===1">Xoá</n-button>
+                    <div v-for="(row, i) in svc.mythic.offers" :key="'myth-'+i" class="space-y-2 p-2 rounded-lg border border-neutral-200/60">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <n-select v-model:value="row.item" :options="mythicItemDict" filterable placeholder="Mythic item" style="width:280px"/>
+                        <n-select v-model:value="row.ga" :options="mythicGADict" placeholder="GA" style="width:180px"/>
+                        <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
+                        <n-button size="tiny" tertiary @click="removeMyth(i)" :disabled="svc.mythic.offers.length===1">Xoá</n-button>
+                      </div>
+                      <div v-if="getStatCountForGA(row.ga) > 0" class="pl-2 space-y-2">
+                        <div class="text-xs text-neutral-500">Chọn đúng {{ getStatCountForGA(row.ga) }} stat(s) yêu cầu</div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <n-select
+                            v-if="getStatCountForGA(row.ga) >= 1"
+                            v-model:value="row.stats[0]"
+                            :options="getFilteredStatOptions(i, 0)"
+                            filterable clearable placeholder="Stat 1"
+                          />
+                          <n-select
+                            v-if="getStatCountForGA(row.ga) >= 2"
+                            v-model:value="row.stats[1]"
+                            :options="getFilteredStatOptions(i, 1)"
+                            filterable clearable placeholder="Stat 2" :disabled="!row.stats[0]"
+                          />
+                          <n-select
+                            v-if="getStatCountForGA(row.ga) >= 3"
+                            v-model:value="row.stats[2]"
+                            :options="getFilteredStatOptions(i, 2)"
+                            filterable clearable placeholder="Stat 3" :disabled="!row.stats[1]"
+                          />
+                        </div>
+                      </div>
                     </div>
                     <n-button size="tiny" tertiary @click="addMyth()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Masterworking -->
-                <div v-if="svc.selected.includes('MASTERWORKING')">
-                  <div class="text-sm font-medium mb-1">Masterworking</div>
+                <div v-if="svc.selected.includes('MASTERWORKING')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Masterworking</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.masterwork.offers" :key="'mw-'+i" class="flex items-center gap-2">
+                    <div v-for="(row,i) in svc.masterwork.offers" :key="'mw-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
                       <n-select v-model:value="row.code" :options="masterworkDict" placeholder="Loại" style="width:200px"/>
                       <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
                       <n-button size="tiny" tertiary @click="removeMw(i)" :disabled="svc.masterwork.offers.length===1">Xoá</n-button>
@@ -266,37 +278,34 @@
                   </div>
                 </div>
 
-                <!-- Altars -->
-                <div v-if="svc.selected.includes('ALTARS')">
-                  <div class="text-sm font-medium mb-1">Altars of Lilith</div>
+                <div v-if="svc.selected.includes('MATERIALS')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Materials</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.altars" :key="'alt-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.region" :options="altarDict" placeholder="Vùng" style="width:200px"/>
+                    <div v-for="(row,i) in svc.materials.offers" :key="'mat-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-select v-model:value="row.code" :options="materialDict" filterable placeholder="Loại nguyên liệu" style="width:200px"/>
                       <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
-                      <n-button size="tiny" tertiary @click="svc.altars.splice(i,1)" :disabled="svc.altars.length===1">Xoá</n-button>
+                      <n-button size="tiny" tertiary @click="removeMat(i)" :disabled="svc.materials.offers.length===1">Xoá</n-button>
                     </div>
-                    <n-button size="tiny" tertiary @click="svc.altars.push({region:'',qty:1})">Thêm vùng</n-button>
+                    <n-button size="tiny" tertiary @click="addMat()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Renown -->
-                <div v-if="svc.selected.includes('RENOWN')">
-                  <div class="text-sm font-medium mb-1">Renown</div>
+                <div v-if="svc.selected.includes('INFERNAL_HORDES')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Infernal Hordes</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.renown" :key="'ren-'+i" class="flex items-center gap-2">
-                      <n-select v-model:value="row.region" :options="renownDict" placeholder="Vùng" style="width:200px"/>
+                    <div v-for="(row,i) in svc.infernalHordes.offers" :key="'horde-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-select v-model:value="row.tier" :options="hordesTierDict" filterable placeholder="Độ khó" style="width:200px"/>
                       <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
-                      <n-button size="tiny" tertiary @click="svc.renown.splice(i,1)" :disabled="svc.renown.length===1">Xoá</n-button>
+                      <n-button size="tiny" tertiary @click="removeHorde(i)" :disabled="svc.infernalHordes.offers.length===1">Xoá</n-button>
                     </div>
-                    <n-button size="tiny" tertiary @click="svc.renown.push({region:'',qty:1})">Thêm vùng</n-button>
+                    <n-button size="tiny" tertiary @click="addHorde()">Thêm offer</n-button>
                   </div>
                 </div>
 
-                <!-- Nightmare -->
-                <div v-if="svc.selected.includes('NIGHTMARE')">
-                  <div class="text-sm font-medium mb-1">Nightmare</div>
+                <div v-if="svc.selected.includes('NIGHTMARE')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Nightmare</div>
                   <div class="space-y-2">
-                    <div v-for="(row,i) in svc.nightmare.offers" :key="'nm-'+i" class="flex items-center gap-2">
+                    <div v-for="(row,i) in svc.nightmare.offers" :key="'nm-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
                       <n-select v-model:value="row.tier" :options="nmTierDict" placeholder="Tier" style="width:160px"/>
                       <n-input-number v-model:value="row.qty" :min="1" placeholder="Qty" style="width:120px"/>
                       <n-button size="tiny" tertiary @click="removeNm(i)" :disabled="svc.nightmare.offers.length===1">Xoá</n-button>
@@ -304,11 +313,47 @@
                     <n-button size="tiny" tertiary @click="addNm()">Thêm offer</n-button>
                   </div>
                 </div>
+
+                <div v-if="svc.selected.includes('RENOWN')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Renown</div>
+                  <div class="space-y-2">
+                    <div v-for="(row,i) in svc.renown.offers" :key="'ren-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-select v-model:value="row.region" :options="renownDict" placeholder="Vùng" style="width:200px"/>
+                      <n-input-number
+                        v-model:value="row.qty"
+                        :min="1"
+                        :max="row.region === 'ALL' ? 6 : 1"
+                        :disabled="row.region !== 'ALL' && row.region !== ''"
+                        placeholder="Qty"
+                        style="width:120px"
+                      />
+                      <n-button size="tiny" tertiary @click="svc.renown.offers.splice(i,1)" :disabled="svc.renown.offers.length===1">Xoá</n-button>
+                    </div>
+                    <n-button size="tiny" tertiary @click="svc.renown.offers.push({region:'',qty:1})">Thêm offer</n-button>
+                  </div>
+                </div>
+
+                <div v-if="svc.selected.includes('ALTARS_OF_LILITH')" class="p-3 border border-neutral-200 rounded-lg space-y-2">
+                  <div class="text-sm font-medium">Altars of Lilith</div>
+                  <div class="space-y-2">
+                    <div v-for="(row,i) in svc.altars.offers" :key="'alt-'+i" class="flex items-center gap-2 p-2 rounded-lg border border-neutral-200/60">
+                      <n-select v-model:value="row.region" :options="altarDict" placeholder="Vùng" style="width:200px"/>
+                      <n-input-number
+                        v-model:value="row.qty"
+                        :min="1"
+                        :max="row.region === 'ALL' ? 190 : undefined"
+                        placeholder="Qty"
+                        style="width:120px"
+                      />
+                      <n-button size="tiny" tertiary @click="svc.altars.offers.splice(i,1)" :disabled="svc.altars.offers.length===1">Xoá</n-button>
+                    </div>
+                    <n-button size="tiny" tertiary @click="svc.altars.offers.push({region:'',qty:1})">Thêm offer</n-button>
+                  </div>
+                </div>
               </div>
             </div>
           </n-form-item>
-          <!-- ========== /DỊCH VỤ ========== -->
-
+          
           <n-form-item path="price">
             <template #label><span :id="lid('price')">Giá bán</span></template>
             <n-input-number
@@ -323,7 +368,7 @@
               :input-props="{ id: fid('price'), name: 'price', inputmode: 'decimal', autocomplete: 'off', 'aria-labelledby': lid('price') }"
             >
               <template #suffix>
-                <div class="currency-suffix currency-suffix--fixed" @focus="ensureCurrencies">
+                <div class="currency-suffix currency-suffix--fixed">
                   <n-auto-complete
                     v-model:value="form.currency"
                     :options="currencyACOptions"
@@ -354,7 +399,7 @@
 
           <div class="flex justify-end gap-2 pt-2">
             <n-button :loading="saving" @click="resetForm">Làm mới</n-button>
-            <n-button type="primary" :loading="saving" @click="submit">Lưu đơn</n-button>
+            <n-button type="primary" :loading="saving" :disabled="!canCreateOrder" @click="submit">Lưu đơn</n-button>
           </div>
         </n-form>
       </template>
@@ -371,43 +416,63 @@ import {
   type FormInst, type FormRules, createDiscreteApi, type SelectOption
 } from 'naive-ui'
 import { supabase } from '@/lib/supabase'
-import { createServiceOrder } from '@/lib/orders'
-import type { CoreForm, SubServiceRow } from '@/types/service'
-import { makeLabelMapsFromOptions, type LabelMaps, mapRowsToRpcItems } from '@/lib/service-desc'
+import { useAuth } from '@/stores/auth';
+import { makeLabelMapsFromOptions, type LabelMaps, } from '@/lib/service-desc'
+import type { SubServiceRow } from '@/types/service'
 
-/* ===== Tabs ===== */
+/* ===== Types ===== */
+type OrderWithChannel = {
+  channels: { code: string } | { code: string }[] | null;
+}
 type Mode = 'currency' | 'items' | 'service'
-const mode = ref<Mode>('service')
-const baseBtn = 'px-3 py-1.5 rounded-md text-sm transition bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-const activeBtn = 'bg-neutral-900 text-white'
-const btnClass = (m: Mode) => (mode.value === m ? `${baseBtn} ${activeBtn}` : baseBtn)
-
-const { message } = createDiscreteApi(['message'])
-
-/* ===== Model ===== */
-const formRef = ref<FormInst | null>(null)
 type ServiceType = 'selfplay' | 'pilot'
 type PackageType = 'BASIC' | 'CUSTOM' | 'BUILD'
 interface ServiceForm {
   channel_code: string
   service_type: ServiceType
   customer_name: string
-  btag: string
-  login_id: string
-  login_pwd: string
+  selectedAccountId: string | null
   deadline: number | null
   price: number | null
   currency: string
   package_type: PackageType
   package_note: string
 }
+type CustomerAccount = {
+  id: string;
+  label: string;
+  btag?: string | null;
+  login_id?: string | null;
+}
+type Opt = SelectOption & { _db?: boolean }
+type CreateKind = 'channel' | 'customer' | 'currency'
+const MIN_CHAN_CUST = 2
+
+type SellableBoss = {
+  code: string;
+  label: string;
+}
+
+/* ===== State ===== */
+const mode = ref<Mode>('service');
+const baseBtn = 'px-3 py-1.5 rounded-md text-sm transition bg-neutral-100 text-neutral-700 hover:bg-neutral-200';
+const activeBtn = 'bg-neutral-900 text-white'
+const { message } = createDiscreteApi(['message']);
+const auth = useAuth();
+
+const canCreateOrder = computed(() => {
+  return auth.hasPermission('orders:create', {
+    game_code: 'DIABLO_4',
+    business_area_code: 'SERVICE'
+  });
+});
+
+const formRef = ref<FormInst | null>(null);
 const form = ref<ServiceForm>({
   channel_code: '',
   service_type: 'selfplay',
   customer_name: '',
-  btag: '',
-  login_id: '',
-  login_pwd: '',
+  selectedAccountId: null,
   deadline: null,
   price: null,
   currency: 'USD',
@@ -415,58 +480,78 @@ const form = ref<ServiceForm>({
   package_note: ''
 })
 
-/* ===== Service builder ===== */
-const levelKinds = [
-  { label: 'Level', value: 'LEVEL' },
-  { label: 'Paragon', value: 'PARAGON' }
-]
+const customerAccounts = ref<CustomerAccount[]>([])
+const loadingAccounts = ref(false)
+const ADD_NEW_ACCOUNT = 'add_new_account'
+const newAccount = reactive({
+    label: '',
+    btag: '',
+    login_id: '',
+    login_pwd: ''
+})
+const isAddingNewAccount = computed(() => form.value.selectedAccountId === ADD_NEW_ACCOUNT)
+const isProgrammaticChange = ref(false) // <-- BIẾN CỜ ĐỂ ĐIỀU PHỐI LOGIC
 
+const levelKinds = [ { label: 'Level', value: 'LEVEL' }, { label: 'Paragon', value: 'PARAGON' }]
 const svc = reactive({
   selected: [] as string[],
   generic: { offers: [{ desc: '' }] },
   leveling: { offers: [{ kind: 'LEVEL' as 'LEVEL'|'PARAGON', start: 1 as number | null, end: 60 as number | null }] },
-  boss: { offers: [{ code: '' as string, runs: 1 as number | null }] },
-  pit:  { offers: [{ tier: '' as string, runs: 1 as number | null }] },
-  materials: { offers: [{ code: '' as string, qty: 1 as number | null }] },
-  mythic: { offers: [{ item: '' as string, ga: '' as string, ga_note: '' as string, qty: 1 as number | null }] },
-  masterwork: { offers: [{ code: '' as string, qty: 1 as number | null }] },
-  altars: [{ region: '', qty: 1 as number | null }],
-  renown: [{ region: '', qty: 1 as number | null }],
-  nightmare: { offers: [{ tier: '' as string, qty: 1 as number | null }] }
-})
+  pit:  { offers: [{ tier: '', runs: 1 as number | null }] },
+  boss: { offers: [{ code: '', runs: 1 as number | null }] },
+  mythic: { offers: [{ item: '', ga: '', stats: [null, null, null] as (string|null)[], qty: 1 as number | null }] },
+  masterwork: { offers: [{ code: '', qty: 1 as number | null }] },
+  materials: { offers: [{ code: '', qty: 1 as number | null }] },
+  infernalHordes: { offers: [{ tier: '' as string, qty: 1 as number | null }] },
+  nightmare: { offers: [{ tier: '', qty: 1 as number | null }] },
+  renown: { offers: [{ region: '', qty: 1 as number | null }] },
+  altars: { offers: [{ region: '', qty: 1 as number | null }] },
+});
 
-/* ===== Validation ===== */
-const rules: FormRules = {
-  channel_code: [{ required: true, message: 'Chọn/nhập nguồn bán', trigger: ['blur', 'change'] }],
-  service_type: [{ required: true, message: 'Chọn loại dịch vụ', trigger: ['blur', 'change'] }],
-  customer_name: [{ required: true, message: 'Chọn/nhập khách hàng', trigger: ['blur', 'change'] }],
-  btag: [{
-    validator: (_r, v) => form.value.service_type === 'selfplay' ? !!String(v || '').trim() : true,
-    message: 'Nhập Btag cho selfplay', trigger: ['blur', 'input', 'change']
-  }],
-  login_id: [{
-    validator: (_r, v) => form.value.service_type === 'pilot' ? !!String(v || '').trim() : true,
-    message: 'Nhập ID đăng nhập cho pilot', trigger: ['blur', 'input', 'change']
-  }],
-  login_pwd: [{
-    validator: (_r, v) => form.value.service_type === 'pilot' ? !!String(v || '').trim() : true,
-    message: 'Nhập mật khẩu cho pilot', trigger: ['blur', 'input', 'change']
-  }],
-  price: [{
-    validator: (_r, v) => v !== null && v !== undefined && !Number.isNaN(Number(v)) && Number(v) >= 0,
-    message: 'Nhập giá bán hợp lệ', trigger: ['blur', 'change', 'input']
-  }],
-  currency: [{ required: true, message: 'Chọn tiền tệ', trigger: ['blur', 'change'] }]
-}
-
-/* ===== Options + search ===== */
-type Opt = SelectOption & { _db?: boolean }
 const channelOptions  = ref<Opt[]>([])
 const customerOptions = ref<Opt[]>([])
 const currencyOptions = ref<Opt[]>([])
-const btagOptions     = ref<Opt[]>([])
-const acOpen = reactive({ channel: false, customer: false, currency: false, btag: false })
-const search = reactive({ channel: '', customer: '', currency: '', btag: '' })
+const acOpen = reactive({ channel: false, customer: false, currency: false })
+const search = reactive({ channel: '', customer: '', currency: '' })
+
+const bossDict = ref<SelectOption[]>([])
+const pitTierDict = ref<SelectOption[]>([])
+const hordesTierDict = ref<SelectOption[]>([]);
+const materialDict = ref<SelectOption[]>([])
+const masterworkDict = ref<SelectOption[]>([])
+const nmTierDict = ref<SelectOption[]>([])
+const mythicItemDict = ref<SelectOption[]>([])
+const mythicGADict = ref<SelectOption[]>([])
+const altarDict = ref<SelectOption[]>([])
+const renownDict = ref<SelectOption[]>([])
+const itemStatsSortDict = ref<SelectOption[]>([]);
+
+/* ===== Computed ===== */
+const btnClass = (m: Mode) => (mode.value === m ? `${baseBtn} ${activeBtn}` : baseBtn)
+const accountOptions = computed(() => {
+    const options = customerAccounts.value.map(acc => ({
+        label: `${acc.label} (${acc.btag || acc.login_id || 'N/A'})`,
+        value: acc.id
+    }))
+    options.push({ label: 'Thêm tài khoản mới...', value: ADD_NEW_ACCOUNT })
+    return options
+})
+const pricePrecision = computed(() => (form.value.currency === 'VND' ? 0 : 2))
+const asVL = (arr: any[]) => (arr ?? []).map((o: any) => ({ value: String(o.value ?? ''), label: String(o.label ?? o.value ?? '') }))
+const labelMaps = computed<LabelMaps>(() =>
+  makeLabelMapsFromOptions({
+    BOSS: asVL(bossDict.value), 
+    PIT: asVL(pitTierDict.value), 
+    MATERIAL: asVL(materialDict.value),
+    MASTERWORKING: asVL(masterworkDict.value), 
+    ALTARS: asVL(altarDict.value), 
+    RENOWN: asVL(renownDict.value),
+    NIGHTMARE: asVL(nmTierDict.value), 
+    MYTHIC_ITEM: asVL(mythicItemDict.value), 
+    MYTHIC_GA: asVL(mythicGADict.value),
+    ITEM_STATS_SORT: asVL(itemStatsSortDict.value) // <-- THÊM DÒNG NÀY
+  })
+);
 
 function filterAC(list: Opt[], kw: string) {
   const s = (kw || '').toLowerCase()
@@ -476,21 +561,61 @@ function filterAC(list: Opt[], kw: string) {
 }
 const channelACOptions  = computed(() => filterAC(channelOptions.value,  search.channel))
 const currencyACOptions = computed(() => filterAC(currencyOptions.value, search.currency))
-const btagACOptions     = computed(() => filterAC(btagOptions.value,     search.btag))
-
 const customersByChannel = ref<Record<string, Opt[]>>({})
+
+// SỬA LỖI AUTOCOMPLETE: Logic này đảm bảo chỉ hiển thị khách hàng của kênh đã chọn.
 const customerACOptions = computed(() => {
   const ch = (form.value.channel_code || '').trim()
-  const baseList = ch && customersByChannel.value[ch]?.length
-    ? customersByChannel.value[ch]
-    : customerOptions.value
-  return filterAC(baseList, search.customer)
+  if (ch) {
+    // Nếu có kênh, CHỈ hiển thị khách hàng của kênh đó (kể cả khi đang tải hoặc rỗng)
+    return filterAC(customersByChannel.value[ch] || [], search.customer)
+  }
+  // Nếu không có kênh, hiển thị tất cả khách hàng
+  return filterAC(customerOptions.value, search.customer)
 })
 
-/* tải data cơ bản */
+
+/* ===== Validation ===== */
+const rules: FormRules = {
+  channel_code: [{ required: true, message: 'Chọn/nhập nguồn bán', trigger: ['blur', 'change'] }],
+  customer_name: [{ required: true, message: 'Chọn/nhập khách hàng', trigger: ['blur', 'change'] }],
+  price: [{ validator: (_r, v) => v != null && !Number.isNaN(Number(v)) && Number(v) >= 0, message: 'Nhập giá bán hợp lệ', trigger: ['blur', 'change', 'input'] }],
+  currency: [{ required: true, message: 'Chọn tiền tệ', trigger: ['blur', 'change'] }],
+  selectedAccountId: [{
+    required: true,
+    validator: (rule, value) => {
+      if (!isAddingNewAccount.value && !value) {
+        return new Error('Vui lòng chọn một tài khoản có sẵn');
+      }
+      return true;
+    },
+    trigger: ['blur', 'change']
+  }],
+  'newAccount.label': [{
+      validator: () => !isAddingNewAccount.value || !!newAccount.label.trim(),
+      message: 'Vui lòng nhập nhãn gợi nhớ cho tài khoản mới'
+  }],
+  'newAccount.btag': [{
+      validator: () => !isAddingNewAccount.value || form.value.service_type !== 'selfplay' || !!newAccount.btag.trim(),
+      message: 'Vui lòng nhập Btag cho tài khoản mới'
+  }],
+  'newAccount.login_id': [{
+      validator: () => !isAddingNewAccount.value || form.value.service_type !== 'pilot' || !!newAccount.login_id.trim(),
+      message: 'Vui lòng nhập Login ID cho tài khoản mới'
+  }]
+}
+
+/* ===== Data Loading & Watchers ===== */
 const hasLoadedChannels   = ref(false)
 const hasLoadedCurrencies = ref(false)
-const hasLoadedBtgsForCus = ref<string>('')
+
+function getStatCountForGA(gaCode?: string | null): number {
+  const code = String(gaCode || '').toUpperCase();
+  if (code === '1GA_REQUEST') return 1;
+  if (code === '2GA_REQUEST') return 2;
+  if (code === '3GA_REQUEST') return 3;
+  return 0; // Mặc định không hiển thị ô nào
+}
 
 async function loadChannels() {
   const { data, error } = await supabase.from('channels').select('code').order('code')
@@ -503,44 +628,35 @@ async function loadAllCustomers() {
   if (error) { console.error('parties/select', error); return message.error('Không tải được Khách hàng: ' + error.message) }
   customerOptions.value = (data ?? []).map((r: any) => ({ label: r.name, value: r.name, _db: true }))
 }
+
 async function loadCustomersForChannel(code: string) {
-  if (!code) return
-  if (customersByChannel.value[code]) return
+  if (!code) return;
+  
   try {
-    // Đọc từ view để tránh phụ thuộc FK/relationship
-    const { data, error } = await supabase
-      .from('orders_sales_v1')
-      .select('customer_name, created_at')
-      .eq('channel_code', code)
-      .order('created_at', { ascending: false })
-      .limit(2000)
+    // Gọi hàm RPC thay vì truy vấn trực tiếp
+    const { data, error } = await supabase.rpc('get_customers_by_channel_v1', {
+      p_channel_code: code
+    });
 
-    if (error) throw error
+    if (error) throw error;
 
-    const names = Array.from(
-      new Set((data ?? []).map((r: any) => r.customer_name).filter(Boolean))
-    )
-    customersByChannel.value[code] = names.map((n: string) => ({ label: n, value: n, _db: true }))
-  } catch (e) {
-    console.error('[loadCustomersForChannel]', e)
+    // Kết quả trả về là một mảng các object { name: '...' }
+    const names = (data || []).map((r: any) => r.name);
+    
+    customersByChannel.value[code] = names.map((n: string) => ({ label: n, value: n, _db: true }));
+    
+  } catch (e: any) {
+    console.error('[loadCustomersForChannel]', e);
+    customersByChannel.value[code] = [];
+    message.error('Không tải được danh sách khách hàng cho kênh này.');
   }
 }
+
 async function loadCurrencies() {
   const { data, error } = await supabase.from('currencies').select('code').order('code')
   if (error) { console.error('currencies/select', error); return message.error('Không tải được Tiền tệ: ' + error.message) }
   currencyOptions.value = (data ?? []).map((r: any) => ({ label: r.code, value: r.code, _db: true }))
   hasLoadedCurrencies.value = true
-}
-async function ensureBtgsForCustomer() {
-  const name = (form.value.customer_name || '').trim()
-  if (!name) { btagOptions.value = []; return }
-  if (hasLoadedBtgsForCus.value === name) return
-  const { data, error } = await supabase.from('parties')
-    .select('btag').eq('type','customer').eq('name', name).not('btag','is',null).order('btag')
-  if (error) { console.error('btag/select', error); return message.error('Không tải được Btag: ' + error.message) }
-  const uniq = Array.from(new Set((data ?? []).map((r:any)=>r.btag))).filter(Boolean)
-  btagOptions.value = uniq.map((b:string)=>({ label:b, value:b, _db:true }))
-  hasLoadedBtgsForCus.value = name
 }
 function ensureChannels()   { if (!hasLoadedChannels.value)   loadChannels() }
 function ensureCurrencies() { if (!hasLoadedCurrencies.value) loadCurrencies() }
@@ -554,143 +670,286 @@ function ensureCustomersForChannel() {
   if (code) loadCustomersForChannel(code)
 }
 
-/* ===== Service dictionary (label-first) ===== */
-const bossDict        = ref<SelectOption[]>([])
-const pitTierDict     = ref<SelectOption[]>([])
-const materialDict    = ref<Array<{ value: string; label: string }>>([])
-const masterworkDict  = ref<SelectOption[]>([])
-const altarDict       = ref<SelectOption[]>([])
-const renownDict      = ref<SelectOption[]>([])
-const nmTierDict      = ref<SelectOption[]>([])
-const mythicItemDict  = ref<SelectOption[]>([])
-const mythicGADict    = ref<SelectOption[]>([])
-
 async function loadServiceDict() {
   try {
-    const pick = async (kind: string) =>
-      (await supabase.from('service_dict').select('code,label').eq('kind', kind).eq('active', true).order('sort')).data ?? []
-    const [bosses, pits, mats, mws, altars, renowns, nms, mythItems, mythGAs] = await Promise.all([
-      pick('BOSS'), pick('PIT'), pick('MATERIAL'), pick('MASTERWORKING'),
-      pick('ALTARS'), pick('RENOWN'), pick('NIGHTMARE'),
-      pick('MYTHIC_ITEM'), pick('MYTHIC_GA')
-    ])
-    const map = (arr:any[]) => arr.map((r:any)=>({ value: r.code, label: r.label }))
-    bossDict.value        = map(bosses)
-    pitTierDict.value     = map(pits)
-    materialDict.value    = mats.map((r:any)=>({ value: r.code, label: r.label }))
-    masterworkDict.value  = map(mws)
-    altarDict.value       = map(altars)
-    renownDict.value      = map(renowns)
-    nmTierDict.value      = map(nms)
-    mythicItemDict.value  = map(mythItems)
-    mythicGADict.value    = map(mythGAs)
+    const { data: attributes, error } = await supabase
+      .from('attributes')
+      .select('id, code, name, type');
+
+    if (error) throw error;
+    if (!attributes) {
+      message.warning('Không có dữ liệu danh mục dịch vụ.');
+      return;
+    }
+
+    // Tải tất cả relationships
+    const { data: relationships, error: relError } = await supabase
+      .from('attribute_relationships')
+      .select('parent_attribute_id, child_attribute_id');
+    if (relError) throw relError;
+
+
+    // === BƯỚC 1: Xây dựng các Map ===
+    const attrMapById = new Map(attributes.map(a => [a.id, a]));
+    const childrenMap = new Map<string, string[]>();
+    for (const rel of relationships!) {
+      if (!childrenMap.has(rel.parent_attribute_id)) {
+        childrenMap.set(rel.parent_attribute_id, []);
+      }
+      childrenMap.get(rel.parent_attribute_id)!.push(rel.child_attribute_id);
+    }
+    
+    // MỚI: Populate kindCodeToIdMap và dictCodeToIdMap
+    const newKindCodeToIdMap = new Map<string, string>();
+    const newDictCodeToIdMap = new Map<string, string>();
+    for (const attr of attributes) {
+        newDictCodeToIdMap.set(attr.code, attr.id); // Map tất cả code vào id
+        if (attr.type === 'SERVICE_KIND') {
+            newKindCodeToIdMap.set(attr.code, attr.id);
+        }
+    }
+    kindCodeToIdMap.value = newKindCodeToIdMap;
+    dictCodeToIdMap.value = newDictCodeToIdMap;
+    
+    
+    // === BƯỚC 2: Xây dựng các SelectOption cho UI ===
+    const toSelectOption = (attr: any) => ({ label: attr.name, value: attr.code });
+    const sortFn = (a: {label:string}, b: {label:string}) => a.label.localeCompare(b.label);
+
+    const sellableBosses: { label: string; value: string }[] = [];
+    const bossServiceKind = attributes.find(a => a.code === 'BOSS' && a.type === 'SERVICE_KIND');
+    if (bossServiceKind) {
+      const bossTypeIds = childrenMap.get(bossServiceKind.id) || [];
+      for (const bossTypeId of bossTypeIds) {
+        const concreteBossIds = childrenMap.get(bossTypeId) || [];
+        for (const bossId of concreteBossIds) {
+          const bossAttr = attrMapById.get(bossId);
+          if (bossAttr) sellableBosses.push(toSelectOption(bossAttr));
+        }
+      }
+    }
+    bossDict.value = sellableBosses.sort(sortFn);
+    
+    const groupedOptions: Record<string, { label: string; value: string }[]> = {};
+    for (const attr of attributes) {
+      if (!attr.type) continue;
+      if (!groupedOptions[attr.type]) groupedOptions[attr.type] = [];
+      groupedOptions[attr.type].push(toSelectOption(attr));
+    }
+
+    pitTierDict.value = (groupedOptions['TIER_DIFFICULTY'] || []).sort((a,b) => parseInt(a.label.match(/\d+/)?.[0] || '0') - parseInt(b.label.match(/\d+/)?.[0] || '0'));
+    materialDict.value = (groupedOptions['MATS_NAME'] || []).sort(sortFn);
+    masterworkDict.value = (groupedOptions['MW_TYPE'] || []).sort(sortFn);
+    mythicItemDict.value = (groupedOptions['MYTHIC_NAME'] || []).sort(sortFn);
+    hordesTierDict.value = (groupedOptions['TORMENT_DIFFICULTY'] || []).sort(sortFn);
+    nmTierDict.value = (groupedOptions['TORMENT_DIFFICULTY'] || []).sort(sortFn);
+    mythicGADict.value = (groupedOptions['MYTHIC_GA_TYPE'] || []).sort(sortFn);
+
+    const allOption = (groupedOptions['SPECIAL'] || []).find(opt => opt.value === 'ALL');
+    const regions = (groupedOptions['REGIONS_NAME'] || []).sort(sortFn);
+    renownDict.value = allOption ? [allOption, ...regions] : regions;
+    altarDict.value = allOption ? [allOption, ...regions] : regions;
+    itemStatsSortDict.value = (groupedOptions['ITEM_STATS_SORT'] || []).sort(sortFn);
+
+    const newMythicStatsMap = new Map<string, { label: string, value: string }[]>();
+    const mythicNameAttrs = attributes.filter(a => a.type === 'MYTHIC_NAME');
+    for (const mythicAttr of mythicNameAttrs) {
+      const statIds = childrenMap.get(mythicAttr.id) || [];
+      const statsOptions = statIds
+        .map(id => attrMapById.get(id))
+        .filter(Boolean)
+        .map(attr => toSelectOption(attr!));
+      newMythicStatsMap.set(mythicAttr.code, statsOptions.sort(sortFn));
+    }
+    mythicStatsMap.value = newMythicStatsMap;
+
   } catch (e:any) {
-    console.error('[loadServiceDict]', e)
-    message.error('Không tải được danh mục dịch vụ')
+    console.error('[loadServiceDict]', e);
+    message.error('Không tải được danh mục dịch vụ: ' + e.message);
   }
 }
 
-/* ===== Helpers (AC thêm nhanh) ===== */
-function normalize(s: string) { return (s || '').trim() }
-function exists(list: Opt[], val: string) {
-  const v = val.toLowerCase()
-  return list.some(o => String(o.value).toLowerCase() === v)
+// SỬA LỖI XUNG ĐỘT LOGIC: Watcher này được cập nhật để xử lý cả hai chiều
+watch(() => form.value.customer_name, async (name) => {
+    // Khi tên khách hàng thay đổi (hoặc bị xóa), reset danh sách tài khoản
+    customerAccounts.value = []
+    form.value.selectedAccountId = null
+    const v = (name || '').trim()
+    if (!v) return
+
+    loadingAccounts.value = true
+    try {
+        const { data: party, error: partyErr } = await supabase.from('parties').select('id').eq('name', v).eq('type', 'customer').maybeSingle()
+        if (partyErr) throw partyErr
+        if (!party) return
+
+        const accountTypeForQuery = form.value.service_type === 'pilot' ? 'login' : 'btag'
+        const { data: accounts, error: accErr } = await supabase
+          .from('customer_accounts')
+          .select('id, label, btag, login_id')
+          .eq('party_id', party.id)
+          .eq('account_type', accountTypeForQuery)
+
+        if (accErr) throw accErr
+        customerAccounts.value = accounts || []
+        
+        if (customerAccounts.value.length > 0) {
+          form.value.selectedAccountId = customerAccounts.value[0].id
+        }
+
+        // Tự động điền kênh bán hàng gần nhất của khách hàng
+        if (!String(form.value.channel_code || '').trim() && party.id) {
+            const { data: ord, error: e2 } = await supabase.from('orders').select('channels(code)').eq('customer_id', party.id).order('created_at', { ascending: false }).limit(1).maybeSingle() as { data: OrderWithChannel | null, error: any }
+            if (e2) throw e2;
+            const chan = ord?.channels;
+            const code = Array.isArray(chan) ? chan[0]?.code : chan?.code;
+            if (typeof code === 'string' && code.trim()) {
+                ensureChannelOption(code)
+                isProgrammaticChange.value = true // <-- Đặt cờ báo hiệu đây là thay đổi nội bộ
+                form.value.channel_code = code;
+                await loadCustomersForChannel(code);
+            }
+        }
+        await nextTick(); formRef.value?.restoreValidation?.()
+    } catch (e: any) {
+        console.error(e)
+        message.error('Không tải được dữ liệu khách hàng hoặc tài khoản.')
+    } finally {
+        loadingAccounts.value = false
+    }
+})
+
+// SỬA LỖI XUNG ĐỘT LOGIC: Watcher này được cập nhật để xử lý cả hai chiều
+watch(() => form.value.channel_code, (code) => {
+  // Nếu thay đổi này là do logic chọn khách hàng gây ra, bỏ qua
+  if (isProgrammaticChange.value) {
+    isProgrammaticChange.value = false;
+    return;
+  }
+  
+  // Nếu người dùng tự tay thay đổi kênh bán, xóa khách hàng hiện tại
+  form.value.customer_name = '';
+
+  // Luôn tải danh sách khách hàng cho kênh mới
+  if (code) {
+    loadCustomersForChannel(code)
+  }
+})
+
+watch(() => form.value.service_type, () => {
+  const currentName = form.value.customer_name
+  if(currentName) {
+    form.value.customer_name = '' 
+    nextTick(() => { form.value.customer_name = currentName })
+  }
+})
+
+watch(() => svc.leveling.offers, (offers) => {
+  for (const offer of offers) {
+    const max = offer.kind === 'PARAGON' ? 300 : 60;
+    
+    if (offer.start && offer.start > max) {
+      offer.start = max;
+    }
+    
+    if (offer.end && offer.end > max) {
+      offer.end = max;
+    }
+  }
+}, { deep: true });
+
+watch(() => svc.renown.offers, (offers) => {
+  for (const offer of offers) {
+    if (offer.region && offer.region !== 'ALL' && offer.qty !== 1) {
+      offer.qty = 1;
+    }
+  }
+}, { deep: true });
+
+// Logic gói dịch vụ (UX) được giữ lại
+watch(() => svc.selected.length, (selectedCount) => {
+  if (form.value.package_type === 'BASIC' && selectedCount >= 2) {
+    form.value.package_type = 'CUSTOM';
+  } else if (form.value.package_type === 'CUSTOM' && selectedCount < 2) {
+    form.value.package_type = 'BASIC';
+  }
+});
+
+const mythicStatsMap = ref<Map<string, { label: string, value: string }[]>>(new Map());
+
+// Helper computed để lấy danh sách stats cho từng offer mythic
+const offerStatsOptions = computed(() => {
+  return svc.mythic.offers.map(offer => {
+    if (!offer.item) return [];
+    return mythicStatsMap.value.get(offer.item) || [];
+  });
+});
+
+function getFilteredStatOptions(offerIndex: number, statIndex: number) {
+  const allStats = offerStatsOptions.value[offerIndex] || [];
+  const selectedStats = svc.mythic.offers[offerIndex].stats;
+  const currentSelection = selectedStats[statIndex];
+
+  return allStats.filter(stat => {
+    // Luôn hiển thị lựa chọn hiện tại
+    if (stat.value === currentSelection) return true;
+    // Ẩn đi nếu đã được chọn ở ô khác
+    return !selectedStats.includes(stat.value);
+  });
 }
+
+/* ===== Helpers ===== */
+// ... (Các hàm helper khác giữ nguyên không đổi)
 const fid = (s: string) => `sales-${s}`
 const lid = (s: string) => `${fid(s)}-label`
-
-type CreateKind = 'channel' | 'customer' | 'currency' | 'btag'
-const MIN_CHAN_CUST = 3
 function acInputProps(kind: CreateKind, idBase: string, name: string, ariaId: string) {
   const ac = kind === 'customer' ? 'name' : 'off'
-  return {
+  const props: Record<string, any> = {
     id: fid(idBase), name, autocomplete: ac, 'aria-labelledby': ariaId,
-    ...(kind === 'currency' ? { maxlength: 3, style: 'text-transform: uppercase; text-align:center;' } : {}),
     onKeydown: (e: KeyboardEvent) => {
       if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitCreate(kind) }
     }
-  } as Record<string, any>
+  }
+  if (kind === 'currency') {
+    props.maxlength = 3;
+    props.style = 'text-transform: uppercase; text-align:center;';
+  }
+  return props;
 }
 function commitCreate(kind: CreateKind) {
-  const raw = normalize(
+  const raw = (
     kind === 'channel'  ? (search.channel || form.value.channel_code)
   : kind === 'customer' ? (search.customer || form.value.customer_name)
-  : kind === 'btag'     ? (search.btag || form.value.btag)
-  :                       (search.currency || form.value.currency).toUpperCase()
-  )
+  : (search.currency || form.value.currency).toUpperCase()
+  ).trim()
   if (!raw) return
-  const list = kind === 'channel' ? channelOptions.value
-            : kind === 'customer' ? customerOptions.value
-            : kind === 'btag'     ? btagOptions.value
-            : currencyOptions.value
+  const list = kind === 'channel' ? channelOptions.value : kind === 'customer' ? customerOptions.value : currencyOptions.value
 
   if (kind === 'currency') {
     if (!/^[A-Z]{3}$/.test(raw)) { message.warning('Tiền tệ phải đúng 3 ký tự A–Z (VD: USD, VND)'); return }
-  } else if (kind !== 'btag' && raw.length < MIN_CHAN_CUST) {
+  } else if (raw.length < MIN_CHAN_CUST) {
     message.warning(`Nhập tối thiểu ${MIN_CHAN_CUST} ký tự rồi Enter`)
     return
   }
 
-  if (!exists(list, raw)) list.push({ label: raw, value: raw, _db: false })
-  if (kind === 'channel')  form.value.channel_code  = raw
+  if (!list.some(o => String(o.value).toLowerCase() === raw.toLowerCase())) {
+    list.push({ label: raw, value: raw, _db: false })
+  }
+  if (kind === 'channel') form.value.channel_code = raw
   if (kind === 'customer') form.value.customer_name = raw
-  if (kind === 'btag')     form.value.btag          = raw
-  if (kind === 'currency') form.value.currency      = raw
+  if (kind === 'currency') form.value.currency = raw
 }
 
-/* ===== Auto behaviors ===== */
-watch(() => form.value.customer_name, async (val) => {
-  const v = normalize(val)
-  if (!v) return
-  try {
-    const { data: party, error } = await supabase
-      .from('parties').select('id, btag, login_id, login_pwd')
-      .eq('type', 'customer').eq('name', v).maybeSingle()
-    if (error) throw error
-    if (party) {
-      if (form.value.service_type === 'selfplay') form.value.btag = party.btag || ''
-      else { form.value.login_id = party.login_id || ''; form.value.login_pwd = party.login_pwd || '' }
-
-      if (!String(form.value.channel_code || '').trim() && party.id) {
-        try {
-          const { data: ord, error: e2 } = await supabase
-            .from('orders')
-            .select('id, created_at, channels(code)')
-            .eq('counterparty_id', party.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-          if (e2) throw e2
-          const ch = (ord?.[0] ?? {}) as any
-          const chan = (ch.channels ?? null) as any
-          const code: string | undefined = Array.isArray(chan) ? chan[0]?.code : chan?.code
-          if (typeof code === 'string' && code.trim()) {
-            ensureChannelOption(code)
-            form.value.channel_code = code
-            await loadCustomersForChannel(code)
-          }
-        } catch (e) { console.error('[autoPickChannelForCustomer]', e) }
-      }
-
-      await nextTick(); formRef.value?.restoreValidation?.()
-    }
-  } catch (e:any) { console.error(e) }
-})
-watch(() => form.value.service_type, () => { formRef.value?.restoreValidation?.() })
-watch(() => form.value.channel_code, (code) => { if (code) loadCustomersForChannel(code) })
-
-/* ===== Giá ===== */
-const pricePrecision = computed(() => (form.value.currency === 'VND' ? 0 : 2))
-const formatPrice = (value: number | null) => {
+const formatPrice = (value: number | null): string => {
   if (value == null || Number.isNaN(value)) return ''
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: pricePrecision.value, maximumFractionDigits: pricePrecision.value }).format(Number(value))
 }
-const parsePrice = (input: string) => {
+const parsePrice = (input: string): number | null => {
   if (!input) return null
   const n = Number(input.replace(/[,\s]/g, ''))
   return Number.isNaN(n) ? null : n
 }
 
-/* ===== Add/Remove helpers ===== */
 function addGeneric() { svc.generic.offers.push({ desc:'' }) }
 function removeGeneric(i:number) { svc.generic.offers.splice(i,1) }
 function addLv() { svc.leveling.offers.push({ kind:'LEVEL', start:1, end:60 }) }
@@ -699,144 +958,241 @@ function addBoss() { svc.boss.offers.push({ code:'', runs:1 }) }
 function removeBoss(i:number) { svc.boss.offers.splice(i,1) }
 function addPit() { svc.pit.offers.push({ tier:'', runs:1 }) }
 function removePit(i:number) { svc.pit.offers.splice(i,1) }
+function addHorde() { svc.infernalHordes.offers.push({ tier:'', qty:1 }) }
+function removeHorde(i:number) { svc.infernalHordes.offers.splice(i,1) }
 function addMat() { svc.materials.offers.push({ code:'', qty:1 }) }
 function removeMat(i:number) { svc.materials.offers.splice(i,1) }
-function addMyth() { svc.mythic.offers.push({ item:'', ga:'', ga_note:'', qty:1 }) }
+function addMyth() { svc.mythic.offers.push({ item: '', ga: '', stats: [null, null, null], qty: 1 }) }
 function removeMyth(i:number) { svc.mythic.offers.splice(i,1) }
 function addMw() { svc.masterwork.offers.push({ code:'', qty:1 }) }
 function removeMw(i:number) { svc.masterwork.offers.splice(i,1) }
 function addNm() { svc.nightmare.offers.push({ tier:'', qty:1 }) }
 function removeNm(i:number) { svc.nightmare.offers.splice(i,1) }
 
-/* ===== Helper: GA request? ===== */
-function isGARequest(v: string) { return /request/i.test(String(v || '')) }
-
-/* ===== Map UI -> SubServiceRow[] ===== */
-const parseTierNum = (v: string): number => { const m = String(v || '').match(/\d+/); return m ? parseInt(m[0], 10) : 0 }
-function toSubRows(): SubServiceRow[] {
-  const rows: SubServiceRow[] = []
-  if (svc.selected.includes('GENERIC')) for (const r of svc.generic.offers) { const note = (r.desc || '').trim(); if (note) rows.push({ kind: 'GENERIC', note } as any) }
-  if (svc.selected.includes('LEVELING')) for (const r of svc.leveling.offers) if (r.start != null && r.end != null)
-    rows.push({ kind:'LEVELING', from:Number(r.start), to:Number(r.end), mode: r.kind === 'PARAGON' ? 'paragon' : 'level' } as any)
-  if (svc.selected.includes('BOSS')) for (const r of svc.boss.offers) if (r.code) rows.push({ kind:'BOSS', boss_code:r.code, qty:Number(r.runs || 1) } as any)
-  if (svc.selected.includes('PIT')) for (const r of svc.pit.offers) if (r.tier) rows.push({ kind:'PIT', tier:parseTierNum(r.tier), runs:Number(r.runs || 1) } as any)
-  if (svc.selected.includes('MATERIAL')) for (const r of svc.materials.offers) { const n = Number(r.qty || 0); if (r.code && n > 0) rows.push({ kind:'MATERIAL', code:r.code, qty:n } as any) }
-  if (svc.selected.includes('MYTHIC')) for (const r of svc.mythic.offers) if (r.item)
-    rows.push({ kind:'MYTHIC', item_code:r.item, ga_code:r.ga || '', qty:Number(r.qty || 1), ga_note: isGARequest(r.ga) ? (r.ga_note || '').trim() : '' } as any)
-  if (svc.selected.includes('MASTERWORKING')) for (const r of svc.masterwork.offers) if (r.code) rows.push({ kind:'MASTERWORKING', variant:(r.code as any), qty:Number(r.qty || 1) } as any)
-  if (svc.selected.includes('ALTARS')) for (const r of svc.altars) if (r.region && Number(r.qty || 0) > 0) rows.push({ kind:'ALTARS', region:r.region, qty:Number(r.qty) } as any)
-  if (svc.selected.includes('RENOWN')) for (const r of svc.renown) if (r.region && Number(r.qty || 0) > 0) rows.push({ kind:'RENOWN', region:r.region, qty:Number(r.qty) } as any)
-  if (svc.selected.includes('NIGHTMARE')) for (const r of svc.nightmare.offers) if (r.tier) rows.push({ kind:'NIGHTMARE', tier:parseTierNum(r.tier) as 1|2|3|4, runs:Number(r.qty || 1) } as any)
-  return rows
-}
-
-/* ===== Đếm KIND có dữ liệu & auto gói ===== */
-function countSelectedKinds(): number {
-  let n = 0
-  if (svc.selected.includes('GENERIC') && svc.generic.offers.some(r => (r.desc || '').trim())) n++
-  if (svc.selected.includes('LEVELING') && svc.leveling.offers.some(r => r.start!=null && r.end!=null)) n++
-  if (svc.selected.includes('BOSS') && svc.boss.offers.some(r => r.code)) n++
-  if (svc.selected.includes('PIT') && svc.pit.offers.some(r => r.tier)) n++
-  if (svc.selected.includes('MATERIAL') && svc.materials.offers.some(r => r.code && (r.qty ?? 0) > 0)) n++
-  if (svc.selected.includes('MYTHIC') && svc.mythic.offers.some(r => r.item)) n++
-  if (svc.selected.includes('MASTERWORKING') && svc.masterwork.offers.some(r => r.code)) n++
-  if (svc.selected.includes('ALTARS') && svc.altars.some(r => r.region && (r.qty ?? 0) > 0)) n++
-  if (svc.selected.includes('RENOWN') && svc.renown.some(r => r.region && (r.qty ?? 0) > 0)) n++
-  if (svc.selected.includes('NIGHTMARE') && svc.nightmare.offers.some(r => r.tier)) n++
-  return n
-}
-const selectedKindCount = computed(() => countSelectedKinds())
-watch(selectedKindCount, (v) => { if (form.value.package_type === 'BASIC' && v >= 2) form.value.package_type = 'CUSTOM' })
-
-/* ===== LabelMaps từ dict ===== */
-const asVL = (arr: SelectOption[]) =>
-  (arr ?? []).map((o: any) => ({ value: String(o.value ?? ''), label: String(o.label ?? o.value ?? '') }))
-
-const labelMaps = computed<LabelMaps>(() =>
-  makeLabelMapsFromOptions({
-    BOSS: asVL(bossDict.value),
-    PIT: asVL(pitTierDict.value),
-    MATERIAL: materialDict.value,            // [{value,label}]
-    MASTERWORKING: asVL(masterworkDict.value),
-    ALTARS: asVL(altarDict.value),
-    RENOWN: asVL(renownDict.value),
-    NIGHTMARE: asVL(nmTierDict.value),
-    MYTHIC_ITEM: asVL(mythicItemDict.value),
-    MYTHIC_GA: asVL(mythicGADict.value)
-  })
-)
-
 /* ===== Reset ===== */
 function resetForm() {
   form.value = {
-    channel_code: '', service_type: 'selfplay', customer_name: '', btag: '',
-    login_id: '', login_pwd: '', deadline: null, price: null, currency: 'USD',
+    channel_code: '', service_type: 'selfplay', customer_name: '',
+    selectedAccountId: null, deadline: null, price: null, currency: 'USD',
     package_type: 'BASIC', package_note: ''
   }
+  customerAccounts.value = []
+  Object.assign(newAccount, { label: '', btag: '', login_id: '', login_pwd: '' })
   svc.selected = []
-  svc.generic.offers = [{ desc: '' }]
-  svc.leveling.offers = [{ kind:'LEVEL', start:1, end:60 }]
-  svc.boss.offers = [{ code:'', runs:1 }]
-  svc.pit.offers = [{ tier:'', runs:1 }]
-  svc.materials.offers = [{ code:'', qty:1 }]
-  svc.mythic.offers = [{ item:'', ga:'', ga_note:'', qty:1 }]
-  svc.masterwork.offers = [{ code:'', qty:1 }]
-  svc.altars = [{ region:'', qty:1 }]
-  svc.renown = [{ region:'', qty:1 }]
-  svc.nightmare.offers = [{ tier:'', qty:1 }]
+  svc.generic = { offers: [{ desc: '' }] }
+  svc.leveling = { offers: [{ kind:'LEVEL', start:1, end:60 }] }
+  svc.boss = { offers: [{ code:'', runs:1 }] }
+  svc.pit = { offers: [{ tier:'', runs:1 }] }
+  svc.materials = { offers: [{ code:'', qty:1 }] }
+  svc.infernalHordes = { offers: [{ tier:'', qty:1 }] }
+  svc.nightmare = { offers: [{ tier:'', qty:1 }] }
+  svc.mythic = { offers: [{ item: '', ga: '', stats: [null, null, null], qty: 1 }] }
+  svc.masterwork = { offers: [{ code:'', qty:1 }] }
+  // SỬA LẠI: Bọc mảng trong object { offers: [...] } để đồng bộ với cấu trúc mới
+  svc.altars = { offers: [{ region: '', qty: 1 }] }
+  svc.renown = { offers: [{ region: '', qty: 1 }] }
 }
 
 /* ===== Submit ===== */
 const saving = ref(false)
+const kindCodeToIdMap = ref<Map<string, string>>(new Map());
+const dictCodeToIdMap = ref<Map<string, string>>(new Map());
+
+// TÌM HÀM NÀY TRONG Sales.vue VÀ THAY THẾ NÓ
+function buildServiceItemsPayload(): any[] {
+  const items: any[] = [];
+
+  for (const kindCode of svc.selected) {
+    const serviceKindId = kindCodeToIdMap.value.get(kindCode);
+    if (!serviceKindId) continue;
+
+    switch (kindCode) {
+      case 'GENERIC':
+        for (const offer of svc.generic.offers) {
+          if (offer.desc && offer.desc.trim()) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: { note: offer.desc.trim() },
+              plan_qty: 1
+            });
+          }
+        }
+        break;
+
+      case 'LEVELING':
+        for (const offer of svc.leveling.offers) {
+          if (offer.start != null && offer.end != null && offer.end > offer.start) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: {
+                mode: offer.kind?.toLowerCase(),
+                start: offer.start,
+                end: offer.end
+              },
+              plan_qty: offer.end - offer.start
+            });
+          }
+        }
+        break;
+
+      case 'THE_PIT':
+        for (const offer of svc.pit.offers) {
+          if (offer.tier && (offer.runs ?? 0) > 0) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: {
+                tier_code: offer.tier,
+                tier_label: labelMaps.value.PIT?.get(offer.tier) || offer.tier
+              },
+              plan_qty: offer.runs
+            });
+          }
+        }
+        break;
+        
+      case 'BOSS':
+        for (const offer of svc.boss.offers) {
+          if (offer.code && (offer.runs ?? 0) > 0) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: {
+                boss_code: offer.code,
+                boss_label: labelMaps.value.BOSS?.get(offer.code) || offer.code
+              },
+              plan_qty: offer.runs
+            });
+          }
+        }
+        break;
+
+      case 'MYTHIC':
+        for (const offer of svc.mythic.offers) {
+          if (offer.item && (offer.qty ?? 0) > 0) {
+            const statLabels = offer.stats?.filter(Boolean)
+              .map(statCode => labelMaps.value.ITEM_STATS_SORT?.get(statCode!) || statCode);
+            
+            items.push({
+              service_kind_id: serviceKindId,
+              params: {
+                item_code: offer.item,
+                item_label: labelMaps.value.MYTHIC_ITEM?.get(offer.item) || offer.item,
+                ga_code: offer.ga || undefined,
+                ga_label: offer.ga ? (labelMaps.value.MYTHIC_GA?.get(offer.ga) || offer.ga) : undefined,
+                ga_note: statLabels?.length ? statLabels.join(', ') : undefined
+              },
+              plan_qty: offer.qty
+            });
+          }
+        }
+        break;
+
+      case 'MATERIALS':
+      case 'MASTERWORKING':
+        const offersToProcess = kindCode === 'MATERIALS' ? svc.materials.offers : svc.masterwork.offers;
+        for (const offer of offersToProcess) {
+          if (offer.code && (offer.qty ?? 0) > 0) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: { attribute_code: offer.code },
+              plan_qty: offer.qty
+            });
+          }
+        }
+        break;
+
+      case 'INFERNAL_HORDES':
+      case 'NIGHTMARE':
+        const tierOffers = kindCode === 'INFERNAL_HORDES' ? svc.infernalHordes.offers : svc.nightmare.offers;
+        for (const offer of tierOffers) {
+           if (offer.tier && (offer.qty ?? 0) > 0) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: { attribute_code: offer.tier },
+              plan_qty: offer.qty
+            });
+          }
+        }
+        break;
+
+      case 'RENOWN':
+      case 'ALTARS_OF_LILITH':
+        const regionOffers = kindCode === 'RENOWN' ? svc.renown.offers : svc.altars.offers;
+        for (const offer of regionOffers) {
+          if (offer.region) {
+            items.push({
+              service_kind_id: serviceKindId,
+              params: { attribute_code: offer.region },
+              plan_qty: offer.qty
+            });
+          }
+        }
+        break;
+    }
+  }
+  return items;
+}
+
+// THAY THẾ HÀM submit CŨ BẰNG HÀM NÀY
 async function submit() {
-  await formRef.value?.validate()
-
-  const k = countSelectedKinds()
-  if ((form.value.package_type === 'CUSTOM' || form.value.package_type === 'BUILD') && k < 2) {
-    form.value.package_type = 'BASIC'
-  }
-  if (k < 1) return message.warning('Chọn ít nhất 1 loại dịch vụ.')
-
-  const rows = toSubRows()
-
-  const coreForm: CoreForm = {
-    channel_code: form.value.channel_code || '',
-    service_type: form.value.service_type,
-    customer_name: form.value.customer_name || '',
-    btag: form.value.service_type === 'selfplay' ? (form.value.btag || undefined) : undefined,
-    login_id: form.value.service_type === 'pilot' ? (form.value.login_id || undefined) : undefined,
-    login_pwd: form.value.service_type === 'pilot' ? (form.value.login_pwd || undefined) : undefined,
-    deadline: form.value.deadline ? new Date(form.value.deadline).toISOString() : undefined,
-    price: Number(form.value.price ?? 0),
-    currency: form.value.currency,
-    package_type: form.value.package_type,
-    package_note: form.value.package_note?.trim() || undefined
-  }
-
-  saving.value = true
+  saving.value = true;
   try {
-    // ✅ Tạo order + line + sub-items NGAY TRONG RPC
-    const { order_id, line_id } = await createServiceOrder(coreForm, rows, labelMaps.value)
-    message.success(`Đã lưu đơn #${order_id}`)
-    hasLoadedChannels.value = hasLoadedCurrencies.value = false
-    ensureChannels(); ensureCurrencies(); loadServiceDict(); loadAllCustomers()
-    resetForm()
+    await formRef.value?.validate();
+    
+    const serviceItemsPayload = buildServiceItemsPayload();
+
+    if (serviceItemsPayload.length === 0 && svc.selected.length > 0) {
+      message.warning('Vui lòng chọn chi tiết cho các dịch vụ đã tick.');
+      saving.value = false;
+      return;
+    }
+    
+    // Payload này chứa ĐÚNG và ĐỦ 12 tham số mà RPC mong đợi
+    const payload = {
+        p_channel_code: form.value.channel_code,
+        p_service_type: form.value.service_type,
+        p_customer_name: form.value.customer_name,
+        p_deadline: form.value.deadline ? new Date(form.value.deadline).toISOString() : null,
+        p_price: form.value.price,
+        p_currency_code: form.value.currency,
+        p_package_type: form.value.package_type,
+        p_package_note: form.value.package_note,
+        p_customer_account_id: isAddingNewAccount.value ? null : form.value.selectedAccountId,
+        p_new_account_details: isAddingNewAccount.value ? {
+            account_type: form.value.service_type === 'pilot' ? 'login' : 'btag',
+            label: newAccount.label,
+            btag: form.value.service_type === 'selfplay' ? newAccount.btag : null,
+            login_id: form.value.service_type === 'pilot' ? newAccount.login_id : null,
+            login_pwd: form.value.service_type === 'pilot' ? newAccount.login_pwd : null,
+        } : null,
+        p_game_code: 'DIABLO_4',
+        p_service_items: serviceItemsPayload
+    };
+
+    const { error } = await supabase.rpc('create_service_order_v1', payload);
+    if (error) throw error;
+
+    message.success(`Đã tạo đơn hàng thành công!`);
+    resetForm();
+
   } catch (e: any) {
-    console.error(e)
-    message.error(e?.message || 'Không thể lưu đơn')
+    console.error('LỖI CHI TIẾT KHI LƯU ĐƠN:', JSON.stringify(e, null, 2));
+    message.error(e?.message || 'Không thể lưu đơn. Vui lòng kiểm tra Console (F12).');
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 
 /* mount */
-onMounted(() => { ensureChannels(); ensureCurrencies(); loadServiceDict(); loadAllCustomers() })
+onMounted(() => {
+  ensureChannels();
+  ensureCurrencies();
+  loadServiceDict();
+  loadAllCustomers()
+})
 </script>
 
 <style scoped>
 :deep(.n-card) { border-radius: 14px; }
-
-/* Ô giá + currency ở suffix */
 .price-field :deep(.n-input-number .n-input__suffix) { padding-right: 0; }
 .currency-suffix { display: inline-flex; align-items: center; height: 100%; }
 .currency-suffix--fixed { width: 75px; flex: 0 0 75px; }
@@ -847,8 +1203,6 @@ onMounted(() => { ensureChannels(); ensureCurrencies(); loadServiceDict(); loadA
 .currency-suffix :deep(.n-input .n-input__border),
 .currency-suffix :deep(.n-input .n-input__state-border) { display: none !important; }
 .currency-suffix :deep(.n-input__input-el) { text-align: center; padding: 0 4px; }
-
-/* Radio group style */
 .service-type { display: inline-flex !important; gap: 12px; align-items: center; }
 .service-type :deep(.n-radio-button) {
   min-width: 110px; height: 40px; padding: 0 18px; border-radius: 12px;

@@ -1,7 +1,5 @@
-<!-- path: src/pages/ServiceBoosting.vue -->
 <template>
   <div class="p-4">
-    <!-- Header -->
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-xl font-semibold tracking-tight">Service – Boosting</h1>
       <div class="flex items-center gap-2">
@@ -14,10 +12,66 @@
     </div>
 
     <n-card :bordered="false" class="shadow-sm">
+      <div class="flex items-end gap-3 mb-4 flex-wrap">
+        <n-form-item label="Kênh bán" size="small" class="mb-0">
+          <n-select
+            v-model:value="filters.channels"
+            multiple
+            clearable
+            max-tag-count="responsive"
+            :options="channelOptions"
+            placeholder="Lọc kênh bán"
+            style="width: 200px"
+          />
+        </n-form-item>
+        <n-form-item label="Loại dịch vụ" size="small" class="mb-0">
+          <n-select
+            v-model:value="filters.serviceTypes"
+            multiple
+            clearable
+            max-tag-count="responsive"
+            :options="serviceTypeOptions"
+            placeholder="Lọc loại"
+            style="width: 150px"
+          />
+        </n-form-item>
+        <n-form-item label="Trạng thái" size="small" class="mb-0">
+          <n-select
+            v-model:value="filters.statuses"
+            multiple
+            clearable
+            max-tag-count="responsive"
+            :options="statusOptions"
+            placeholder="Lọc trạng thái"
+            style="width: 200px"
+            class="wide-dropdown"
+          />
+        </n-form-item>
+        <n-form-item label="Gói dịch vụ" size="small" class="mb-0">
+          <n-select
+            v-model:value="filters.packageTypes"
+            multiple
+            clearable
+            max-tag-count="responsive"
+            :options="packageTypeOptions"
+            placeholder="Lọc gói"
+            style="width: 150px"
+          />
+        </n-form-item>
+        <n-form-item label="Tên khách hàng" size="small" class="mb-0">
+          <n-input v-model:value="filters.customerName" clearable placeholder="Tên khách hàng" />
+        </n-form-item>
+        <n-form-item label="Người thực hiện" size="small" class="mb-0">
+          <n-input v-model:value="filters.assignee" clearable placeholder="Người thực hiện" />
+        </n-form-item>
+        
+        <n-button size="small" tertiary @click="resetFilters">Xóa bộ lọc</n-button>
+      </div>
+
       <div class="table-wrap overflow-x-auto">
         <n-data-table
           :columns="columns"
-          :data="rows"
+          :data="filteredRows"
           :loading="loading"
           :pagination="pagination"
           size="small"
@@ -27,14 +81,13 @@
       </div>
     </n-card>
 
-    <!-- Drawer -->
-    <n-drawer v-model:show="detailOpen" width="1040" placement="right">
+    <n-drawer v-model:show="detailOpen" width="1120" placement="right" @after-leave="onDrawerClose">
       <n-drawer-content title="Thao tác đơn hàng">
         <div class="flex items-center justify-between mb-2">
           <div class="text-sm text-neutral-500">Thông tin đơn hàng</div>
           <div class="flex items-center gap-2">
             <template v-if="!editing">
-              <n-button size="tiny" tertiary @click="toggleEdit()">Sửa</n-button>
+              <n-button v-if="canEditOrderDetails" :disabled="isOrderFinalized" size="tiny" tertiary @click="toggleEdit()">Sửa</n-button>
             </template>
             <template v-else>
               <n-button size="tiny" type="primary" @click="saveInfo" :loading="savingInfo">Lưu</n-button>
@@ -49,19 +102,12 @@
           <div class="row">
             <div class="meta">Loại hình</div>
             <div class="val">
-              <n-radio-group
-                v-model:value="detail.service_type"
-                name="service_type"
-                size="small"
-                :disabled="!editing"
-                class="service-type"
-              >
-                <n-radio-button value="selfplay">Selfplay</n-radio-button>
-                <n-radio-button value="pilot">Pilot</n-radio-button>
+              <n-radio-group v-model:value="detail.service_type" name="service_type" size="small" :disabled="!editing || isOrderFinalized" class="service-type">
+                <n-radio-button value="Selfplay">Selfplay</n-radio-button>
+                <n-radio-button value="Pilot">Pilot</n-radio-button>
               </n-radio-group>
             </div>
           </div>
-
           <div class="row">
             <div class="meta">Dịch vụ (gói)</div>
             <div class="val">
@@ -74,7 +120,10 @@
                 <span class="text-xs text-neutral-400">•</span>
                 <span class="text-sm">{{ detail.customer_name }}</span>
               </div>
-              <div class="text-sm text-neutral-500 mt-1" v-if="detail.package_note">
+              <div v-if="editing" class="mt-2">
+                <n-input v-model:value="detail.package_note" type="textarea" :autosize="{minRows: 1, maxRows: 3}" placeholder="Ghi chú gói dịch vụ" :disabled="isOrderFinalized" />
+              </div>
+              <div class="text-sm text-neutral-500 mt-1" v-else-if="detail.package_note">
                 {{ detail.package_note }}
               </div>
             </div>
@@ -82,18 +131,26 @@
 
           <div class="row">
             <div class="meta">Mô tả</div>
-            <div class="val pre">
-              <n-input
-                v-if="editing"
-                v-model:value="detail.service_desc"
-                type="textarea"
-                :autosize="{ minRows: 2, maxRows: 5 }"
-                placeholder="Mô tả dịch vụ (tóm tắt)"
-              />
-              <template v-else>{{ detail.service_desc || '—' }}</template>
+            <div class="val">
+              <template v-if="detail.service_items?.length">
+                <div v-if="isDescCollapsed" class="whitespace-pre-line" v-html="generateServiceDescription(detail.service_items).summaryHtml"></div>
+                <div v-else v-html="generateServiceDescription(detail.service_items).detailHtml"></div>
+
+                <n-button
+                  text
+                  size="tiny"
+                  type="primary"
+                  @click="isDescCollapsed = !isDescCollapsed"
+                  class="mt-1"
+                >
+                  {{ isDescCollapsed ? 'Xem thêm' : 'Thu gọn' }}
+                </n-button>
+              </template>
+              
+              <span v-else>—</span>
             </div>
           </div>
-
+          
           <div class="row">
             <div class="meta">Deadline</div>
             <div class="val">
@@ -104,13 +161,14 @@
                   clearable
                   placeholder="Chọn hạn chót"
                   class="w-full"
+                  :disabled="isOrderFinalized"
                 />
               </template>
               <template v-else>
                 <n-tooltip trigger="hover" v-if="detail.deadline">
                   <template #trigger>
-                    <n-tag size="small" :type="relText(toTs(detail.deadline), now).color" :bordered="false">
-                      {{ relText(toTs(detail.deadline), now).text }}
+                    <n-tag size="small" :type="drawerDeadlineDisplay.color" :bordered="false">
+                      {{ drawerDeadlineDisplay.text }}
                     </n-tag>
                   </template>
                   {{ new Date(toTs(detail.deadline)!).toLocaleString() }}
@@ -128,806 +186,2108 @@
               </n-tag>
             </div>
           </div>
-
           <div class="row">
             <div class="meta">Người thực hiện</div>
             <div class="val">
               <span class="text-sm">{{ detail.assignees_text || '—' }}</span>
             </div>
           </div>
-
-          <div class="row" v-if="detail.service_type === 'selfplay'">
+          <div class="row" v-if="detail.service_type === 'Selfplay'">
             <div class="meta">Btag</div>
-            <div class="val">
-              <n-input v-if="editing" v-model:value="detail.btag" placeholder="Player#1234" />
-              <template v-else>{{ detail.btag || '—' }}</template>
+            <div class="val flex items-center gap-2">
+              <n-input v-if="editing" v-model:value="detail.btag" placeholder="Player#1234" :disabled="isOrderFinalized" />
+              <template v-else>
+                <span>{{ detail.btag || '—' }}</span>
+                <n-button v-if="detail.btag" size="tiny" tertiary @click="copyToClipboard(detail.btag!)">Copy</n-button>
+              </template>
             </div>
           </div>
           <template v-else>
             <div class="row">
               <div class="meta">Login ID</div>
-              <div class="val">
+              <div class="val flex items-center gap-2">
                 <n-input v-if="editing" v-model:value="detail.login_id" placeholder="Login ID" />
-                <template v-else>{{ detail.login_id || '—' }}</template>
+                <template v-else>
+                  <span>{{ detail.login_id || '—' }}</span>
+                  <n-button v-if="detail.login_id" size="tiny" tertiary @click="copyToClipboard(detail.login_id!)">Copy</n-button>
+                </template>
               </div>
             </div>
             <div class="row">
               <div class="meta">Login Pwd</div>
-              <div class="val">
+              <div class="val flex items-center gap-2">
                 <n-input v-if="editing" v-model:value="detail.login_pwd" type="password" show-password-on="mousedown" placeholder="••••••" />
-                <template v-else>{{ detail.login_pwd ? '••••••' : '—' }}</template>
+                <template v-else>
+                  <span>{{ detail.login_pwd ? '••••••' : '—' }}</span>
+                  <n-button v-if="detail.login_pwd" size="tiny" tertiary @click="copyToClipboard(detail.login_pwd!)">Copy</n-button>
+                </template>
               </div>
             </div>
           </template>
         </div>
 
         <n-divider class="!my-3">Danh mục sub (svc_items)</n-divider>
-        <div class="space-y-2">
-          <div v-for="grp in svcGroups" :key="grp.key" class="svc-kind">
-            <div class="svc-kind__head">{{ grp.label }}</div>
-            <ul class="svc-kind__list">
-              <li v-for="it in grp.items" :key="it.id" class="svc-kind__item">{{ paramsLabel(it) }}</li>
-            </ul>
+
+        <n-spin :show="detailLoading">
+          <div class="space-y-2">
+            <div v-for="grp in svcGroups" :key="grp.key" class="svc-kind">
+              <div class="svc-kind__head flex items-center justify-between cursor-pointer" @click="toggleKindCollapse(grp.key)">
+                <span>{{ grp.label }}</span>
+                <n-icon>
+                  <chevron-up v-if="!collapsedKinds.has(grp.key)" />
+                  <chevron-down v-else />
+                </n-icon>
+              </div>
+              <div v-show="!collapsedKinds.has(grp.key)" class="svc-kind__grid">
+                <div v-for="it in grp.items" :key="it.id" class="svc-item-row">
+                  <template v-if="rowMap.has(String(it.id))">
+                    <div class="cell cell-check">
+                      <n-checkbox :checked="isPicked(it.id)" @update:checked="(c:boolean) => togglePick(it, c)" :disabled="isLevelingItemDisabled(it) || !!it.active_report_id || isOrderFinalized" />
+                    </div>
+                    <div class="cell cell-label">
+                      <div class="flex items-center gap-2">
+                        <span v-html="paramsLabel(it)"></span>
+                        <n-tag v-if="rowMap.has(String(it.id))" size="tiny" round :type="rowMap.get(String(it.id))?.statusText === 'Hoàn thành' ? 'success' : rowMap.get(String(it.id))?.statusText === 'Đang thực hiện' ? 'warning' : 'default'">
+                          {{ rowMap.get(String(it.id))?.statusText }}
+                        </n-tag>
+                      </div>
+                    </div>
+                    <div class="cell cell-actions flex items-center justify-center">
+                      <n-tooltip trigger="hover">
+                        <template #trigger>
+                          <n-button
+                            text
+                            :disabled="!canCreateReport || isOrderFinalized"
+                            @click="canCreateReport ? openReportModal(it) : null"
+                            :type="it.active_report_id ? 'warning' : 'default'"
+                          >
+                            <template #icon><n-icon :component="InformationCircleOutline" /></template>
+                          </n-button>
+                        </template>
+                        {{
+                          !canCreateReport
+                            ? 'Bạn không có quyền tạo báo cáo'
+                            : it.active_report_id
+                            ? 'Hạng mục đang có báo cáo'
+                            : 'Báo cáo sai lệch'
+                        }}
+                      </n-tooltip>
+                    </div>
+                    <div class="cell cell-num">
+                      <n-input-number :value="rowMap.get(String(it.id))?.start_value ?? 0" :show-button="false" :disabled="!rowMap.get(String(it.id))?.isStartValueEditable || isOrderFinalized" />
+                    </div>
+                    <div class="cell cell-exp">
+                      <n-input-number v-if="it.kind_code === 'LEVELING'" v-model:value="rowMap.get(String(it.id))!.start_exp" :show-button="false" :disabled="!rowMap.get(String(it.id))?.isExpEditable|| isOrderFinalized" placeholder="EXP BĐ" :min="0" :max="100">
+                        <template #suffix>%</template>
+                      </n-input-number>
+                    </div>
+                    <div class="cell cell-num">
+                      <n-input-number v-model:value="rowMap.get(String(it.id))!.current_value" :show-button="false" :disabled="!ws2.sessionId || isOrderFinalized" />
+                    </div>
+                    <div class="cell cell-exp">
+                      <n-input-number v-if="it.kind_code === 'LEVELING'" v-model:value="rowMap.get(String(it.id))!.current_exp" :show-button="false" :disabled="!ws2.sessionId || isOrderFinalized" placeholder="EXP HT" :min="0" :max="100">
+                        <template #suffix>%</template>
+                      </n-input-number>
+                    </div>
+                    <div class="cell cell-proof">
+                      <div v-if="rowMap.get(String(it.id))?.startPreviewUrl || rowMap.get(String(it.id))?.startProofUrl" class="proof-box-with-image">
+                        <n-image width="96" height="64" class="rounded object-cover" :src="(rowMap.get(String(it.id))?.startPreviewUrl || rowMap.get(String(it.id))?.startProofUrl) ?? undefined" />
+                        <div class="image-actions">
+                          <n-upload :default-upload="false" :max="1" list-type="image" :show-file-list="false" :disabled="!!ws2.sessionId || isOrderFinalized" @change="(f) => { const r=rowMap.get(String(it.id)); if (r) onPickStartFile(r, f) }">
+                            <n-button circle size="tiny" title="Thay đổi ảnh"><template #icon><n-icon :component="EditIcon" /></template></n-button>
+                          </n-upload>
+                          <n-button circle size="tiny" title="Xóa ảnh" @click="() => { const r=rowMap.get(String(it.id)); if (r) removeProof(r, 'start') }" :disabled="!!ws2.sessionId || isOrderFinalized"><template #icon><n-icon :component="TrashIcon" /></template></n-button>
+                        </div>
+                      </div>
+                      <div v-else class="proof-box-empty">
+                        <n-upload :default-upload="false" :max="1" list-type="image" :show-file-list="false" :disabled="!!ws2.sessionId || isOrderFinalized" @change="(f) => { const r=rowMap.get(String(it.id)); if (r) onPickStartFile(r, f) }" @paste="(e: ClipboardEvent) => { if (ws2.sessionId) return; const r=rowMap.get(String(it.id)); if (r) handlePaste(e, r, 'start') }">
+                          <n-button :disabled="!!ws2.sessionId || isOrderFinalized">Tải lên / Dán</n-button>
+                        </n-upload>
+                      </div>
+                    </div>
+                    <div v-if="ws2.sessionId && isPicked(it.id)" class="cell cell-proof">
+                      <div v-if="rowMap.get(String(it.id))?.endPreviewUrl || rowMap.get(String(it.id))?.endProofUrl" class="proof-box-with-image">
+                        <n-image width="96" height="64" class="rounded object-cover" :src="(rowMap.get(String(it.id))?.endPreviewUrl || rowMap.get(String(it.id))?.endProofUrl) ?? undefined" />
+                        <div class="image-actions">
+                          <n-upload :default-upload="false" :max="1" list-type="image" :show-file-list="false" @change="(f) => { const r=rowMap.get(String(it.id)); if (r) onPickEndFile(r, f) }">
+                            <n-button circle size="tiny" title="Thay đổi ảnh" :disabled="isOrderFinalized"><template #icon><n-icon :component="EditIcon" /></template></n-button>
+                          </n-upload>
+                          <n-button circle size="tiny" title="Xóa ảnh" @click="() => { const r=rowMap.get(String(it.id)); if (r) removeProof(r, 'end') }"><template #icon><n-icon :component="TrashIcon" :disabled="isOrderFinalized"/></template></n-button>
+                        </div>
+                      </div>
+                      <div v-else class="proof-box-empty">
+                        <n-upload :default-upload="false" :max="1" list-type="image" :show-file-list="false" @change="(f) => { const r=rowMap.get(String(it.id)); if (r) onPickEndFile(r, f) }" @paste="(e: ClipboardEvent) => { const r=rowMap.get(String(it.id)); if (r) handlePaste(e, r, 'end') }">
+                          <n-button :disabled="isOrderFinalized">Tải lên / Dán</n-button>
+                        </n-upload>
+                      </div>
+                    </div>
+                    <div v-else class="cell cell-proof"></div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!svcGroups.length && !detailLoading" class="text-sm text-neutral-500">Chưa có svc_items.</div>
+            <div class="flex items-center gap-2 mt-2">
+              <n-button size="small" type="primary" :disabled="!computedCanStart" @click="startSession">Bắt đầu</n-button>
+              <n-button size="small" tertiary :disabled="!ws2.sessionId || !canManageActiveSession" @click="cancelSession">Huỷ phiên</n-button>
+              <n-button size="small" type="success" :disabled="!computedCanFinish" :loading="submittingFinish" @click="finishSession">Kết thúc</n-button>
+            </div>
           </div>
-          <div v-if="!svcGroups.length" class="text-sm text-neutral-500">Chưa có svc_items — sẽ parse tạm từ service_desc nếu có.</div>
-        </div>
 
-        <n-divider class="!my-3">Tiến trình & phiên làm việc</n-divider>
+          <div class="mb-3" v-if="showActivity && !detailLoading">
+            <div class="text-xs text-neutral-500 mb-1" :disabled="isOrderFinalized">Hoạt động (Ghi nhận số boss đã đánh)</div>
+            <div class="grid gap-2">
+              <div v-for="(ar, i) in ws2.activityRows" :key="'act-'+i" class="flex items-center gap-2">
+                <n-select v-model:value="ar.label" filterable placeholder="Chọn boss" :options="activityOptions" class="flex-grow"/>
+                <n-input-number v-model:value="ar.qty" :min="1" :show-button="false" placeholder="Số lượng" style="width: 120px"/>
+                <n-button size="tiny" tertiary @click="rmActRow(i)" :disabled="ws2.activityRows.length===1">Xoá</n-button>
+              </div>
+              <n-button size="tiny" tertiary @click="addActRow" :disabled="isOrderFinalized">Thêm hoạt động</n-button>
+            </div>
+          </div>
 
-        <div class="mb-2">
-          <div class="text-xs text-neutral-500 mb-1">Chọn nhóm để cập nhật tiến trình</div>
-          <n-select
-            v-model:value="ws2.kindSelected"
-            :options="kindOptionsFromOrder"
+          <div v-if="overrunDetected && !detailLoading" class="mb-2">
+            <n-input v-model:value="ws2.overrun_reason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="Lý do vượt chỉ tiêu (bắt buộc nếu có sub vượt/đạt plan)" :disabled="isOrderFinalized"/>
+          </div>
+
+          <div class="mb-2" v-if="!detailLoading">
+            <n-input v-model:value="ws2.note" type="textarea" :autosize="{minRows:2, maxRows:4}" placeholder="Ghi chú thêm (sẽ được lưu khi Hoàn thành hoặc Hủy bỏ)" :disabled="isOrderFinalized"/>
+          </div>
+        </n-spin>
+
+        <div class="mt-4" v-if="!isOrderFinalized || detail.action_proof_urls?.length || hasNewProofs">
+          <div class="font-medium mb-2">Bằng chứng (Hoàn thành / Hủy bỏ)</div>
+          <n-upload
+            v-model:file-list="proofFiles"
+            :max="5"
             multiple
-            placeholder="Chọn KIND cần thao tác"
-            @update:value="syncRowsFromKinds"
+            list-type="image-card"
+            :disabled="isOrderFinalized && !canEditOrderDetails"
+            :show-remove-button="(handleShowRemoveButton as any)"
           />
+          <n-button 
+            v-if="hasNewProofs" 
+            size="small" 
+            type="primary" 
+            class="mt-2" 
+            :loading="savingNewProofs"
+            @click="saveAdditionalProofs"
+          >
+            Lưu bằng chứng bổ sung
+          </n-button>
         </div>
 
-        <div class="ws-table mb-3" v-if="ws2.rows.length">
-          <div class="ws-head">
-            <div>Nội dung</div>
-            <div>Start</div>
-            <div>Current</div>
-            <div>Proof (tuỳ chọn)</div>
-          </div>
-          <div v-for="(r, i) in ws2.rows" :key="r.item_id" class="ws-row">
-            <div class="truncate">{{ r.label }}</div>
-            <div><n-input-number v-model:value="r.start_value" :show-button="false" /></div>
-            <div><n-input-number v-model:value="r.current_value" :show-button="false" /></div>
-            <div class="flex items-center gap-2">
-              <n-upload :default-upload="false" :max="1" @change="(f) => (ws2.rows[i].startFile = f.file?.file || null)">
-                <n-button size="tiny">Start</n-button>
-              </n-upload>
-              <n-upload :default-upload="false" :max="1" @change="(f) => (ws2.rows[i].endFile = f.file?.file || null)">
-                <n-button size="tiny">End</n-button>
-              </n-upload>
-            </div>
-          </div>
-        </div>
-
-        <div class="mb-2 grid gap-2">
-          <div class="text-xs text-neutral-500">Hoạt động (tuỳ chọn)</div>
-          <div class="flex items-center gap-2">
-            <n-select v-model:value="ws2.activity" :options="activityOptions" style="width: 220px" />
-            <n-button size="tiny" tertiary @click="addActRow">Thêm dòng</n-button>
-          </div>
-          <div class="grid gap-2">
-            <div v-for="(ar, i) in ws2.activityRows" :key="'act-'+i" class="flex items-center gap-2">
-              <n-input v-model:value="ar.label" placeholder="Mô tả" />
-              <n-input-number v-model:value="ar.qty" :min="0" :show-button="false" placeholder="Qty" style="width: 120px" />
-              <n-button size="tiny" tertiary @click="rmActRow(i)" :disabled="ws2.activityRows.length===1">Xoá</n-button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mb-2">
-          <n-input v-model:value="ws2.note" type="textarea" :autosize="{minRows:2, maxRows:4}" placeholder="Ghi chú thêm" />
-        </div>
-
-        <div class="flex justify-end gap-2">
+        <div class="flex justify-end gap-2 mt-4">
           <n-button size="small" tertiary @click="detailOpen=false">Đóng</n-button>
-          <n-button size="small" type="primary" :loading="submittingFinish" @click="finishSession">Cập nhật tiến trình</n-button>
+          <n-button size="small" type="error" :loading="cancellingOrder" :disabled="!canCancelOrder || isOrderFinalized" @click="handleCancelOrder">Hủy bỏ đơn hàng</n-button>
+          <n-button size="small" type="primary" :disabled="!computedCanComplete || isOrderFinalized" :loading="closingOrder" @click="handleCompleteOrder">Hoàn thành đơn hàng</n-button>
         </div>
       </n-drawer-content>
     </n-drawer>
 
-    <!-- Modal: Review -->
-    <n-modal v-model:show="review.open" preset="dialog" title="Đánh giá đơn">
+    <n-modal v-model:show="reportModal.open" preset="dialog" title="Báo cáo sai lệch">
       <div class="space-y-3">
+        <div class="text-sm">Báo cáo cho hạng mục: <strong>{{ reportModal.itemLabel }}</strong></div>
+        <n-input v-model:value="reportModal.description" type="textarea" :autosize="{ minRows: 3, maxRows: 6 }" placeholder="Mô tả chi tiết vấn đề bạn gặp phải..." />
+        <div>
+          <div class="text-xs text-neutral-500 mb-1">Bằng chứng (nếu có)</div>
+          <n-upload v-model:file-list="reportModal.proofs" :max="3" multiple list-type="image-card" />
+        </div>
+        <div class="flex justify-end gap-2">
+          <n-button tertiary size="small" @click="reportModal.open = false" :disabled="reportModal.loading">Huỷ</n-button>
+          <n-button type="primary" size="small" :loading="reportModal.loading" @click="submitReport">Gửi báo cáo</n-button>
+        </div>
+      </div>
+    </n-modal>
+
+    <n-modal v-model:show="review.open" preset="card" title="Đánh giá đơn hàng" style="width: 700px;">
+      <n-spin :show="review.loadingExisting">
+        <div v-if="review.existingReviews.length > 0" class="space-y-4 max-h-[40vh] overflow-y-auto pr-2 mb-4 border-b pb-4">
+          <div v-for="rev in review.existingReviews" :key="rev.id" class="p-3 border rounded-lg bg-neutral-50">
+            <div class="flex items-center justify-between mb-2">
+              <n-rate readonly :value="rev.rating" allow-half />
+              <div class="text-xs text-neutral-500">
+                <span>{{ rev.reviewer_name }}</span> - 
+                <span>{{ new Date(rev.created_at).toLocaleString() }}</span>
+              </div>
+            </div>
+            <p v-if="rev.comment" class="text-sm text-neutral-700 mb-2 whitespace-pre-wrap">{{ rev.comment }}</p>
+            <div v-if="rev.proof_urls?.length">
+              <n-image-group>
+                <div class="flex flex-wrap gap-2">
+                  <n-image v-for="url in rev.proof_urls" :key="url" width="80" :src="url" class="rounded" />
+                </div>
+              </n-image-group>
+            </div>
+          </div>
+        </div>
+      </n-spin>
+
+      <div v-if="auth.hasPermission('orders:add_review')" class="space-y-3">
+        <div class="font-medium">Thêm đánh giá mới</div>
         <n-rate v-model:value="review.stars" allow-half />
         <n-input v-model:value="review.comment" type="textarea" :autosize="{minRows: 3, maxRows: 6}" placeholder="Nhận xét (tuỳ chọn)" />
-        <div class="flex justify-end gap-2">
-          <n-button tertiary size="small" @click="review.open = false">Huỷ</n-button>
+        <div>
+          <div class="text-xs text-neutral-500 mb-1">Bằng chứng (tuỳ chọn)</div>
+          <n-upload v-model:file-list="review.proofs" :max="3" multiple list-type="image-card" />
+        </div>
+        <div class="flex justify-end">
           <n-button type="primary" size="small" :loading="review.saving" @click="submitReview">Gửi đánh giá</n-button>
         </div>
       </div>
+    </n-modal>
+
+    <n-modal v-model:show="historyModal.open" preset="card" title="Lịch sử Phiên làm việc" style="width: 900px;">
+      <n-spin :show="historyModal.loading">
+        <div v-if="!historyModal.sessions?.length" class="text-center text-neutral-500 py-4">
+          Chưa có phiên làm việc nào đã hoàn thành.
+        </div>
+        <n-collapse v-else class="max-h-[70vh] overflow-y-auto pr-2">
+          <n-collapse-item v-for="session in historyModal.sessions" :key="session.session_id">
+            <template #header>
+              <div class="flex items-center justify-between w-full pr-4">
+                <div class="font-semibold text-sm">{{ session.farmer_name }}</div>
+                <div class="text-xs text-neutral-500">
+                  {{ formatDateTime(session.started_at) }} - {{ formatDateTime(session.ended_at) }}
+                </div>
+              </div>
+            </template>
+
+            <div class="space-y-4">
+              <div v-for="group in groupSessionOutputs(session.outputs)" :key="group.kind">
+                <div class="font-semibold text-sm mb-2">{{ group.kind }}</div>
+                <div class="space-y-3 pl-4">
+                  <div v-for="output in group.items" :key="output.id" class="p-3 border rounded-lg bg-neutral-50/50">
+                    <div class="font-medium text-sm mb-2" v-html="paramsLabel(output)"></div>
+                    <div class="grid grid-cols-2 gap-4 items-start">
+                      <div>
+                        <div class="text-xs text-neutral-500">Bắt đầu</div>
+                        <div class="flex items-center gap-2">
+                          <span>Chỉ số: {{ output.session_start_value }}</span>
+                          <n-button v-if="output.start_proof_url" text tag="a" :href="output.start_proof_url" target="_blank" type="primary">
+                            <template #icon><n-icon :component="InformationCircleOutline" /></template>
+                            Xem ảnh
+                          </n-button>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="text-xs text-neutral-500">Kết thúc</div>
+                        <div class="flex items-center gap-2">
+                          <span>Chỉ số: {{ output.session_end_value }} (+{{ output.session_delta }})</span>
+                          <n-button v-if="output.end_proof_url" text tag="a" :href="output.end_proof_url" target="_blank" type="primary">
+                            <template #icon><n-icon :component="InformationCircleOutline" /></template>
+                            Xem ảnh
+                          </n-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="group.activities?.length" class="p-3 border rounded-lg bg-blue-50/50 border-blue-200">
+                    <div class="font-medium text-sm mb-2">Hoạt động farm boss:</div>
+                    <div class="space-y-1 pl-4">
+                      <div v-for="(activity, index) in group.activities" :key="index" class="text-sm flex items-center gap-2">
+                        <n-icon :component="BookOutline" />
+                        <span>{{ getAttributeName(activity.activity_label) }}: <strong>{{ activity.session_delta }}</strong> runs</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </n-collapse-item>
+        </n-collapse>
+      </n-spin>
     </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { h, ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { h, ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import {
-  NCard, NButton, NDataTable, NSwitch, NTag, NTooltip, NDrawer, NDrawerContent,
-  NDivider, NRadioGroup, NRadioButton, NInput, NDatePicker, NUpload, NInputNumber,
-  NModal, NRate, NSelect, createDiscreteApi, type DataTableColumns
-} from 'naive-ui'
-import { supabase } from '@/lib/supabase'
+  NCard, NButton, NDataTable, NSwitch, NTag, NTooltip, NDrawer, NDrawerContent, NDivider,
+  NInput, NUpload, NInputNumber, NCheckbox, NImage, NSpin, createDiscreteApi, useDialog,
+  NRadioGroup, NRadioButton, NDatePicker, NRate, NModal, NSelect, NIcon,  NImageGroup,
+  NCollapse, NCollapseItem,
+  type UploadFileInfo, type SelectOption, type DataTableColumns
+} from 'naive-ui';
+import { ChevronDown, ChevronUp, Pencil as EditIcon, TrashOutline as TrashIcon,
+  InformationCircleOutline, EyeOutline, BookOutline } from '@vicons/ionicons5';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/stores/auth';
+import { 
+  fetchLastProofs, startWorkSession, finishWorkSessionIdem,
+  type SessionOutputRow, type ActivityRow 
+} from '@/lib/progress';
 
-const { message } = createDiscreteApi(['message'])
-const CUSTOMER_REL = 'customer:parties!orders_customer_id_fkey'
-
-/* ===================== Types ===================== */
-type Row = {
-  id: string
-  order_id: string
-  created_at: string
-  channel_code: string
-  service_type: 'selfplay'|'pilot'
-  customer_name: string
-  package_type: 'BASIC'|'CUSTOM'|'BUILD'|null
-  package_note: string|null
-  service_desc: string|null
-  deadline: string|null
-  status: string|null
-  assignees_text: string
+// =================================================================
+// TYPES
+// =================================================================
+// THAY ĐỔI 1: Định nghĩa type cho một service item trả về từ RPC mới
+type SvcItemSummary = {
+  id: string;
+  kind_code: string;
+  kind_name: string;
+  params: any;
+  plan_qty: number | null;
+  done_qty: number;
+  active_report_id: string | null;
+}
+type OrderRow = {
+  id: string; line_id: string; order_id: string; created_at: string; updated_at: string | null; status: string;
+  channel_code: string; customer_name: string; deadline: string | null;
+  btag: string | null; login_id: string | null; login_pwd: string | null;
+  service_type: 'Selfplay' | 'Pilot';
+  package_type: 'BASIC' | 'CUSTOM' | 'BUILD';
+  package_note: string | null;
+  assignees_text: string;
+  service_items: SvcItemSummary[] | null;
+  review_id: string | null;
 }
 
-type SvcItem = { id: string; kind_code: string; kind_name?: string; params: any; plan_qty?: number|null; done_qty?: number|null }
-
-/* ===================== State ===================== */
-const rows = ref<Row[]>([])
-const loading = ref(false)
-const autoRefresh = ref(true)
-const pagination = reactive({ page: 1, pageSize: 20, pageSizes: [10, 20, 50, 100], showSizePicker: true })
-
-/* ===================== Helpers ===================== */
-const clip = (s: any, n = 60) => {
-  const str = (s ?? '').toString()
-  return str.length > n ? (str.slice(0, n - 1) + '…') : str
+type OrderDetail = OrderRow & {
+  action_proof_urls: string[] | null;
+  active_session: {
+    session_id: string;
+    farmer_id: string;
+    farmer_name: string;
+    start_state: { item_id: string; start_value: number; start_proof_url: string | null; start_exp?: number | null; }[];
+  } | null;
 }
+
+type SvcItem = { 
+  id: string; kind_code: string; params: any; plan_qty: number | null; done_qty: number; active_report_id: string | null;
+}
+type LastProof = {
+  item_id: string; last_start_proof_url: string | null; last_end_proof_url: string | null;
+  last_end: number | null; last_delta: number | null; last_exp_percent: number | null;
+}
+type WsRow = {
+  item_id: string; kind_code: string; label: string; start_value: number; current_value: number;
+  start_exp: number | null; current_exp: number | null; isStartValueEditable: boolean; isExpEditable: boolean;
+  startFile: File | null; endFile: File | null; startPreviewUrl: string | null; endPreviewUrl: string | null;
+  startProofUrl: string | null; endProofUrl: string | null; statusText: string;
+}
+
+type PkgType = 'BASIC' | 'CUSTOM' | 'BUILD';
+
+type ProofUploadFileInfo = UploadFileInfo & { isSaved?: boolean };
+// =================================================================
+// INITIALIZATION & STATE
+// =================================================================
+const { message } = createDiscreteApi(['message']);
+const dialog = useDialog();
+const auth = useAuth();
+
+const rows = ref<OrderRow[]>([]);
+const loading = ref(false);
+const autoRefresh = ref(true);
+const pagination = reactive({
+  page: 1,
+  pageSize: 100,
+  pageSizes: [20, 50, 100, 200],
+  showSizePicker: true,
+  onUpdatePage: (page: number) => {
+    pagination.page = page;
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    pagination.pageSize = pageSize;
+    pagination.page = 1; // Quay về trang 1 khi đổi kích thước
+  }
+});
+const now = ref(Date.now());
+const isDescCollapsed = ref(true);
+let clock: number | null = null;
+let poll: number | null = null;
+
+const filters = reactive({
+  channels: null as string[] | null, 
+  serviceTypes: null as string[] | null,
+  packageTypes: null as string[] | null,
+  customerName: '', 
+  statuses: null as string[] | null, 
+  assignee: ''
+});
+
+const detailOpen = ref(false);
+const detailLoading = ref(false);
+const detail = reactive<Partial<OrderDetail>>({});
+const editing = ref(false);
+const savingInfo = ref(false);
+const deadlineModel = ref<number | null>(null);
+const svcItems = ref<SvcItem[]>([]);
+const lastProofMap = ref<Record<string, LastProof>>({});
+const attributeMap = ref<Map<string, string>>(new Map());
+const bossDict = ref<SelectOption[]>([]);
+const collapsedKinds = reactive(new Set<string>());
+
+const sessionLoading = ref(false);
+const ws2 = ref({
+  activityRows: [{ label: null as string | null, qty: null as number | null }],
+  note: '',
+  overrun_reason: null as string | null,
+  sessionId: null as string | null,
+  selectedIds: [] as string[],
+  rows: [] as WsRow[]
+});
+const submittingFinish = ref(false);
+const closingOrder = ref(false);
+const cancellingOrder = ref(false);
+const proofFiles = ref<ProofUploadFileInfo[]>([]);
+
+const reportModal = ref({
+  open: false, loading: false, itemId: null as string | null, itemLabel: '',
+  description: '', proofs: [] as UploadFileInfo[]
+});
+
+const review = ref({ 
+  open: false, 
+  lineId: null as string | null, 
+  stars: 5, 
+  comment: '', 
+  saving: false,
+  proofs: [] as UploadFileInfo[],
+  // THÊM CÁC TRƯỜNG MỚI ĐỂ XEM REVIEW
+  loadingExisting: false,
+  existingReviews: [] as any[]
+});
+
+// =================================================================
+// PERMISSION & LOGIC COMPUTED PROPERTIES
+// =================================================================
+const D4_SERVICE_CONTEXT = { game_code: 'DIABLO_4', business_area_code: 'SERVICE' };
+
+// Sửa lại toàn bộ các computed kiểm tra quyền để thêm ngữ cảnh
+const canEditOrderDetails = computed(() => auth.hasPermission('orders:edit_details', D4_SERVICE_CONTEXT));
+const canCreateReport = computed(() => auth.hasPermission('reports:create', D4_SERVICE_CONTEXT));
+const canCompleteOrder = computed(() => auth.hasPermission('orders:complete', D4_SERVICE_CONTEXT));
+const canCancelOrder = computed(() => auth.hasPermission('orders:cancel', D4_SERVICE_CONTEXT));
+
+const canManageActiveSession = computed(() => {
+  const session = detail.active_session;
+  if (!session) return false;
+  
+  if (session.farmer_id === auth.user?.id) {
+    return auth.hasPermission('work_session:finish', D4_SERVICE_CONTEXT) || auth.hasPermission('work_session:cancel', D4_SERVICE_CONTEXT);
+  }
+  return auth.hasPermission('work_session:override', D4_SERVICE_CONTEXT);
+});
+
+const computedCanStart = computed(() => {
+  if (!auth.hasPermission('work_session:start', D4_SERVICE_CONTEXT)) return false;
+  if (!ws2.value.selectedIds.length || ws2.value.sessionId) return false;
+  
+  for (const itemId of ws2.value.selectedIds) {
+    const row = rowMap.value.get(itemId);
+    if (!row || (!row.startProofUrl && !row.startFile)) return false;
+    if (row.kind_code === 'LEVELING' && row.start_exp === null) return false;
+  }
+  
+  return true;
+});
+
+const computedCanFinish = computed(() => {
+  if (!ws2.value.sessionId) return false;
+  if (!canManageActiveSession.value) return false;
+
+  // Giữ lại logic kiểm tra bằng chứng và EXP cũ
+  for (const itemId of ws2.value.selectedIds) {
+    const row = rowMap.value.get(itemId);
+    if (!row) continue;
+    const hasProgress = (row.kind_code === 'LEVELING')
+      ? (round2(row.current_value) >= round2(row.start_value))
+      : (round2(row.current_value) > round2(row.start_value));
+    if (hasProgress) {
+      if (!row.endFile && !row.endProofUrl) return false;
+      if (row.kind_code === 'LEVELING' && row.current_exp === null) return false;
+    }
+  }
+
+  // --- LOGIC MỚI: Kiểm tra hoạt động farm boss cho Mythic ---
+  // 1. Kiểm tra xem có item Mythic nào được chọn trong phiên không
+  const isMythicSession = ws2.value.rows.some(r => 
+    ws2.value.selectedIds.includes(r.item_id) && mythicKinds.has(r.kind_code)
+  );
+
+  // 2. Nếu có, kiểm tra xem đã nhập hoạt động farm boss chưa
+  if (isMythicSession) {
+    const hasActivity = ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0);
+    if (!hasActivity) {
+      return false; // Vô hiệu hóa nút nếu không có hoạt động nào được nhập
+    }
+  }
+  // --- KẾT THÚC LOGIC MỚI ---
+
+  return true;
+});
+
+const computedCanComplete = computed(() => {
+  if (!canCompleteOrder.value) return false;
+  if (!svcItems.value.length) return false;
+  return svcItems.value.every(s => {
+    const plan = Number(s.plan_qty ?? 0);
+    const done = Number(s.done_qty ?? 0);
+    return plan > 0 ? done >= plan : true;
+  });
+});
+
+const drawerDeadlineDisplay = computed(() => {
+  if (!detail.created_at || !detail.deadline) {
+    return { text: '—', color: 'default' as const };
+  }
+  return formatDeadline(detail.created_at, detail.deadline, detail.updated_at, now.value, detail.status);
+});
+
+const rowMap = computed(() => new Map(ws2.value.rows.map(r => [String(r.item_id), r])));
+const activityOptions = computed(() => bossDict.value);
+const svcGroups = computed(() => groupAndSort(svcItems.value));
+const mythicKinds = new Set(['MYTHIC', 'MYTHIC_ITEM', 'MYTHIC_GA']);
+const showActivity = computed(() => ws2.value.rows.some(r => ws2.value.selectedIds.includes(r.item_id) && mythicKinds.has(String(r.kind_code || '').toUpperCase())));
+const overrunDetected = computed(() => ws2.value.rows.some(r => { if (!ws2.value.selectedIds.includes(r.item_id)) return false; const item = svcItems.value.find(s => String(s.id) === String(r.item_id)); if (!item) return false; const kind = String(item.kind_code || '').toUpperCase(); if (kind === 'LEVELING') { const plan_end_level = Number(item.params?.end ?? 0); return plan_end_level > 0 && round2(r.current_value) > round2(plan_end_level); } else { const plan_qty = Number(item.plan_qty ?? 0); return plan_qty > 0 && round2(r.current_value) > round2(plan_qty); } }));
+const isOrderFinalized = computed(() => {
+    return detail.status === 'completed' || detail.status === 'cancelled';
+});
+
+//Lọc dịch vụ
+const statusOptions = computed(() => {
+  const allStatuses = [...new Set(rows.value.map(r => r.status))];
+  return allStatuses.map(s => ({
+    label: statusView(s).label,
+    value: s
+  }));
+});
+
+const channelOptions = computed(() => {
+  const allChannels = [...new Set(rows.value.map(r => r.channel_code).filter(Boolean))];
+  return allChannels.map(c => ({
+    label: c,
+    value: c
+  }));
+});
+
+const packageTypeOptions = computed(() => {
+  const allTypes = [...new Set(rows.value.map(r => r.package_type))];
+  return allTypes.map(t => ({
+    label: pkgTypeTag(t).label,
+    value: t
+  }));
+});
+
+const serviceTypeOptions = computed(() => {
+  const allTypes = [...new Set(rows.value.map(r => r.service_type).filter(Boolean))];
+  return allTypes.map(t => ({
+    label: t,
+    value: t
+  }));
+});
+
+const filteredRows = computed(() => {
+  let data = rows.value;
+
+  // Lọc theo trạng thái
+  if (filters.statuses?.length) {
+    const statusSet = new Set(filters.statuses);
+    data = data.filter(row => statusSet.has(row.status));
+  }
+  
+  // Lọc theo kênh bán
+  if (filters.channels?.length) {
+    const channelSet = new Set(filters.channels);
+    data = data.filter(row => channelSet.has(row.channel_code));
+  }
+
+  // Lọc theo tên khách hàng
+  const customer = filters.customerName.trim().toLowerCase();
+  if (customer) {
+    data = data.filter(row => row.customer_name.toLowerCase().includes(customer));
+  }
+
+  // Lọc theo người thực hiện
+  const assignee = filters.assignee.trim().toLowerCase();
+  if (assignee) {
+    data = data.filter(row => (row.assignees_text || '').toLowerCase().includes(assignee));
+  }
+
+  // Lọc theo gói dịch vụ
+  if (filters.packageTypes?.length) {
+    const packageSet = new Set(filters.packageTypes);
+    data = data.filter(row => packageSet.has(row.package_type));
+  }
+  
+  // Lọc theo loại dịch vụ
+  if (filters.serviceTypes?.length) {
+    const serviceSet = new Set(filters.serviceTypes);
+    data = data.filter(row => serviceSet.has(row.service_type));
+  }
+
+  return data;
+});
+// =================================================================
+// CONSTANTS & HELPERS
+// =================================================================
+const KIND_UNITS: Record<string, string> = { LEVELING: 'levels', BOSS: 'runs', THE_PIT: 'runs', NIGHTMARE: 'runs', MATERIALS: 'mats', MYTHIC: 'items', MASTERWORKING: 'items', ALTARS_OF_LILITH: 'altars', RENOWN: 'regions', GENERIC: '' };
+const KIND_ORDER: Record<string, number> = { LEVELING: 10, BOSS: 20, THE_PIT: 30, NIGHTMARE: 40, MYTHIC: 50, MATERIALS: 60, MASTERWORKING: 70, ALTARS_OF_LILITH: 80, RENOWN: 90, GENERIC: 999 };
+const PROOF_BUCKET = 'work-proofs';
+function clip(s: string, n = 220) { if (!s) return ''; return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+function round2(n: any): number { const x = Number(n); return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0; }
+function toTs(s: string | null | undefined): number | null { if (!s) return null; const t = Date.parse(s); return Number.isFinite(t) ? t : null; }
+
+function generateServiceDescription(items: SvcItemSummary[] | null): { summaryHtml: string; detailHtml: string } {
+  if (!items || items.length === 0) {
+    return { summaryHtml: 'N/A', detailHtml: '—' };
+  }
+
+  const isItemCompleted = (item: SvcItemSummary) => {
+    const plan = Number(item.plan_qty ?? 0);
+    return plan > 0 && Number(item.done_qty ?? 0) >= plan;
+  };
+
+  const kindCodesInOrder = [...new Set(items.map(it => it.kind_code))].sort((a, b) => (KIND_ORDER[a] ?? 999) - (KIND_ORDER[b] ?? 999));
+
+  // Tạo chuỗi tóm tắt (summary)
+  const summaryParts = kindCodesInOrder.map(code => {
+    const kindName = attributeMap.value.get(code) || code;
+    const itemsInKind = items.filter(it => it.kind_code === code);
+    const isGroupCompleted = itemsInKind.length > 0 && itemsInKind.every(isItemCompleted);
+    return isGroupCompleted ? `<del>${kindName}</del>` : kindName;
+  });
+  const summaryHtml = summaryParts.join(', ');
+
+  // Tạo chuỗi chi tiết (detailed html)
+  let detailHtml = '<ul class="list-none p-0 m-0 space-y-1">';
+  for (const code of kindCodesInOrder) {
+    const kindName = attributeMap.value.get(code) || code;
+    const itemsInKind = items.filter(it => it.kind_code === code);
+    const isGroupCompleted = itemsInKind.length > 0 && itemsInKind.every(isItemCompleted);
+
+    if (isGroupCompleted) {
+      detailHtml += `<li><del><strong>- ${kindName}:</strong></del>`;
+    } else {
+      detailHtml += `<li><strong>- ${kindName}:</strong>`;
+    }
+    
+    if (itemsInKind.length > 0) {
+      detailHtml += '<ul class="list-none p-0 m-0 pl-4">';
+      for (const item of itemsInKind) {
+        // paramsLabel đã tự xử lý gạch ngang cho từng item
+        detailHtml += `<li>+ ${paramsLabel(item)}</li>`;
+      }
+      detailHtml += '</ul>';
+    }
+    detailHtml += '</li>';
+  }
+  detailHtml += '</ul>';
+
+  return { summaryHtml, detailHtml };
+}
+
+const historyModal = reactive({
+  open: false,
+  loading: false,
+  sessions: [] as any[],
+  lineId: null as string | null,
+});
+
+function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleString('vi-VN');
+}
+// =================================================================
+// DATA TABLE & RENDERERS
+// =================================================================
 function renderTrunc(text: any, len = 30) {
-  const full = (text ?? '').toString()
-  const short = clip(full, len)
-  if (!full) return '—'
-  if (short === full) return full
-  return h(
-    NTooltip,
-    { trigger: 'hover' },
-    { trigger: () => h('span', { class: 'cell-text' }, short), default: () => full }
-  )
+  const full = (text ?? '').toString();
+  const short = clip(full, len);
+  if (!full) return '—';
+  if (short === full) return full;
+  return h(NTooltip, { trigger: 'hover' }, {
+    trigger: () => h('span', { class: 'cell-text' }, short),
+    default: () => full
+  });
 }
+
 function pkgTypeTag(v: any) {
-  const s = (v ?? '').toString().toUpperCase()
-  if (s === 'CUSTOM') return { label: 'Custom', type: 'warning' as const }
-  if (s === 'BUILD')  return { label: 'Build',  type: 'info'    as const }
-  return { label: 'Basic',  type: 'success' as const }
+  const s = (v ?? '').toString().toUpperCase();
+  if (s === 'CUSTOM') return { label: 'Custom', type: 'warning' as const };
+  if (s === 'BUILD') return { label: 'Build', type: 'info' as const };
+  return { label: 'Basic', type: 'success' as const };
 }
+
 function statusView(s: any) {
-  const v = (s ?? '').toString().toUpperCase()
-  if (v === 'CLOSED') return { label: 'Closed', type: 'default' as const }
-  if (v === 'PENDING') return { label: 'Pending', type: 'warning' as const }
-  if (v === 'CANCELLED') return { label: 'Cancelled', type: 'error' as const }
-  return { label: 'Active', type: 'success' as const }
-}
-const now = ref(Date.now())
-let clock: number | null = null
-function startClock(){ stopClock(); clock = window.setInterval(()=> now.value = Date.now(), 1000) }
-function stopClock(){ if (clock) { clearInterval(clock); clock = null } }
-const toTs = (v: any) => !v ? null : (typeof v === 'number' ? v : Date.parse(v))
-function relText(ts: number | null, nowMs: number) {
-  if (!ts) return { text: '—', color: 'default' as const }
-  const diff = ts - nowMs
-  const abs = Math.abs(diff)
-  const mins = Math.round(abs / 60000)
-  if (diff < 0) {
-    if (mins < 60) return { text: `Quá hạn ${mins}m`, color: 'error' as const }
-    const h = Math.round(mins/60); return { text:`Quá hạn ${h}h`, color:'error' as const }
-  } else {
-    if (mins <= 30) return { text: `Còn ${mins}m`, color: 'warning' as const }
-    const h = Math.round(mins/60); return { text:`Còn ${h}h`, color:'success' as const }
+  const v = (s ?? '').toString().toLowerCase();
+  switch (v) {
+    case 'new': return { label: 'Mới', type: 'default' as const };
+    case 'in_progress': return { label: 'Đang làm', type: 'warning' as const };
+    case 'pending_pilot': return { label: 'Chờ làm', type: 'info' as const };
+    case 'paused_selfplay': return { label: 'Tạm dừng', type: 'info' as const };
+    case 'pending_completion': return { label: 'Chờ hoàn thành', type: 'primary' as const };
+    case 'completed': return { label: 'Hoàn thành', type: 'success' as const };
+    case 'cancelled': return { label: 'Đã hủy', type: 'error' as const };
+    default: return { label: v, type: 'default' as const };
   }
 }
 
-/* ===================== Columns ===================== */
-const columns: DataTableColumns<Row> = [
-  { title: 'Nguồn bán', key: 'channel_code', width: 120, ellipsis: true, render: (row) => renderTrunc(row.channel_code, 16) },
-  {
-    title: 'Loại', key: 'service_type', width: 90,
-    render: (row) => {
-      const t = (row.service_type === 'pilot') ? 'Pilot' : 'Selfplay'
-      const type: 'default' | 'primary' = row.service_type === 'pilot' ? 'default' : 'primary'
-      return h(NTag, { size: 'small', type, bordered: false }, { default: () => t })
+function formatDeadline(createdAt: string | null | undefined, deadline: string | null | undefined, updatedAt: string | null | undefined, nowMs: number, status: string | null | undefined) {
+  const startTs = toTs(createdAt);
+  const endTs = toTs(deadline);
+  if (!endTs) return { text: '—', color: 'default' as const };
+
+  // --- LOGIC MỚI CHO ĐƠN HOÀN THÀNH ---
+  if (status === 'completed') {
+    const completionTs = toTs(updatedAt) ?? nowMs;
+    const diffMs = endTs - completionTs;
+    const absDiffMs = Math.abs(diffMs);
+    
+    const d = Math.floor(absDiffMs / 86400000);
+    const h = Math.floor((absDiffMs % 86400000) / 3600000);
+    const m = Math.floor((absDiffMs % 3600000) / 60000);
+
+    // Xây dựng chuỗi thời gian động
+    const timeParts = [];
+    if (d > 0) timeParts.push(`${d}d`);
+    if (h > 0) timeParts.push(`${h}h`);
+    // Luôn hiển thị phút nếu không có ngày hoặc giờ, hoặc nếu phút > 0
+    if (m > 0 || (d === 0 && h === 0)) {
+        timeParts.push(`${m}m`);
     }
-  },
-  { title: 'Tên khách hàng', key: 'customer_name', width: 180, ellipsis: true, render: (row) => renderTrunc(row.customer_name, 30) },
-  {
-    title: 'Gói dịch vụ', key: 'package_type', width: 100,
-    render: (row) => {
-      const t = pkgTypeTag(row.package_type)
-      return h(NTag, { size: 'small', type: t.type, bordered: false }, { default: () => t.label })
+    const timeString = timeParts.join(' ');
+
+    if (diffMs < 0) { // Trễ hạn
+      return { text: `Trễ hạn: ${timeString}`, color: 'error' as const };
+    } else { // Đúng hạn
+      return { text: `Đúng hạn: ${timeString}`, color: 'success' as const };
     }
-  },
-  { title: 'Gói Note', key: 'package_note', width: 200, ellipsis: true, render: (row) => renderTrunc(row.package_note, 40) },
-  {
-    title: 'Dịch vụ (mô tả)',
-    key: 'service_desc',
-    minWidth: 480,
-    ellipsis: true,
-    render: (row) => {
-      const full = (row.service_desc || '').toString()
-      const short = clip(full, 120)
-      const parts = full.split(/\s\|\s/g).filter(Boolean)
-      return h(
-        NTooltip,
-        { trigger: 'hover', placement: 'top' },
-        {
-          trigger: () => h('span', { class: 'cell-text' }, short),
-          default: () =>
-            h('div', { class: 'tooltip-desc' }, [
-              h(
-                'ul',
-                { class: 'tooltip-desc__list' },
-                parts.map((p, i) => {
-                  const m = p.match(/^([^:]+):\s*(.*)$/)
-                  const head = m ? m[1] : null
-                  const rest = m ? m[2] : p
-                  return h('li', { class: 'tooltip-desc__item', key: i }, [
-                    head ? h('strong', head + ': ') : null,
-                    rest
-                  ])
-                })
-              )
-            ])
-        }
-      )
-    }
-  },
-  {
-    title: 'Deadline', key: 'deadline', width: 120,
-    render: (row) => {
-      const ts = toTs(row.deadline)
-      if (!ts) return '—'
-      const { text, color } = relText(ts, now.value)
-      const abs = new Date(ts).toLocaleString()
-      return h(
-        NTooltip,
-        { trigger: 'hover' },
-        { trigger: () => h(NTag, { size: 'small', type: color, bordered: false }, { default: () => text }), default: () => abs }
-      )
-    }
-  },
-  {
-    title: 'Trạng thái', key: 'status', width: 100,
-    render: (row) => {
-      const s = statusView(row.status ?? null)
-      return h(NTag, { size: 'small', type: s.type, bordered: false }, { default: () => s.label })
-    }
-  },
-  { title: 'Người đang thực hiện', key: 'assignees_text', width: 180, ellipsis: true, render: (row) => renderTrunc(row.assignees_text, 30) },
-  {
-    title: 'Thao tác', key: 'actions', width: 160, align: 'center',
-    render: (row) => h('div', { class: 'row-actions' }, [
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openDetail(row) }, { default: () => 'Chi tiết' }),
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openReview(row) }, { default: () => 'Review' })
-    ])
   }
-]
+  // --- KẾT THÚC LOGIC MỚI ---
 
-/* ===================== Load list ===================== */
-async function loadOrders() {
-  loading.value = true
-  try {
-    const listSelect = [
-      'id',
-      'created_at',
-      'deadline_to',
-      'service_type',
-      'meta_json',
-      // thêm customer_id để dự phòng
-      `orders!inner(id,status,package_type,package_note,customer_id,${CUSTOMER_REL}(name,btag,login_id,login_pwd),channels(code))`
-    ].join(',')
+  if (status === 'cancelled') {
+    return { text: 'Đã hủy', color: 'error' as const };
+  }
 
-    const { data, error } = await supabase
-      .from('order_lines')
-      .select(listSelect)
-      .order('created_at', { ascending: false })
-    if (error) throw error
+  const remainingMs = endTs - nowMs;
+  if (remainingMs < 0) {
+    const overdueSeconds = Math.abs(Math.floor(remainingMs / 1000));
+    const d = Math.floor(overdueSeconds / 86400); const h = Math.floor((overdueSeconds % 86400) / 3600); const m = Math.floor((overdueSeconds % 3600) / 60); const s = overdueSeconds % 60;
+    let text = 'Trễ '; if (d > 0) text += `${d}d ${h}h ${m}m`; else if (h > 0) text += `${h}h ${m}m ${s}s`; else if (m > 0) text += `${m}m ${s}s`; else text += `${s}s`;
+    return { text, color: 'error' as const };
+  }
+  const totalDuration = startTs ? endTs - startTs : 0;
+  if (totalDuration <= 0) return { text: 'Còn lại', color: 'success' as const };
+  const ratio = remainingMs / totalDuration;
+  let color: 'success' | 'primary' | 'warning' | 'error' = 'success';
+  if (ratio <= 1 / 3) { color = 'warning'; } else if (ratio <= 2 / 3) { color = 'primary'; }
+  const remainingSeconds = Math.floor(remainingMs / 1000);
+  const d = Math.floor(remainingSeconds / 86400); const h = Math.floor((remainingSeconds % 86400) / 3600); const m = Math.floor((remainingSeconds % 3600) / 60); const s = remainingSeconds % 60;
+  let text = 'Còn '; if (d > 0) text += `${d}d ${h}h ${m}m`; else if (h > 0) text += `${h}h ${m}m ${s}s`; else if (m > 0) text += `${m}m ${s}s`; else text += `${s}s`;
+  return { text, color };
+}
 
-    rows.value = (data ?? []).map((r: any) => {
-      const ord = r.orders
-      // do đã alias "customer:parties!..." nên dữ liệu nằm ở ord.customer (object)
-      const pa = ord?.customer ?? null
-      const ch = ord?.channels ?? null
-
-      return {
-        id: String(r.id),
-        order_id: String(ord?.id ?? ''),
-        created_at: String(r.created_at ?? ''),
-        channel_code: ch?.code || '',
-        service_type: String(r.service_type || 'selfplay').toLowerCase() === 'pilot' ? 'pilot' : 'selfplay',
-        // 👇 đảm bảo field đúng tên bạn đang bind trong template
-        customer_name: pa?.name || '',
-        customer: pa?.name || '',              // nếu template dùng "customer", cũng có dữ liệu
-        package_type: ord?.package_type ?? 'BASIC',
-        package_note: ord?.package_note ?? '',
-        deadline: r?.deadline_to ?? null,
-        status: ord?.status ?? 'ACTIVE',
-        service_desc: r?.meta_json?.service_desc || '',
-        assignees_text: ''
-      } as Row
-    })
-
-    // 3) Lấy người thực hiện — KHÔNG làm hỏng trang nếu RPC chưa có
-    const lineIds = rows.value.map(r => r.id)
-    if (lineIds.length) {
-      try {
-        const { data: assData, error: assErr } = await supabase.rpc('list_assignees_v1', {
-          p_line_ids: lineIds
-        })
-        if (!assErr && Array.isArray(assData)) {
-          const map = new Map<string, string[]>()
-          for (const r of assData) {
-            const k = String(r.order_line_id)
-            if (!map.has(k)) map.set(k, [])
-            if (r.full_name) map.get(k)!.push(String(r.full_name))
+const columns: DataTableColumns<OrderRow> = [
+  { title: 'Nguồn bán', key: 'channel_code', width: 115, ellipsis: true, render: (row: OrderRow) => renderTrunc(row.channel_code, 16) },
+  { title: 'Loại', key: 'service_type', width: 90, align: 'center', titleAlign: 'center', render: (row: OrderRow) => {
+      const typeIsPilot = String(row.service_type || '').toLowerCase() === 'pilot';
+      return h(NTag, { size: 'small', bordered: false, type: typeIsPilot ? 'warning' : 'primary' }, { default: () => row.service_type || 'N/A' });
+  }},
+  { title: 'Tên khách hàng', key: 'customer_name', width: 150, ellipsis: true, render: (row: OrderRow) => renderTrunc(row.customer_name, 30) },
+  {
+    title: 'Gói Dịch vụ',
+    key: 'package_type',
+    width: 110,
+    align: 'center',
+    render: (row: OrderRow) => {
+      const { label, type } = pkgTypeTag(row.package_type);
+      return h(NTag, { size: 'small', type, bordered: false }, { default: () => label });
+    }
+  },
+  {
+    title: 'Mô tả gói',
+    key: 'package_note',
+    width: 180,
+    render: (row: OrderRow) => {
+      if (!row.package_note) return '—';
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      if (urlRegex.test(row.package_note)) {
+        const noteParts = row.package_note.split(urlRegex);
+        const noteContent = noteParts.map((part: string) => {
+          if (urlRegex.test(part)) {
+            return h('a', { href: part, target: '_blank', class: 'text-primary-600 hover:underline' }, '[link]');
           }
-          for (const row of rows.value) row.assignees_text = (map.get(row.id) || []).join(', ')
+          return h('span', part);
+        });
+        return h('div', { class: 'text-left' }, noteContent);
+      }
+      return renderTrunc(row.package_note, 30);
+    }
+  },
+  // THAY ĐỔI NẰM Ở ĐÂY
+  { 
+    title: 'Dịch vụ', 
+    key: 'service_items', 
+    minWidth: 250, 
+    render: (row: OrderRow) => {
+      const { summaryHtml, detailHtml } = generateServiceDescription(row.service_items);
+      return h(NTooltip, { trigger: 'hover', placement: 'top-start' }, {
+        trigger: () => h('span', { class: 'cell-text', innerHTML: summaryHtml }),
+        default: () => h('div', { class: 'max-w-md', innerHTML: detailHtml })
+      });
+  }},
+  { title: 'Deadline', key: 'deadline', width: 120, align: 'center', titleAlign: 'center', render: (row: OrderRow) => {
+    const { text, color } = formatDeadline(row.created_at, row.deadline, row.updated_at, now.value, row.status);
+      if (text === '—') return '—';
+      return h(NTooltip, { trigger: 'hover' }, {
+        trigger: () => h(NTag, { size: 'small', type: color, bordered: false }, { default: () => text }),
+          default: () => toTs(row.deadline) ? new Date(toTs(row.deadline)!).toLocaleString() : ''
+      });
+  }},
+  { title: 'Trạng thái', key: 'status', width: 140, align: 'center', titleAlign: 'center', render: (row: OrderRow) => {
+      const s = statusView(row.status);
+      return h(NTag, { size: 'small', type: s.type, bordered: false }, { default: () => s.label });
+  }},
+  { title: 'Người thực hiện', key: 'assignees_text', width: 150, ellipsis: true, render: (row: OrderRow) => renderTrunc(row.assignees_text, 30) },
+  { 
+    title: 'Thao tác', 
+    key: 'actions', 
+    width: 160, 
+    align: 'center', 
+    titleAlign: 'center', 
+    render: (row: OrderRow) => {
+      const actionItems = [
+        // Nút chi tiết giữ nguyên
+        h(NButton, { 
+          size: 'tiny', 
+          tertiary: true, 
+          onClick: () => openDetail(row) 
+        }, { default: () => 'Chi tiết' }),
+
+        // Nút Lịch sử (biểu tượng quyển sách)
+        h(NTooltip, { trigger: 'hover' }, {
+          trigger: () => h(NButton, { 
+            text: true, 
+            class: 'mx-1', 
+            onClick: () => openHistoryModal(row) 
+          }, {
+            default: () => h(NIcon, { component: BookOutline, color: '#333' })
+          }),
+          default: () => 'Lịch sử'
+        })
+      ];
+
+      const isFinalized = row.status === 'completed' || row.status === 'cancelled';
+      const canViewReviews = auth.hasPermission('orders:view_reviews');
+      const canAddReview = auth.hasPermission('orders:add_review');
+
+      // Nút Review (biểu tượng con mắt)
+      if (isFinalized && (canAddReview || (row.review_id && canViewReviews))) {
+        const reviewColor = row.review_id ? '#208842' : '#333'; // Xanh lá nếu đã review, đen nếu chưa
+        const tooltipText = row.review_id ? 'Xem/Thêm Review' : 'Thêm Review';
+
+        actionItems.push(
+          h(NTooltip, { trigger: 'hover' }, {
+            trigger: () => h(NButton, { 
+              text: true, 
+              class: 'mx-1', 
+              onClick: () => openReviewModal(row) 
+            }, {
+              default: () => h(NIcon, { component: EyeOutline, color: reviewColor })
+            }),
+            default: () => tooltipText
+          })
+        );
+      }
+
+      return h('div', { class: 'row-actions flex justify-center items-center gap-1' }, actionItems);
+    } 
+  }
+];
+
+async function copyToClipboard(text: string) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    message.success('Đã sao chép!');
+  } catch (err) {
+    message.error('Không thể sao chép.');
+  }
+}
+
+// =================================================================
+// API & DATA FETCHING
+// =================================================================
+async function loadOrders() {
+  loading.value = true;
+  try {
+    // THAY ĐỔI 5: Gọi RPC v2 thay vì v1
+    const { data, error } = await supabase.rpc('get_boosting_orders_v2');
+    if (error) throw error;
+    rows.value = (data as any[] ?? []).map((r: any) => ({ ...r, line_id: r.id }));
+  } catch (e: any) {
+    console.error('[loadOrders]', e);
+    message.error(e?.message || 'Không tải được danh sách đơn hàng');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadLastProofs(ids: string[]) {
+  if (!ids?.length) return;
+  try {
+    const rows = await fetchLastProofs(ids);
+    const m: Record<string, LastProof> = {};
+    for (const r of rows || []) {
+      m[String(r.item_id)] = r as LastProof;
+    }
+    lastProofMap.value = { ...lastProofMap.value, ...m };
+  } catch (e) {
+    console.warn('[loadLastProofs]', e);
+  }
+}
+
+async function uploadProof(
+  file: File, 
+  lineId: string, 
+  sessionId: string, 
+  itemId: string, 
+  phase: 'start' | 'end'
+): Promise<string | null> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const path = `${lineId}/${sessionId}/${itemId}/${phase}.${ext}`;
+  
+  const { error, data } = await supabase.storage
+    .from('work-proofs')
+    .upload(path, file, { upsert: true });
+
+  if (error) {
+    throw new Error(`Lỗi upload bằng chứng cho ${itemId}: ${error.message}`);
+  }
+
+  const { data: pub } = supabase.storage.from('work-proofs').getPublicUrl(data.path);
+  return pub?.publicUrl || null;
+}
+
+async function uploadActionProof(file: File, lineId: string, action: 'completion' | 'cancellation'): Promise<string> {
+  if (!file) throw new Error("File không hợp lệ.");
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+  const filePath = `${lineId}/${action}/${fileName}`;
+  const { data, error } = await supabase.storage.from('work-proofs').upload(filePath, file);
+  if (error) throw new Error(`Lỗi upload bằng chứng: ${error.message}`);
+  const { data: publicURL } = supabase.storage.from('work-proofs').getPublicUrl(data.path);
+  return publicURL.publicUrl;
+}
+
+function handlePaste(event: ClipboardEvent, row: WsRow, phase: 'start' | 'end') {
+  if (isOrderFinalized.value) return;
+  event.preventDefault();
+  const items = event.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.type.includes('image')) {
+      const file = item.getAsFile();
+      if (file) {
+        const uploadFileInfo: UploadFileInfo = {
+          id: file.name + Date.now(),
+          name: file.name,
+          status: 'pending',
+          file: file
+        };
+        
+        const payload = { file: uploadFileInfo };
+        if (phase === 'start') {
+          onPickStartFile(row, payload);
         } else {
-          console.warn('[assignees] RPC vắng mặt hoặc trả lỗi — bỏ qua hiển thị assignees.')
+          onPickEndFile(row, payload);
         }
-      } catch (e) {
-        console.warn('[assignees] RPC không khả dụng — bỏ qua.', e)
+        message.success('Đã dán ảnh thành công!');
+        break;
       }
     }
-  } catch (e: any) {
-    console.error('[loadOrders]', e)
-    message.error(e?.message || 'Không tải được danh sách')
-  } finally {
-    loading.value = false
   }
 }
 
-
-
-/* ===================== Drawer detail ===================== */
-const detailOpen = ref(false)
-const detail = reactive<any>({
-  id: '', order_id: '',
-  service_type: 'selfplay',
-  customer_name: '',
-  channel_code: '',
-  package_type: 'BASIC',
-  package_note: '',
-  service_desc: '',
-  deadline: null as null | string,
-  status: 'ACTIVE',
-  btag: '', login_id: '', login_pwd: '',
-  assignees_text: ''
-})
-const editing = ref(false)
-const savingInfo = ref(false)
-const deadlineModel = ref<number | null>(null)
-
-function toggleEdit() { editing.value = true; syncEditModel() }
-function cancelEdit() { editing.value = false; syncEditModel(true) }
-function syncEditModel(reset=false) {
-  // hiện tại chỉ đồng bộ deadline
-  deadlineModel.value = detail.deadline ? Date.parse(detail.deadline) : null
+function removeProof(row: WsRow, phase: 'start' | 'end') {
+  if (phase === 'start') {
+    if (row.startPreviewUrl) {
+      URL.revokeObjectURL(row.startPreviewUrl);
+    }
+    row.startFile = null;
+    row.startPreviewUrl = null;
+    row.startProofUrl = null;
+  } else {
+    if (row.endPreviewUrl) {
+      URL.revokeObjectURL(row.endPreviewUrl);
+    }
+    row.endFile = null;
+    row.endPreviewUrl = null;
+    row.endProofUrl = null;
+  }
 }
 
-async function openDetail(row: Row) {
-  detail.assignees_text = row.assignees_text || ''   // điền sẵn từ list
-  await refreshDetail(row.id)
-  detailOpen.value = true
-  editing.value = false
-}
+// =================================================================
+// DETAIL DRAWER LOGIC
+// =================================================================
+async function openDetail(row: OrderRow) {
+  isDescCollapsed.value = true;
+  detailOpen.value = true;
+  detailLoading.value = true;
+  collapsedKinds.clear();
 
-type QChannel = { code: string }
-type QParty = { name: string; btag: string | null; login_id: string | null; login_pwd: string | null }
-type QOrder = {
-  id: string
-  status: string | null
-  package_type: 'BASIC' | 'CUSTOM' | 'BUILD' | null
-  package_note: string | null
-  channels: QChannel[] | QChannel | null
-  parties: QParty[] | QParty | null
-}
-type QLine = {
-  id: string
-  deadline_to: string | null
-  meta_json: any
-  orders: QOrder
-}
-
-function first<T>(v: T | T[] | null | undefined): T | null {
-  if (Array.isArray(v)) return (v[0] ?? null) as T | null
-  return (v ?? null) as T | null
-}
-
-async function refreshDetail(lineId: string) {
   try {
-    const detailSelect = [
-      'id',
-      'deadline_to',
-      'service_type',
-      'meta_json',
-      `orders!inner(id,status,package_type,package_note,customer_id,${CUSTOMER_REL}(name,btag,login_id,login_pwd),channels(code))`
-    ].join(',')
-
-    const { data, error } = await supabase
-      .from('order_lines')
-      .select(detailSelect)
-      .eq('id', lineId)
-      .maybeSingle()
-
-    if (error) throw error
-    if (!data) return
-
-    const d   = data as any
-    const ord = d.orders
-    const ch  = ord?.channels ?? null
-    const pa  = ord?.customer ?? null  // 👈 do alias ở trên
-
-    detail.id            = String(d.id)
-    detail.order_id      = String(ord?.id || '')
-    detail.service_type  = String(d.service_type || 'selfplay').toLowerCase() === 'pilot' ? 'pilot' : 'selfplay'
-    detail.customer_name = pa?.name || ''
-    detail.customer      = pa?.name || ''
-    detail.channel_code  = ch?.code || ''
-    detail.package_type  = (ord?.package_type ?? 'BASIC') as any
-    detail.package_note  = ord?.package_note ?? ''
-    detail.service_desc  = d?.meta_json?.service_desc || ''
-    detail.deadline      = d.deadline_to ?? null
-    detail.status        = ord?.status ?? 'ACTIVE'
-    detail.btag          = pa?.btag || ''
-    detail.login_id      = pa?.login_id || ''
-    detail.login_pwd     = pa?.login_pwd || ''
-
-    // assignees — an toàn khi RPC chưa có
-    try {
-      const { data: assData } = await supabase.rpc('list_assignees_v1', { p_line_ids: [lineId] })
-      const names = (assData || [])
-        .filter((r:any) => String(r.order_line_id) === String(lineId))
-        .map((r:any) => r.full_name)
-        .filter(Boolean)
-      detail.assignees_text = names.join(', ')
-    } catch {
-      detail.assignees_text = detail.assignees_text || ''
+    // KHÔI PHỤC LẠI RPC CALL
+    const { data, error } = await supabase.rpc('get_boosting_order_detail_v1', { p_line_id: row.id });
+    if (error) throw error;
+    if (!data) {
+      message.error('Không tìm thấy dữ liệu chi tiết.');
+      detailOpen.value = false;
+      return;
     }
 
-    await loadSvcItems(d.id)
-    syncEditModel(true)
-  } catch (e:any) {
-    console.error('[refreshDetail]', e)
-    message.error(e?.message || 'Không tải được chi tiết')
+    // Chuẩn hóa service_type 
+    if (data.service_type) {
+      if (String(data.service_type).toLowerCase().includes('pilot')) {
+        data.service_type = 'Pilot';
+      } else if (String(data.service_type).toLowerCase().includes('selfplay')) {
+        data.service_type = 'Selfplay';
+      }
+    }
+
+    Object.assign(detail, data);
+
+    // Xử lý tên người thực hiện (assignee)
+    if (data.active_session) {
+      detail.assignees_text = data.active_session.farmer_name;
+    } else {
+      detail.assignees_text = row.assignees_text;
+    }
+
+    svcItems.value = (data.service_items || []) as SvcItem[];
+
+    const allGroupKeys = new Set(svcItems.value.map(it => (it.kind_code || 'GENERIC').toUpperCase()));
+    allGroupKeys.forEach(key => collapsedKinds.add(key));
+
+    if (data.active_session && data.active_session.start_state) {
+      const activeItemIds = new Set(data.active_session.start_state.map((s: any) => s.item_id));
+      const kindsToExpand = new Set<string>();
+      
+      svcItems.value.forEach(it => {
+        if (activeItemIds.has(it.id)) {
+          kindsToExpand.add((it.kind_code || 'GENERIC').toUpperCase());
+        }
+      });
+      kindsToExpand.forEach(key => collapsedKinds.delete(key));
+    }
+    
+    await loadLastProofs(svcItems.value.map((s: SvcItem) => s.id));
+
+    if (data.active_session) {
+      ws2.value.sessionId = data.active_session.session_id;
+      const startStateMap = new Map(data.active_session.start_state.map((s: any) => [String(s.item_id), s]));
+      ws2.value.rows = svcItems.value.map(it => {
+        const state = startStateMap.get(String(it.id));
+        const done = Number(it.done_qty ?? 0);
+        const plan = Number(it.plan_qty ?? 0);
+        let status = 'Đang thực hiện';
+        if (plan > 0 && done >= plan) status = 'Hoàn thành';
+        return {
+          item_id: String(it.id),
+          kind_code: (it.kind_code || '').toUpperCase(),
+          label: paramsLabel(it),
+          start_value: round2((state as any)?.start_value ?? 0),
+          current_value: round2((state as any)?.start_value ?? 0),
+          start_exp: (state as any)?.start_exp ?? null,
+          current_exp: (state as any)?.start_exp ?? null,
+          isStartValueEditable: false,
+          isExpEditable: false,
+          startProofUrl: (state as any)?.start_proof_url ?? null,
+          startFile: null, endFile: null, startPreviewUrl: null, endPreviewUrl: null, endProofUrl: null,
+          statusText: status
+        };
+      });
+      ws2.value.selectedIds = Array.from(startStateMap.keys(), key => String(key));
+    } else {
+      ws2.value.sessionId = null;
+      ws2.value.rows = svcItems.value.map(it => {
+        const base = baselineFromItem(it);
+        const lp = lastProofMap.value[String(it.id)];
+        const done = Number(it.done_qty ?? 0);
+        const plan = Number(it.plan_qty ?? 0);
+        const kind = (it.kind_code || '').toUpperCase();
+        const isFirstSession = done === 0 && !lp;
+        const startExp = lp?.last_exp_percent ?? null;
+        let isStartValueEditable = false;
+        let isExpEditable = false;
+        if (kind === 'MATERIALS' && detail.service_type === 'Pilot' && isFirstSession) {
+          isStartValueEditable = true;
+        }
+        if (kind === 'LEVELING' && isFirstSession) {
+          isExpEditable = true;
+        }
+        let status = 'Chờ thực hiện';
+        if (plan > 0 && done >= plan) status = 'Hoàn thành';
+        else if (done > 0) status = 'Đang thực hiện';
+        return {
+          item_id: String(it.id),
+          kind_code: kind,
+          label: paramsLabel(it),
+          start_value: round2(lp?.last_end ?? base),
+          current_value: round2(lp?.last_end ?? base),
+          start_exp: startExp,
+          current_exp: startExp,
+          isStartValueEditable: isStartValueEditable,
+          isExpEditable: isExpEditable,
+          startFile: null, endFile: null, startPreviewUrl: null, endPreviewUrl: null,
+          startProofUrl: lp?.last_end_proof_url || lp?.last_start_proof_url || null,
+          endProofUrl: null,
+          statusText: status
+        };
+      });
+    }
+    syncEditModel(true);
+  } catch (e: any) {
+    console.error('[openDetail]', e);
+    message.error(e?.message || 'Không tải được chi tiết đơn hàng');
+  } finally {
+    detailLoading.value = false;
   }
+}
+
+async function createServiceReport(itemId: string, description: string, proofUrls: string[]) {
+  const { data, error } = await supabase.rpc('create_service_report_v1', {
+    p_order_service_item_id: itemId,
+    p_description: description,
+    p_proof_urls: proofUrls
+  });
+  if (error) throw error;
+  return data;
+}
+
+function onDrawerClose() {
+  Object.assign(detail, {});
+  editing.value = false;
+  deadlineModel.value = null;
+  svcItems.value = [];
+  lastProofMap.value = {};
+  ws2.value = { 
+    activityRows: [{ label: null, qty: null }], 
+    note: '', 
+    overrun_reason: null, 
+    sessionId: null, 
+    selectedIds: [], 
+    rows: [] 
+  };
+  proofFiles.value = [];
+}
+
+function toggleEdit() {
+  editing.value = true;
+  syncEditModel();
+}
+
+function cancelEdit() {
+  editing.value = false;
+  syncEditModel(true);
+}
+
+function syncEditModel(_reset = false) {
+  deadlineModel.value = detail.deadline ? Date.parse(detail.deadline) : null;
 }
 
 async function saveInfo() {
-  if (!detail.id) return
+  if (!detail.id) return;
   try {
-    savingInfo.value = true
-    const payload: any = {
+    savingInfo.value = true;
+
+    const payload = {
       p_line_id: detail.id,
-      p_service_desc: detail.service_desc || null,
+      p_service_type: detail.service_type,
       p_deadline: deadlineModel.value ? new Date(deadlineModel.value).toISOString() : null,
-      p_btag: detail.service_type === 'selfplay' ? (detail.btag || null) : null,
-      p_login_id: detail.service_type === 'pilot' ? (detail.login_id || null) : null,
-      p_login_pwd: detail.service_type === 'pilot' ? (detail.login_pwd || null) : null,
+      p_package_note: detail.package_note || null,
+      p_btag: detail.service_type === 'Selfplay' ? (detail.btag || null) : null,
+      p_login_id: detail.service_type === 'Pilot' ? (detail.login_id || null) : null,
+      p_login_pwd: detail.service_type === 'Pilot' ? (detail.login_pwd || null) : null,
+    };
+
+    const { error } = await supabase.rpc('update_order_details_v1', payload);
+
+    if (error) throw error;
+    message.success('Đã lưu thay đổi!');
+    editing.value = false;
+    await loadOrders();
+
+    const currentRow = rows.value.find(r => r.id === detail.id);
+    if (currentRow) {
+      await openDetail(currentRow);
     }
-    const { error } = await supabase.rpc('update_service_order_v1', payload)
-    if (error) throw error
-    message.success('Đã lưu')
-    editing.value = false
-    await loadOrders()
-    await refreshDetail(detail.id)
-  } catch (e:any) {
-    console.error('[saveInfo]', e)
-    message.error(e?.message || 'Không lưu được thay đổi')
+
+  } catch (e: any) {
+    console.error('[saveInfo]', e);
+    message.error(e?.message || 'Không lưu được thay đổi');
   } finally {
-    savingInfo.value = false
+    savingInfo.value = false;
   }
 }
 
-/* ===================== svc_items ===================== */
-const svcItems = ref<SvcItem[]>([])
-const svcGroups = computed(() => groupAndSort(svcItems.value))
-function paramsLabel(it: SvcItem): string {
-  const k = (it.kind_code || '').toUpperCase()
-  const p = it.params || {}
-  const plan = Number(it.plan_qty ?? p.plan_qty ?? p.qty ?? 0)
-  const done = Number(it.done_qty ?? 0)
+function paramsLabel(it: SvcItem | SvcItemSummary): string {
+  const k = (it.kind_code || '').toUpperCase();
+  const p = it.params || {};
+  const plan = Number(it.plan_qty ?? p.plan_qty ?? p.qty ?? 0);
+  const done = Number(it.done_qty ?? 0);
+  let mainLabel = '';
 
-  const suffix = plan ? ` (${done}/${plan})` : (done ? ` (${done})` : '')
+  // KHÔNG CẦN `const getName` ở đây nữa
 
-  if (k === 'LEVELING') return `${p.mode === 'paragon' ? 'Paragon' : 'Level'} ${p.start}→${p.end}${suffix}`
-  if (k === 'BOSS')     return `${p.boss_label || p.boss_code}${suffix}`
-  if (k === 'PIT')      return `${p.tier_label || ('Tier ' + p.tier)}${suffix}`
-  if (k === 'NIGHTMARE')return `${p.tier_label || ('Tier ' + p.tier)}${suffix}`
-  if (k === 'MATERIAL') return `${p.material_label || p.code}${suffix}`
-  if (k === 'MYTHIC')   return `${p.item_label || p.item_code}${p.ga_label ? ' ('+p.ga_label+(p.ga_note?': '+p.ga_note:'')+')' : ''}${suffix}`
-  if (k === 'MASTERWORKING') return `${p.variant_label || p.variant}${suffix}`
-  if (k === 'ALTARS')   return `${p.region_label || p.region}${suffix}`
-  if (k === 'RENOWN')   return `${p.region_label || p.region}${suffix}`
-  if (k === 'GENERIC')  return (p.desc || 'Generic') + suffix
-  return JSON.stringify(p) + suffix
-}
+  switch (k) {
+    case 'LEVELING': mainLabel = `${p.mode === 'paragon' ? 'Paragon' : 'Level'} ${p.start}→${p.end}`; break;
+    case 'BOSS': mainLabel = `${p.boss_label || getAttributeName(p.boss_code)}`; break; // Dùng getAttributeName
+    case 'THE_PIT': mainLabel = `${p.tier_label || getAttributeName(p.tier_code)}`; break; // Dùng getAttributeName
+    case 'NIGHTMARE': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'INFERNAL_HORDES': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'MATERIALS': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'MASTERWORKING': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'ALTARS_OF_LILITH': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'RENOWN': mainLabel = `${getAttributeName(p.attribute_code)}`; break; // Dùng getAttributeName
+    case 'MYTHIC': mainLabel = `${p.item_label || getAttributeName(p.item_code)}${p.ga_label ? ` (${p.ga_label}${p.ga_note ? ': ' + p.ga_note : ''})` : ''}`; break;
+    case 'GENERIC': mainLabel = (p.desc || p.note || 'Generic'); break;
+    default: mainLabel = JSON.stringify(p); break;
+  }
 
-const KIND_ORDER: Record<string, number> = {
-  LEVELING: 10, BOSS: 20, PIT: 30, NIGHTMARE: 40, MYTHIC: 50,
-  MATERIAL: 60, MASTERWORKING: 70, ALTARS: 80, RENOWN: 90, GENERIC: 999
+  const unit = KIND_UNITS[k as keyof typeof KIND_UNITS] || '';
+  const suffix = plan > 0 ? ` (${done}/${plan}${unit ? ' ' + unit : ''})` : done > 0 ? ` (${done}${unit ? ' ' + unit : ''})` : '';
+
+  return mainLabel + suffix;
 }
 
 function groupAndSort(items: SvcItem[]) {
-  const groups = new Map<string, { key: string; label: string; code: string; items: SvcItem[] }>()
+  const groups = new Map<string, { key: string; label: string; code: string; items: SvcItem[] }>();
   for (const it of items) {
-    const code = (it.kind_code || 'GENERIC').toString().toUpperCase()
-    const label = (it.kind_name || code).toString().replace(/_/g, ' ')
-    if (!groups.has(code)) groups.set(code, { key: code, label, code, items: [] })
-    groups.get(code)!.items.push(it)
+    const code = (it.kind_code || 'GENERIC').toString().toUpperCase();
+    const label = attributeMap.value.get(code) || code.replace(/_/g, ' '); 
+    if (!groups.has(code)) {
+      groups.set(code, { key: code, label, code, items: [] });
+    }
+    groups.get(code)!.items.push(it);
   }
-  return Array.from(groups.values()).sort((a, b) => {
-    const ra = KIND_ORDER[a.code] ?? 999
-    const rb = KIND_ORDER[b.code] ?? 999
-    return ra - rb
-  })
+  return Array.from(groups.values()).sort((a, b) => (KIND_ORDER[a.code as keyof typeof KIND_ORDER] ?? 999) - (KIND_ORDER[b.code as keyof typeof KIND_ORDER] ?? 999));
 }
 
-async function loadSvcItems(lineId: string) {
+function openReportModal(item: SvcItem) {
+  if (item.active_report_id) {
+    message.warning('Hạng mục này đã có báo cáo và đang chờ xử lý.');
+    return;
+  }
+  reportModal.value.open = true;
+  reportModal.value.itemId = item.id;
+  reportModal.value.itemLabel = paramsLabel(item);
+  reportModal.value.description = '';
+  reportModal.value.proofs = [];
+  reportModal.value.loading = false;
+}
+
+async function submitReport() {
+  if (!reportModal.value.itemId || !reportModal.value.description.trim()) {
+    message.error('Vui lòng nhập mô tả cho báo cáo.');
+    return;
+  }
+
+  reportModal.value.loading = true;
+  message.loading('Đang xử lý báo cáo...');
   try {
-    const { data, error } = await supabase
-      .from('order_service_items')
-      .select('id, kind_code, params, plan_qty, done_qty, service_kinds(label)')
-      .eq('line_id', lineId)
-      .order('created_at', { ascending: true })
-    if (error) throw error
-
-    svcItems.value = (data || []).map((r: any) => ({
-      id: r.id,
-      kind_code: r.kind_code,
-      params: r.params,
-      plan_qty: r.plan_qty,
-      done_qty: r.done_qty,
-      kind_name: r.service_kinds?.label
-    }))
-  } catch (e) {
-    console.error('[loadSvcItems]', e)
-    svcItems.value = []
-  }
-}
-
-/* ===================== Work session ===================== */
-type WsRow = {
-  item_id: string
-  kind_code: string
-  label: string
-  start_value: number
-  current_value: number
-  startFile: File | null
-  endFile: File | null
-  startProofUrl: string | null
-  endProofUrl: string | null
-}
-const ws2 = ref<{
-  activity: string
-  activityRows: { label: string; qty: number }[]
-  note: string
-  startedAt: string | null
-  kindSelected: string[]
-  rows: WsRow[]
-}>({
-  activity: 'BOSS',
-  activityRows: [{ label: '', qty: 0 }],
-  note: '',
-  startedAt: null,
-  kindSelected: [],
-  rows: []
-})
-const submittingFinish = ref(false)
-
-const activityOptions = [
-  { label: 'Boss', value: 'BOSS' },
-  { label: 'The Pit', value: 'PIT' },
-  { label: 'Hordes', value: 'HORDES' },
-  { label: 'Kurast Undercity', value: 'KURAST_UNDERCITY' },
-  { label: 'Helltide', value: 'HELLTIDE' },
-  { label: 'Darkcitadel', value: 'DARKCITADEL' },
-  { label: 'Khác', value: 'OTHER' }
-]
-function prettyKind(k: string) {
-  const m: Record<string,string> = {
-    LEVELING:'Leveling', BOSS:'Boss', PIT:'The Pit', NIGHTMARE:'Nightmare',
-    MATERIAL:'Materials', MYTHIC:'Mythic', MASTERWORKING:'Masterworking',
-    ALTARS:'Altars', RENOWN:'Renown'
-  }
-  return m[k] || k
-}
-const kindOptionsFromOrder = computed(() => {
-  const kinds = Array.from(new Set((svcItems.value||[]).map((it:any)=>String(it.kind_code||'').toUpperCase())))
-  return kinds.map(k => ({ label: `${prettyKind(k)}`, value: k }))
-})
-function baselineFromItem(it:any): number {
-  const kind = String(it.kind_code || '').toUpperCase()
-  const p = it.params || {}
-  const done = Number(it.done_qty ?? 0)
-  if (kind === 'LEVELING') {
-    const st  = Number(p.start ?? 0)
-    const end = Number(p.end ?? st)
-    return Math.min(st + done, end)
-  }
-  return done
-}
-function syncRowsFromKinds() {
-  const picked = new Set(ws2.value.kindSelected.map(k=>String(k).toUpperCase()))
-  const list: WsRow[] = (svcItems.value||[])
-    .filter((it:any)=> picked.has(String(it.kind_code||'').toUpperCase()))
-    .map((it:any)=> {
-      const base = baselineFromItem(it)
-      return {
-        item_id: String(it.id),
-        kind_code: String(it.kind_code || '').toUpperCase(),
-        label: paramsLabel(it),
-        start_value: base,
-        current_value: base,
-        startFile: null, endFile: null,
-        startProofUrl: null, endProofUrl: null
+    const proofUrls: string[] = [];
+    if (reportModal.value.proofs.length > 0) {
+      const uploadPromises = reportModal.value.proofs
+        .map(fileInfo => fileInfo.file ? uploadActionProof(fileInfo.file, detail.id!, 'cancellation') : Promise.resolve(null));
+      
+      const urls = (await Promise.all(uploadPromises)).filter(Boolean) as string[];
+      if (urls.length !== reportModal.value.proofs.length) {
+        throw new Error("Một vài file bằng chứng upload không thành công.");
       }
-    })
-  ws2.value.rows = list
-}
-function addActRow(){ ws2.value.activityRows.push({ label:'', qty:0 }) }
-function rmActRow(i:number){ ws2.value.activityRows.splice(i,1) }
+      proofUrls.push(...urls);
+    }
+    
+    await createServiceReport(reportModal.value.itemId, reportModal.value.description, proofUrls);
+    
+    message.destroyAll();
+    message.success('Gửi báo cáo thành công!');
+    reportModal.value.open = false;
 
-const PROOF_BUCKET = 'work-proofs'
-async function uploadProof(file: File, lineId: string, sessionId: string, itemId: string, phase: 'start'|'end') {
-  const ext = file.name.split('.').pop() || 'bin'
-  const path = `${lineId}/${sessionId}/${itemId}/${phase}.${ext}`
-  const { error, data } = await supabase.storage.from(PROOF_BUCKET).upload(path, file, { upsert: true })
-  if (error) throw error
-  const { data: pub } = supabase.storage.from(PROOF_BUCKET).getPublicUrl(data.path)
-  return pub?.publicUrl || null
+    const currentRow = rows.value.find(r => r.id === detail.id);
+    if (currentRow) {
+      await openDetail(currentRow);
+    }
+
+  } catch (e: any) {
+    console.error('[submitReport]', e);
+    message.destroyAll();
+    message.error(e?.message || 'Không thể gửi báo cáo.');
+  } finally {
+    reportModal.value.loading = false;
+  }
 }
+
+async function openHistoryModal(row: OrderRow) {
+  historyModal.lineId = row.id;
+  historyModal.open = true;
+  historyModal.loading = true;
+  try {
+    const { data, error } = await supabase.rpc('get_session_history_v1', { p_line_id: row.id });
+    if (error) throw error;
+    historyModal.sessions = data || [];
+  } catch (e: any) {
+    console.error('[openHistoryModal]', e);
+    message.error(e.message || 'Không thể tải lịch sử phiên.');
+  } finally {
+    historyModal.loading = false;
+  }
+}
+
+function isLevelingItemDisabled(currentItem: SvcItem): boolean {
+  if (currentItem.active_report_id) {
+    return true;
+  }
+
+  if (!!ws2.value.sessionId) {
+    return true;
+  }
+  
+  const currentIsParagon = (currentItem.params?.mode || '').toLowerCase() === 'paragon';
+  if (!currentIsParagon) {
+    return false;
+  }
+
+  const levelItem = svcItems.value.find(it => (it.params?.mode || '').toLowerCase() === 'level');
+  
+  if (levelItem) {
+    const levelPlan = Number(levelItem.plan_qty ?? 0);
+    const levelDone = Number(levelItem.done_qty ?? 0);
+    if (levelDone < levelPlan) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// =================================================================
+// WORK SESSION LOGIC
+// =================================================================
+function baselineFromItem(it: SvcItem): number {
+  const k = (it.kind_code || '').toUpperCase();
+  if (k === 'LEVELING' && it.params?.start != null) {
+    return round2(Number(it.params.start) + Number(it.done_qty ?? 0));
+  }
+  return round2(it.done_qty ?? 0);
+}
+
+function addActRow() {
+  ws2.value.activityRows.push({ label: '', qty: 0 });
+}
+
+function rmActRow(i: number) {
+  ws2.value.activityRows.splice(i, 1);
+}
+
+function isPicked(id: string) {
+  return ws2.value.selectedIds.includes(String(id));
+}
+
+function togglePick(it: SvcItem, checked: boolean) {
+  if (ws2.value.sessionId) {
+    message.warning('Bạn cần hoàn tất hoặc hủy phiên làm việc hiện tại trước khi thay đổi lựa chọn.');
+    return;
+  }
+  const id = String(it.id);
+  const set = new Set(ws2.value.selectedIds);
+  checked ? set.add(id) : set.delete(id);
+  ws2.value.selectedIds = Array.from(set);
+}
+
+function onPickStartFile(r: WsRow, f: { file?: UploadFileInfo | null }) {
+  if (!r || !f.file?.file) return;
+  const newFile = f.file.file;
+  if (r.startPreviewUrl) URL.revokeObjectURL(r.startPreviewUrl);
+  r.startFile = newFile;
+  r.startPreviewUrl = URL.createObjectURL(newFile);
+}
+
+function onPickEndFile(r: WsRow, f: { file?: UploadFileInfo | null }) {
+  if (!r || !f.file?.file) return;
+  const newFile = f.file.file;
+  if (r.endPreviewUrl) URL.revokeObjectURL(r.endPreviewUrl);
+  r.endFile = newFile;
+  r.endPreviewUrl = URL.createObjectURL(newFile);
+}
+
+async function startSession() {
+  console.log('startSession CALLED'); // LOG 1: Kiểm tra xem hàm có được gọi không
+
+  if (!detail.id) {
+    console.error('startSession EXITED: detail.id is missing'); // LOG 2: Kiểm tra điều kiện thoát sớm
+    return;
+  }
+  
+  sessionLoading.value = true;
+  message.loading('Đang upload bằng chứng và tạo phiên...');
+  console.log('STARTING TRY BLOCK'); // LOG 3: Kiểm tra trước khi vào try...catch
+
+  try {
+    const selectedRows = ws2.value.rows.filter(r => ws2.value.selectedIds.includes(r.item_id));
+    console.log('Selected Rows:', selectedRows); // LOG 4: Xem các item đã chọn
+
+    const tempSessionId = globalThis.crypto.randomUUID();
+
+    const uploadPromises = selectedRows
+      .filter(r => r.startFile)
+      .map(r => uploadProof(r.startFile!, detail.id!, tempSessionId, r.item_id, 'start'));
+    
+    console.log('Upload Promises count:', uploadPromises.length); // LOG 5: Xem có bao nhiêu file cần upload
+
+    const uploadedUrls = await Promise.all(uploadPromises);
+    console.log('Uploaded URLs:', uploadedUrls); // LOG 6: Xem kết quả upload
+    
+    const urlMap = new Map<string, string>();
+    selectedRows.filter(r => r.startFile).forEach((r, i) => {
+      if (uploadedUrls[i]) {
+        urlMap.set(r.item_id, uploadedUrls[i]!);
+      }
+    });
+
+    const startStatePayload = selectedRows.map(r => {
+      return {
+        item_id: r.item_id,
+        start_value: r.start_value,
+        start_proof_url: r.startFile ? urlMap.get(r.item_id) : r.startProofUrl,
+        start_exp: r.start_exp
+      };
+    });
+    console.log('Payload to RPC:', startStatePayload); // LOG 7: Xem payload cuối cùng
+
+    const sessionId = await startWorkSession(detail.id, startStatePayload, ws2.value.note);
+    ws2.value.sessionId = sessionId;
+    
+    message.destroyAll();
+    message.success('Bắt đầu phiên làm việc thành công!');
+    
+    const currentRow = rows.value.find(r => r.id === detail.id);
+    if (currentRow) {
+      await openDetail(currentRow);
+    }
+  } catch (e: any) {
+    // LOG 8: BẮT LỖI QUAN TRỌNG
+    console.error('ERROR inside startSession:', e); 
+    message.destroyAll();
+    message.error(e.message || 'Không thể bắt đầu phiên làm việc');
+  } finally {
+    console.log('FINALLY block executed'); // LOG 9: Kiểm tra khối finally
+    sessionLoading.value = false;
+  }
+}
+
+async function cancelSession() {
+  dialog.warning({
+    title: 'Xác nhận Hủy phiên',
+    content: 'Bạn có chắc chắn muốn hủy phiên làm việc đang dang dở không? Mọi tiến độ chưa lưu sẽ bị mất.',
+    positiveText: 'Chắc chắn Hủy',
+    negativeText: 'Không',
+    onPositiveClick: async () => {
+      const sid = ws2.value.sessionId;
+      if (!sid || !detail.id) return;
+      
+      message.loading('Đang hủy phiên...');
+      submittingFinish.value = true;
+      try {
+        const { error } = await supabase.rpc('cancel_work_session_v1', { p_session_id: sid });
+        if (error) throw error;
+        
+        message.destroyAll();
+        message.success('Đã huỷ phiên');
+        
+        ws2.value.sessionId = null;
+        const currentRow = rows.value.find(r => r.id === detail.id);
+        if (currentRow) {
+          await openDetail(currentRow);
+        }
+      } catch (e:any) {
+        console.error('[cancelSession]', e);
+        message.destroyAll();
+        message.error(e?.message ?? 'Huỷ phiên thất bại');
+      } finally {
+        submittingFinish.value = false;
+      }
+    }
+  });
+}
+
 async function finishSession() {
-  if (!detail.id) return
+  const sid = ws2.value.sessionId;
+  if (!sid || !detail.id) return;
+  
   try {
-    submittingFinish.value = true
-    const { data: sess, error: sErr } = await supabase.rpc('start_work_session_v1', {
+    submittingFinish.value = true;
+    message.loading('Đang upload bằng chứng và lưu tiến độ...');
+
+    const selectedItems = ws2.value.rows.filter(r => ws2.value.selectedIds.includes(r.item_id));
+
+    const outputs: SessionOutputRow[] = await Promise.all(
+      selectedItems
+        .filter(r => {
+          if (r.kind_code === 'LEVELING') {
+            return round2(r.current_value) >= round2(r.start_value);
+          }
+          return round2(r.current_value) > round2(r.start_value);
+        })
+        .map(async (r) => {
+          const startUrl = r.startFile ? await uploadProof(r.startFile, detail.id!, sid, r.item_id, 'start') : (r.startProofUrl ?? null);
+          const endUrl = r.endFile ? await uploadProof(r.endFile, detail.id!, sid, r.item_id, 'end') : (r.endProofUrl ?? null);
+          
+          const params: any = {};
+            if (r.kind_code === 'LEVELING' && r.current_exp != null) {
+              params.exp_percent = r.current_exp;
+            }
+
+          return {
+            item_id: r.item_id,
+            start_value: Number(r.start_value),
+            current_value: Number(r.current_value),
+            start_proof_url: startUrl,
+            end_proof_url: endUrl,
+            params: Object.keys(params).length > 0 ? params : undefined
+          };
+        })
+    );
+    
+    const acts: ActivityRow[] = [];
+    const selectedMythicItemIds = selectedItems
+      .filter(r => mythicKinds.has(r.kind_code))
+      .map(r => r.item_id);
+
+    if (selectedMythicItemIds.length > 0) {
+      ws2.value.activityRows.forEach(activity => {
+        if (activity.label && (activity.qty ?? 0) > 0) {
+          selectedMythicItemIds.forEach(mythicId => {
+            acts.push({
+              item_id: mythicId,
+              kind_code: 'ACTIVITY',
+              delta: Number(activity.qty),
+              params: { label: String(activity.label).trim() || ' ' },
+              start_value: 0,
+              current_value: Number(activity.qty),
+              start_proof_url: null,
+              end_proof_url: null,
+            });
+          });
+        }
+      });
+    }
+
+    const isMythicSession = selectedMythicItemIds.length > 0;
+    const hasActivityInput = ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0);
+
+    if (isMythicSession && hasActivityInput && acts.length === 0) {
+      throw new Error("Lỗi logic: Không thể liên kết hoạt động farm boss với item Mythic đã chọn. Vui lòng bỏ chọn và chọn lại item Mythic.");
+    }
+      
+    const idem = globalThis.crypto?.randomUUID?.() ?? sid;
+    const { error } = await finishWorkSessionIdem(sid, outputs, acts, ws2.value.overrun_reason ?? null, idem);
+    if (error) throw error;
+    
+    message.destroyAll();
+    message.success('Đã kết thúc phiên thành công!');
+    ws2.value.sessionId = null;
+    await loadOrders();
+    const currentRow = rows.value.find(r => r.id === detail.id);
+    if (currentRow) {
+      await openDetail(currentRow);
+    }
+  } catch (e: any) {
+    console.error('[finishSession]', e);
+    message.destroyAll();
+    message.error(e?.message || 'Không thể kết thúc phiên');
+  } finally {
+    submittingFinish.value = false;
+  }
+}
+
+function resetFilters() {
+  filters.channels = null;
+  filters.serviceTypes = null;
+  filters.packageTypes = null;
+  filters.customerName = '';
+  filters.statuses = null;
+  filters.assignee = '';
+}
+
+function getAttributeName(code: string): string {
+  if (!code) return 'Không rõ';
+  return attributeMap.value.get(code) || code;
+}
+
+async function loadAttributeMap() {
+  try {
+    // Lấy tất cả attributes
+    const { data: attributes, error } = await supabase.from('attributes').select('id, code, name, type');
+    if (error) throw error;
+    if (!attributes) return;
+
+    // Lấy tất cả các mối quan hệ
+    const { data: relationships, error: relError } = await supabase
+      .from('attribute_relationships')
+      .select('parent_attribute_id, child_attribute_id');
+    if (relError) throw relError;
+
+    // --- Bắt đầu xử lý dữ liệu ---
+
+    // 1. Tạo các map để tra cứu
+    const attrMapById = new Map(attributes.map(a => [a.id, a]));
+    const childrenMap = new Map<string, string[]>();
+    for (const rel of relationships!) {
+      if (!childrenMap.has(rel.parent_attribute_id)) {
+        childrenMap.set(rel.parent_attribute_id, []);
+      }
+      childrenMap.get(rel.parent_attribute_id)!.push(rel.child_attribute_id);
+    }
+    const toSelectOption = (attr: any) => ({ label: attr.name, value: attr.code });
+    const sortFn = (a: {label:string}, b: {label:string}) => a.label.localeCompare(b.label);
+
+    // 2. Populate attributeMap (giữ lại logic cũ)
+    const newAttrMap = new Map<string, string>();
+    attributes.forEach(attr => newAttrMap.set(attr.code, attr.name));
+    attributeMap.value = newAttrMap;
+
+    // 3. MỚI: Populate bossDict (logic giống hệt Sales.vue)
+    const sellableBosses: { label: string; value: string }[] = [];
+    const bossServiceKind = attributes.find(a => a.code === 'BOSS' && a.type === 'SERVICE_KIND');
+    if (bossServiceKind) {
+      const bossTypeIds = childrenMap.get(bossServiceKind.id) || [];
+      for (const bossTypeId of bossTypeIds) {
+        const concreteBossIds = childrenMap.get(bossTypeId) || [];
+        for (const bossId of concreteBossIds) {
+          const bossAttr = attrMapById.get(bossId);
+          if (bossAttr) sellableBosses.push(toSelectOption(bossAttr));
+        }
+      }
+    }
+    bossDict.value = sellableBosses.sort(sortFn);
+
+  } catch (e: any) {
+    console.error('[loadAttributeMap]', e);
+    message.error('Không tải được từ điển attributes: ' + e.message);
+  }
+}
+
+function toggleKindCollapse(key: string) {
+  if (collapsedKinds.has(key)) {
+    collapsedKinds.delete(key);
+  } else {
+    collapsedKinds.add(key);
+  }
+}
+
+// =================================================================
+// ORDER ACTIONS (COMPLETE / CANCEL / REVIEW)
+// =================================================================
+function handleCompleteOrder() {
+  dialog.success({
+    title: 'Xác nhận Hoàn thành',
+    content: 'Bạn có chắc chắn muốn đánh dấu đơn hàng này là hoàn thành?',
+    positiveText: 'Hoàn thành',
+    negativeText: 'Hủy',
+    onPositiveClick: () => { markLineDone(); }
+  });
+}
+
+async function markLineDone() {
+  if (!detail.id) return;
+  if (proofFiles.value.length === 0) {
+    message.error('Vui lòng tải lên ít nhất một ảnh bằng chứng.');
+    return;
+  }
+  closingOrder.value = true;
+  message.loading('Đang xử lý, vui lòng chờ...');
+  try {
+    const uploadPromises = proofFiles.value.map(fileInfo => fileInfo.file ? uploadActionProof(fileInfo.file, detail.id!, 'completion') : Promise.resolve(null));
+    const proofUrls = (await Promise.all(uploadPromises)).filter(url => url !== null) as string[];
+    if (proofUrls.length !== proofFiles.value.length) {
+      throw new Error("Một vài file upload không thành công, vui lòng thử lại.");
+    }
+    const { error: rpcError } = await supabase.rpc('complete_order_line_v1', {
       p_line_id: detail.id,
-      p_note: ws2.value.note || null,
-      p_activity: ws2.value.activity || null
-    })
-    if (sErr) throw sErr
-    const sessionId = Array.isArray(sess) ? (sess[0]?.id) : (sess?.id)
-    if (!sessionId) throw new Error('Không khởi tạo được session')
-
-    for (const r of ws2.value.rows) {
-      if (r.startFile) r.startProofUrl = await uploadProof(r.startFile, detail.id, sessionId, r.item_id, 'start')
-      if (r.endFile)   r.endProofUrl   = await uploadProof(r.endFile,   detail.id, sessionId, r.item_id, 'end')
-    }
-
-    const itemsPayload = ws2.value.rows.map(r => ({
-      item_id: r.item_id,
-      start_value: r.start_value,
-      end_value: r.current_value,
-      start_proof_url: r.startProofUrl,
-      end_proof_url: r.endProofUrl
-    }))
-    const actRows = (ws2.value.activityRows || []).filter(a => (a.label || '').trim() || Number(a.qty || 0) > 0)
-
-    const { error: fErr } = await supabase.rpc('finish_work_session_v1', {
-      p_session_id: sessionId,
-      p_items: itemsPayload,
-      p_activity_rows: actRows
-    })
-    if (fErr) throw fErr
-
-    message.success('Đã cập nhật tiến trình')
-    await loadOrders()
-    await refreshDetail(detail.id)
-    ws2.value = { activity:'BOSS', activityRows:[{label:'', qty:0}], note:'', startedAt:null, kindSelected:[], rows:[] }
-  } catch (e:any) {
-    console.error('[finishSession]', e)
-    message.error(e?.message || 'Không cập nhật được tiến trình')
+      p_completion_proof_urls: proofUrls,
+      p_reason: ws2.value.note || null
+    });
+    if (rpcError) throw rpcError;
+    message.destroyAll();
+    message.success('Đã hoàn thành đơn hàng!');
+    detailOpen.value = false;
+    await loadOrders();
+  } catch (e: any) {
+    console.error('[markLineDone]', e);
+    message.destroyAll();
+    message.error(e?.message || 'Không thể đóng đơn hàng.');
   } finally {
-    submittingFinish.value = false
+    closingOrder.value = false;
   }
 }
 
-/* ===================== Review flow ===================== */
-const review = ref<{ open: boolean; lineId: string | null; stars: number; comment: string; saving: boolean }>({
-  open: false, lineId: null, stars: 5, comment: '', saving: false
-})
-function openReview(row: Row) {
-  review.value.open = true
-  review.value.lineId = row.id
-  review.value.stars = 5
-  review.value.comment = ''
+function handleCancelOrder() {
+  dialog.warning({
+    title: 'Xác nhận Hủy đơn hàng',
+    content: 'Bạn có chắc chắn muốn hủy đơn hàng này không? Thao tác này không thể hoàn tác.',
+    positiveText: 'Chắc chắn',
+    negativeText: 'Không',
+    onPositiveClick: () => { cancelOrderLine(); },
+  });
 }
-async function submitReview() {
-  if (!review.value.lineId) return
+
+async function cancelOrderLine() {
+  if (!detail.id) return;
+  if (!ws2.value.note.trim()) {
+    message.error('Vui lòng nhập lý do hủy bỏ vào ô Ghi chú.');
+    return;
+  }
+  if (proofFiles.value.length === 0) {
+    message.error('Vui lòng tải lên bằng chứng hủy bỏ.');
+    return;
+  }
+  cancellingOrder.value = true;
+  message.loading('Đang xử lý, vui lòng chờ...');
   try {
-    review.value.saving = true
-    const { data, error } = await supabase.from('order_lines').select('meta_json').eq('id', review.value.lineId).maybeSingle()
-    if (error) throw error
-    const mj = (data?.meta_json ?? {}) as any
-    const newMj = {
-      ...mj,
-      review: { stars: review.value.stars, comment: review.value.comment?.trim() || null, at: new Date().toISOString() }
+    const uploadPromises = proofFiles.value.map(f => f.file ? uploadActionProof(f.file, detail.id!, 'cancellation') : Promise.resolve(null));
+    const proofUrls = (await Promise.all(uploadPromises)).filter(Boolean) as string[];
+    if (proofUrls.length !== proofFiles.value.length) {
+      throw new Error("Một vài file upload không thành công, vui lòng thử lại.");
     }
-    const { error: upErr } = await supabase.from('order_lines').update({ meta_json: newMj }).eq('id', review.value.lineId)
-    if (upErr) throw upErr
-    message.success('Đã ghi nhận đánh giá')
-    review.value.open = false
-    review.value.lineId = null
-    await loadOrders()
-  } catch (e:any) {
-    console.error('[submitReview]', e)
-    message.error(e?.message || 'Không thể gửi đánh giá')
+    const { error: rpcError } = await supabase.rpc('cancel_order_line_v1', {
+      p_line_id: detail.id,
+      p_cancellation_proof_urls: proofUrls,
+      p_reason: ws2.value.note
+    });
+    if (rpcError) throw rpcError;
+    message.destroyAll();
+    message.success('Đã hủy đơn hàng thành công!');
+    detailOpen.value = false;
+    await loadOrders();
+  } catch (e: any) {
+    console.error('[cancelOrderLine]', e);
+    message.destroyAll();
+    message.error(e.message || 'Hủy đơn hàng thất bại.');
   } finally {
-    review.value.saving = false
+    cancellingOrder.value = false;
   }
 }
 
-/* ===================== Polling & lifecycle ===================== */
-let poll: number | null = null
-function startPoll () { stopPoll(); poll = window.setInterval(() => { if (autoRefresh.value) loadOrders() }, 30000) }
-function stopPoll () { if (poll) { clearInterval(poll); poll = null } }
+async function openReviewModal(row: OrderRow) {
+  // Reset state
+  review.value = {
+    ...review.value,
+    open: true,
+    lineId: row.id,
+    stars: 5,
+    comment: '',
+    proofs: [],
+    loadingExisting: true,
+    existingReviews: []
+  };
 
-onMounted(() => { loadOrders(); startClock(); startPoll() })
-onBeforeUnmount(() => { stopClock(); stopPoll() })
+  // Tải các review cũ
+  try {
+    const { data, error } = await supabase.rpc('get_reviews_for_order_line_v1', { p_line_id: row.id });
+    if (error) throw error;
+    review.value.existingReviews = data || [];
+  } catch (e: any) {
+    console.error('[openReviewModal]', e);
+    message.error(e.message || 'Không thể tải danh sách review.');
+  } finally {
+    review.value.loadingExisting = false;
+  }
+}
+
+
+async function submitReview() {
+  const currentLineId = review.value.lineId; // Lưu lại lineId
+  if (!currentLineId) return;
+  if (review.value.stars === 0) {
+    message.error('Vui lòng chọn số sao đánh giá.');
+    return;
+  }
+
+  review.value.saving = true;
+  message.loading('Đang gửi đánh giá...');
+  try {
+    let proofUrls: string[] = [];
+    if (review.value.proofs.length > 0) {
+      const uploadPromises = review.value.proofs
+        .map(fileInfo => fileInfo.file ? uploadActionProof(fileInfo.file, currentLineId, 'completion') : Promise.resolve(null));
+      
+      const urls = (await Promise.all(uploadPromises)).filter(Boolean) as string[];
+      if (urls.length !== review.value.proofs.length) {
+        throw new Error("Tải lên một vài file bằng chứng không thành công.");
+      }
+      proofUrls = urls;
+    }
+
+    const { error } = await supabase.rpc('submit_order_review_v1', {
+      p_line_id: currentLineId,
+      p_rating: review.value.stars,
+      p_comment: review.value.comment || null,
+      p_proof_urls: proofUrls.length > 0 ? proofUrls : null
+    });
+    if (error) throw error;
+
+    message.destroyAll();
+    message.success('Gửi đánh giá thành công!');
+    review.value.open = false; // Đóng modal sau khi thành công
+    await loadOrders(); // Tải lại bảng chính để cập nhật tag "Đã review"
+
+  } catch (e: any) {
+    console.error('[submitReview]', e);
+    message.destroyAll();
+    message.error(e?.message || 'Gửi đánh giá thất bại');
+  } finally {
+    review.value.saving = false;
+  }
+}
+
+const savingNewProofs = ref(false);
+
+// Computed này kiểm tra xem có ảnh mới nào vừa được thêm vào không
+const hasNewProofs = computed(() => {
+  return isOrderFinalized.value && proofFiles.value.some(f => !f.isSaved);
+});
+
+function handleShowRemoveButton({ file }: { file: ProofUploadFileInfo }): boolean {
+  // Nếu file có thuộc tính isSaved, nghĩa là file cũ -> không hiện nút xóa
+  return !file.isSaved;
+}
+
+// Hàm này sẽ được gọi khi nhấn nút "Lưu bằng chứng mới"
+async function saveAdditionalProofs() {
+  if (!detail.id || !hasNewProofs.value) return;
+
+  savingNewProofs.value = true;
+  message.loading('Đang upload và lưu bằng chứng mới...');
+  try {
+    const oldUrls = (detail.action_proof_urls || []);
+    
+    // Lọc ra các file mới cần upload
+    const newFilesToUpload = proofFiles.value.filter(f => !f.isSaved && f.file);
+
+    // Upload các file mới
+    const uploadPromises = newFilesToUpload.map(f => uploadActionProof(f.file!, detail.id!, 'completion'));
+    const newUrls = await Promise.all(uploadPromises);
+
+    // Gộp URL cũ và mới
+    const combinedUrls = [...oldUrls, ...newUrls];
+
+    // Gọi RPC để cập nhật
+    const { error } = await supabase.rpc('update_action_proofs_v1', {
+      p_line_id: detail.id,
+      p_new_urls: combinedUrls
+    });
+    if (error) throw error;
+
+    message.destroyAll();
+    message.success('Đã lưu bằng chứng bổ sung!');
+    
+    // Tải lại dữ liệu cho drawer để cập nhật
+    const currentRow = rows.value.find(r => r.id === detail.id);
+    if (currentRow) {
+      await openDetail(currentRow);
+    }
+    
+  } catch (e: any) {
+    console.error('[saveAdditionalProofs]', e);
+    message.destroyAll();
+    message.error(e.message || 'Lưu bằng chứng thất bại');
+  } finally {
+    savingNewProofs.value = false;
+  }
+}
+
+function groupSessionOutputs(outputs: any[]) {
+  if (!outputs || !outputs.length) return [];
+  
+  const groups = new Map<string, { kind: string; items: any[]; activities?: any[] }>();
+  
+  for (const output of outputs) {
+    let kindName: string;
+    if (output.is_activity) {
+      kindName = 'Hoạt động farm boss';
+    } else {
+      kindName = attributeMap.value.get(output.kind_code) || output.kind_code;
+    }
+    
+    if (!groups.has(kindName)) {
+      groups.set(kindName, { kind: kindName, items: [] });
+    }
+    groups.get(kindName)!.items.push(output);
+  }
+
+  // Gộp nhóm "Hoạt động farm boss" vào nhóm "Mythic" nếu có
+  const activityGroup = groups.get('Hoạt động farm boss');
+  const mythicGroup = Array.from(groups.values()).find(g => g.kind === 'Mythic');
+
+  if (activityGroup && mythicGroup) {
+    mythicGroup.activities = activityGroup.items;
+    groups.delete('Hoạt động farm boss');
+  }
+
+  return Array.from(groups.values());
+}
+
+// =================================================================
+// PROOF FILES FOR ORDER ACTIONS
+// =================================================================
+watch(() => detail.action_proof_urls, (urls) => {
+  if (urls && urls.length > 0) {
+    proofFiles.value = urls.map((url, index) => ({
+      id: `proof-${index}-${url}`,
+      name: `Bằng chứng ${index + 1}`,
+      status: 'finished',
+      url: url,
+      isSaved: true
+    }));
+  } else {
+    proofFiles.value = [];
+  }
+}, { immediate: true });
+
+// =================================================================
+// LIFECYCLE & POLLING
+// =================================================================
+function startClock() {
+  stopClock();
+  clock = window.setInterval(() => {
+    now.value = Date.now();
+  }, 1000);
+}
+
+function stopClock() {
+  if (clock) {
+    clearInterval(clock);
+    clock = null;
+  }
+}
+
+function startPoll () {
+  stopPoll();
+  poll = window.setInterval(() => {
+    if (autoRefresh.value) {
+      loadOrders();
+    }
+  }, 30000);
+}
+
+function stopPoll () {
+  if (poll) {
+    clearInterval(poll);
+    poll = null;
+  }
+}
+
+onMounted(() => {
+  loadAttributeMap();
+  startClock();
+  startPoll();
+  loadOrders();
+});
+
+onBeforeUnmount(() => {
+  stopClock();
+  stopPoll();
+});
 </script>
 
 <style scoped>
 :deep(.n-card) { border-radius: 14px; }
-
-/* Gọn bảng */
 .datatable--tight :deep(.n-data-table-th),
 .datatable--tight :deep(.n-data-table-td) { padding: 8px 10px; }
+.wide-dropdown :deep(.n-select-menu) {
+  min-width: 150px !important;
+}
 
 .cell-text { display:inline-block; max-width:100%; vertical-align:bottom; }
 .row-actions { display:flex; align-items:center; gap:8px; }
-
-/* Drawer layout */
 .row  { display:flex; align-items:flex-start; gap:.5rem; padding:.25rem 0; }
 .meta { font-size:12px; color:#6b7280; flex-shrink:0; width:120px; }
 .val  { font-size:14px; word-break:break-all; }
 .pre  { white-space:pre-line; }
-
-/* Radio trong drawer */
 .service-type { display: inline-flex !important; gap: 8px; align-items: center; }
+
 .service-type :deep(.n-radio-button) {
   min-width: 92px; height: 32px; padding: 0 10px; border-radius: 10px;
   border: 1px solid #e5e7eb !important; background: #fff; transition: all .2s ease;
   display: inline-flex; justify-content: center; align-items: center; box-shadow: none;
 }
+
 .service-type :deep(.n-radio-button--checked) {
   background: #111827; color: #fff; border-color: #111827 !important;
 }
 
-/* Tooltip */
-.tooltip-desc { max-width: 960px; white-space: normal; }
-.tooltip-desc__list { margin: 0; padding-left: 18px; }
-.tooltip-desc__item { margin: 2px 0; line-height: 1.35; }
-
-/* svc_items group */
 .svc-kind { border: 1px dashed #e5e7eb; border-radius: 10px; padding: 8px 10px; }
 .svc-kind + .svc-kind { margin-top: 6px; }
 .svc-kind__head { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
-.svc-kind__list { margin: 0; padding-left: 18px; list-style: disc; }
-.svc-kind__item { line-height: 1.4; margin: 2px 0; }
-
-/* Work session table */
-.ws-table { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
-.ws-head, .ws-row {
+.svc-kind__grid {
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) 120px 120px 1fr;
-  gap: 10px;
+  grid-template-columns: 24px 1fr 30px 90px 60px 90px 60px 95px 100px;
+  gap: 12px 8px;
   align-items: center;
 }
-.ws-head { font-size: 12px; color: #6b7280; padding: 4px 2px; }
-.ws-row  { padding: 6px 2px; border-top: 1px dashed #eee; }
-.ws-row:first-of-type { border-top: 0; }
+
+.svc-item-row {
+  display: contents;
+}
+
+.cell { padding: 4px 0; }
+.cell-check { display:flex; justify-content:center; }
+.cell-label { overflow:hidden; }
+.svc-proof { display:flex; align-items:center; gap:8px; }
+.service-type :deep(.n-radio-group__splitor) {
+  display: none !important;
+}
+
+.proof-box-empty {
+  width: 96px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.proof-box-with-image {
+  position: relative;
+  width: 96px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.proof-box-with-image .n-image {
+  width: 100%;
+  height: 100%;
+}
+
+.proof-box-with-image :deep(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.proof-box-with-image:hover .image-actions {
+  opacity: 1;
+}
 </style>

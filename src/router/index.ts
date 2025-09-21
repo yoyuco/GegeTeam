@@ -1,48 +1,45 @@
-// --- path: src/router/index.ts
+// path: src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/stores/auth'
 
 const routes = [
   { path: '/login', component: () => import('@/pages/Login.vue') },
   { path: '/auth/callback', name: 'auth-callback', component: () => import('@/pages/AuthCallback.vue') },
-
-  // Khu vực cần đăng nhập
+  { path: '/reset-password', name: 'reset-password', component: () => import('@/pages/ResetPassword.vue') },
   { path: '/', component: () => import('@/pages/Dashboard.vue'), meta: { requiresAuth: true } },
   { path: '/sales', component: () => import('@/pages/Sales.vue'), meta: { requiresAuth: true } },
-  { path: '/orders', component: () => import('@/pages/Orders.vue'), meta: { requiresAuth: true } },
-
-  // 🔥 Trang mới: chỉ hiển thị đơn hàng service (Boosting)
   { path: '/service-boosting', component: () => import('@/pages/ServiceBoosting.vue'), meta: { requiresAuth: true } },
-
-  { path: '/customers', component: () => import('@/pages/Customers.vue'), meta: { requiresAuth: true } },
+  { path: '/reports', component: () => import('@/pages/ReportManagement.vue'), meta: { requiresAuth: true } },
   { path: '/employees', component: () => import('@/pages/Employees.vue'), meta: { requiresAuth: true } },
-  { path: '/tasks', component: () => import('@/pages/Tasks.vue'), meta: { requiresAuth: true } },
-  { path: '/kpi', component: () => import('@/pages/KPI.vue'), meta: { requiresAuth: true } },
-
+  { path: '/role-management', name: 'role-management', component: () => import('../pages/RoleManagement.vue'), meta: { requiresAuth: true } },
+  { path: '/systemops', component: () => import('@/pages/SystemOps.vue'), meta: { requiresAuth: true } },
   { path: '/:pathMatch(.*)*', redirect: '/' }
-]
+];
 
 const router = createRouter({
   history: createWebHistory(),
   routes
-})
+});
 
-router.beforeEach(async (to) => {
-  const auth = useAuth()
+// Navigation Guard SIÊU ĐƠN GIẢN VÀ VỮNG CHẮC
+router.beforeEach((to) => {
+  const auth = useAuth();
+  
+  // Do main.ts đã `await auth.init()`, ở đây chúng ta có thể tin tưởng 100% vào trạng thái của store
+  const isAuthenticated = auth.isAuthenticated;
+  const requiresAuth = to.meta.requiresAuth;
 
-  // Nếu store chưa có session (refresh lần đầu), cố lấy từ supabase
-  if (!auth.user && to.meta.requiresAuth) {
-    const { supabase } = await import('@/lib/supabase')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return { path: '/login', query: { redirect: to.fullPath } }
-    }
-    // có session thì cập nhật store
-    auth.session = session
-    auth.user = session.user
+  if (requiresAuth && !isAuthenticated) {
+    // Nếu route yêu cầu đăng nhập mà người dùng chưa đăng nhập -> về trang login
+    return { path: '/login', query: { redirect: to.fullPath } };
   }
 
-  if (to.path === '/login' && auth.user) return '/'
-})
+  if (to.path === '/login' && isAuthenticated) {
+    // Nếu người dùng đã đăng nhập mà vào trang login -> về trang chủ
+    return '/';
+  }
+  
+  // Mọi trường hợp khác, cho phép điều hướng
+});
 
-export default router
+export default router;

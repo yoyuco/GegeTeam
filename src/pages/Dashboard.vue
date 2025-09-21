@@ -85,6 +85,6 @@ async function loadRevenueSeries() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadKPIs(), loadRevenueSeries()])
+  //await Promise.all([loadKPIs(), loadRevenueSeries()])
 })
 </script>

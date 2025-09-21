@@ -44,3 +44,8 @@ client_secret_*.json
 # Supabase local artifacts (không cần commit)
 supabase/.branches
 supabase/.temp
+
+# Migration scripts
+config_data-backup.json
+convert_json_to_sql.py
+data_insert.sql

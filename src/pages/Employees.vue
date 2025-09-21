@@ -1,12 +1,16 @@
 <!-- path: src/pages/Employees.vue -->
 <template>
-  <div>
+  <div v-if="!canManage">
+    <n-alert type="error" title="Không có quyền truy cập">
+      Bạn không có quyền quản lý nhân viên.
+    </n-alert>
+  </div>
+  <div v-else>
     <div class="flex items-center justify-between mb-4">
-      <h1 class="text-xl font-semibold">Nhân viên</h1>
-
+      <h1 class="text-xl font-semibold">Quản lý Nhân viên & Phân quyền</h1>
       <div class="flex items-center gap-2">
-        <n-input v-model:value="q" placeholder="Tìm theo tên/email/role..." clearable style="width: 280px" />
-        <n-button tertiary @click="reload">Làm mới</n-button>
+        <n-input v-model:value="q" placeholder="Tìm kiếm nhân viên..." clearable style="width: 280px" />
+        <n-button tertiary @click="reload" :loading="loading">Làm mới</n-button>
       </div>
     </div>
 
@@ -14,333 +18,378 @@
       <n-data-table
         :columns="columns"
         :data="filteredRows"
+        :loading="loading"
         :bordered="false"
         :single-line="false"
         :row-key="(row) => row.id"
-        :pagination="pagination"
+        :pagination="{ pageSize: 20 }"
       />
     </n-card>
 
-    <!-- Modal chỉnh vai trò -->
-    <n-modal v-model:show="showRoleModal">
-      <n-card style="width: 520px" title="Chỉnh vai trò" :bordered="false" size="small">
-        <div class="space-y-2">
-          <div class="text-sm">
-            <span class="opacity-70 mr-1">Nhân viên:</span>
-            <span class="font-medium">{{ editingRow?.name }}</span>
-          </div>
-
-          <n-select
-            v-model:value="selectedRoleIds"
-            :options="roleOptions"
-            multiple
-            placeholder="Chọn vai trò"
-          />
+    <n-modal v-model:show="modal.open">
+      <n-card style="width: 680px" :title="`Phân quyền cho: ${modal.editingUser?.display_name}`" :bordered="false" size="huge">
+        <div class="font-medium mb-2">Các gán quyền hiện tại</div>
+        <div v-if="!modal.currentAssignments.length" class="text-sm text-neutral-500 mb-4">
+          Nhân viên này chưa có gán quyền nào.
         </div>
+        <div v-else class="space-y-2 mb-4">
+          <div v-for="asg in modal.currentAssignments" :key="asg.assignment_id" class="flex items-center gap-2 bg-neutral-50 p-2 rounded-md">
+            <n-tag :bordered="false">{{ asg.role_name }}</n-tag>
+            <n-tag v-if="asg.game_code" type="info" :bordered="false">{{ asg.game_code }}</n-tag>
+            <n-tag v-if="asg.business_area_code" type="success" :bordered="false">{{ asg.business_area_code }}</n-tag>
+            <div class="flex-grow"></div>
+            <n-button text type="error" @click="removeAssignment(asg.assignment_id)">
+              <template #icon><n-icon :component="CloseIcon"/></template>
+            </n-button>
+          </div>
+        </div>
+
+        <n-divider/>
+
+        <div class="font-medium mb-2">Thêm gán quyền mới</div>
+        <div class="grid grid-cols-4 gap-3 items-end">
+          <n-form-item label="Vai trò" class="col-span-2">
+            <n-select v-model:value="modal.newAssignment.role_id" :options="roleOptions" placeholder="Chọn vai trò" clearable/>
+          </n-form-item>
+          <n-form-item label="Game">
+            <n-select v-model:value="modal.newAssignment.game_attribute_id" :options="gameOptions" placeholder="Tất cả" clearable/>
+          </n-form-item>
+          <n-form-item label="Mảng nghiệp vụ">
+            <n-select v-model:value="modal.newAssignment.business_area_attribute_id" :options="areaOptions" placeholder="Tất cả" clearable/>
+          </n-form-item>
+        </div>
+        <n-button block tertiary @click="addAssignment" :disabled="!modal.newAssignment.role_id">Thêm</n-button>
+        
         <template #footer>
           <div class="flex justify-end gap-2">
-            <n-button @click="showRoleModal = false">Hủy</n-button>
-            <n-button type="primary" :loading="saving" @click="saveRoles">Lưu</n-button>
+            <n-button @click="modal.open = false">Hủy</n-button>
+            <n-button type="primary" :loading="modal.saving" @click="saveAssignments">Lưu thay đổi</n-button>
           </div>
         </template>
       </n-card>
     </n-modal>
 
-    <!-- Modal chỉnh trạng thái -->
-    <n-modal v-model:show="showStatusModal">
-      <n-card style="width: 460px" title="Sửa trạng thái" :bordered="false" size="small">
-        <div class="space-y-2">
-          <div class="text-sm">
-            <span class="opacity-70 mr-1">Nhân viên:</span>
-            <span class="font-medium">{{ editingRow?.name }}</span>
-          </div>
-
-          <n-select
-            v-model:value="selectedStatus"
-            :options="statusOptions"
-            placeholder="Chọn trạng thái"
-          />
-        </div>
+    <n-modal v-model:show="statusModal.open">
+      <n-card style="width: 460px" :title="`Sửa trạng thái cho: ${modal.editingUser?.display_name}`" :bordered="false" size="huge">
+        <n-form-item label="Trạng thái tài khoản">
+            <n-select v-model:value="statusModal.selectedStatus" :options="statusOptions"/>
+        </n-form-item>
         <template #footer>
           <div class="flex justify-end gap-2">
-            <n-button @click="showStatusModal = false">Hủy</n-button>
-            <n-button type="primary" :loading="savingStatus" @click="saveStatus">Lưu</n-button>
+            <n-button @click="statusModal.open = false">Hủy</n-button>
+            <n-button type="primary" :loading="statusModal.saving" @click="saveStatus">Lưu</n-button>
           </div>
         </template>
       </n-card>
     </n-modal>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
-import {
-  NCard,
-  NDataTable,
-  type DataTableColumns,
-  NTag,
-  NButton,
-  NModal,
-  NSelect,
-  NInput,
-  createDiscreteApi
-} from 'naive-ui'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/stores/auth'
+import { computed, h, onMounted, ref, reactive, watch } from 'vue'; 
+import { NCard, NDataTable, type DataTableColumns, NTag, NButton, NModal, NSelect, NInput, NAlert, NDivider, NFormItem, NIcon, createDiscreteApi } from 'naive-ui';
+import { 
+  DiamondOutline, ShieldCheckmarkOutline, BuildOutline, RocketOutline, BarChartOutline, 
+  CloseCircleOutline as CloseIcon, RibbonOutline, SparklesOutline, HourglassOutline, NewspaperOutline
+} from '@vicons/ionicons5';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/stores/auth';
 
-type Row = {
-  id: string
-  name: string
-  email: string
-  status: string | null
-  roles: { id: number; label: string }[]
+// Types
+type Assignment = {
+  assignment_id: string;
+  role_id: string;
+  role_code: string;
+  role_name: string;
+  game_attribute_id: string | null;
+  game_code: string | null;
+  game_name: string | null;
+  business_area_attribute_id: string | null;
+  business_area_code: string | null;
+  business_area_name: string | null;
+}
+type UserRow = {
+  id: string;
+  display_name: string;
+  email: string;
+  status: string | null;
+  assignments: Assignment[];
 }
 
-const { message } = createDiscreteApi(['message'])
-const auth = useAuth()
+// Initialization
+const { message } = createDiscreteApi(['message']);
+const auth = useAuth();
 
-const rows = ref<Row[]>([])
-const q = ref('')
-const pagination = { pageSize: 10 }
+// State
+const canManage = ref(false);
+const loading = ref(false);
+const rows = ref<UserRow[]>([]);
+const q = ref('');
+const roleOptions = ref<{ label: string; value: string }[]>([]);
+const gameOptions = ref<{ label: string; value: string }[]>([]);
+const areaOptions = ref<{ label: string; value: string }[]>([]);
 
-const roleOptions = ref<{ label: string; value: number }[]>([])
 const statusOptions = ref([
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' },
-  { label: 'Blocked', value: 'blocked' }
-])
+  { label: 'Đang hoạt động', value: 'active' },
+  { label: 'Tạm nghỉ', value: 'inactive' },
+  { label: 'Nghỉ vĩnh viễn', value: 'blocked' }
+]);
 
-const showRoleModal = ref(false)
-const showStatusModal = ref(false)
-const editingRow = ref<Row | null>(null)
+const statusModal = reactive({
+  open: false,
+  saving: false,
+  selectedStatus: 'active'
+});
 
-const selectedRoleIds = ref<number[]>([])
-const selectedStatus = ref<string | null>(null)
+const modal = reactive({
+  open: false,
+  saving: false,
+  editingUser: null as UserRow | null,
+  currentAssignments: [] as Assignment[],
+  newAssignment: {
+    role_id: null as string | null,
+    game_attribute_id: null as string | null,
+    business_area_attribute_id: null as string | null,
+  }
+});
 
-const saving = ref(false)
-const savingStatus = ref(false)
+const roleDisplay: Record<string, { icon: any, color: string }> = {
+  admin: { icon: DiamondOutline, color: '#d946ef' },
+  mod: { icon: ShieldCheckmarkOutline, color: '#f97316' },
+  manager: { icon: ShieldCheckmarkOutline, color: '#f97316' },
+  trader_manager: { icon: RibbonOutline, color: '#0d9488' },
+  farmer_manager: { icon: RibbonOutline, color: '#0d9488' },
+  leader: { icon: SparklesOutline, color: '#f59e0b' },
+  trader_leader: { icon: SparklesOutline, color: '#f59e0b' },
+  farmer_leader: { icon: SparklesOutline, color: '#f59e0b' },
+  trader1: { icon: BarChartOutline, color: '#0ea5e9' },
+  trader2: { icon: BarChartOutline, color: '#0ea5e9' },
+  farmer: { icon: RocketOutline, color: '#10b981' },
+  accountant: { icon: NewspaperOutline, color: '#4f46e5' },
+  trial: { icon: HourglassOutline, color: '#64748b' },
+  default: { icon: BuildOutline, color: '#64748b' },
+};
 
-/** QUYỀN: chỉ admin/manager/mod mới thấy chữ "sửa" */
-const canEdit = ref(false)
-async function determineCanEdit() {
-  const uid = auth.user?.id
-  if (!uid) return
-  // lấy role id của chính mình
-  const { data: urs, error: urErr } = await supabase
-    .from('user_roles')
-    .select('role_id')
-    .eq('user_id', uid)
-  if (urErr) return
-  const roleIds = (urs ?? []).map((r: any) => Number(r.role_id)).filter(Number.isFinite)
-  if (!roleIds.length) return
-  const { data: rs } = await supabase
-    .from('roles')
-    .select('id, code')
-    .in('id', roleIds)
-  const codes = (rs ?? []).map((r: any) => String(r.code || '').toLowerCase())
-  canEdit.value = ['admin', 'manager', 'mod'].some(c => codes.includes(c))
-}
+// Computed
+const filteredRows = computed(() => {
+  const s = q.value.trim().toLowerCase();
+  if (!s) return rows.value;
+  return rows.value.filter(r =>
+    r.display_name.toLowerCase().includes(s) ||
+    r.email.toLowerCase().includes(s) ||
+    r.assignments.some(asg => asg.role_name.toLowerCase().includes(s))
+  );
+});
 
-/** Bảng */
-const columns: DataTableColumns<Row> = [
-  { title: 'Tên', key: 'name', sorter: 'default' },
-  { title: 'Email', key: 'email' },
+// Data Table Columns
+const columns: DataTableColumns<UserRow> = [
+  { 
+    title: 'Tên hiển thị', 
+    key: 'display_name', 
+    sorter: 'default',
+    fixed: 'left',
+    width: 180
+  },
+  { 
+    title: 'Email', 
+    key: 'email', 
+    ellipsis: true,
+    width: 220
+  },
   {
-    title: 'Vai trò',
-    key: 'roles',
+    title: 'Phân quyền chi tiết',
+    key: 'assignments',
     render: (row) => {
-      const nodes: any[] = []
-      if (!row.roles?.length) {
-        nodes.push(h('span', {}, '—'))
-      } else {
-        for (const r of row.roles) {
-          nodes.push(h(NTag, { size: 'small', round: true, style: 'margin-right:6px' }, { default: () => r.label }))
-        }
-      }
-      if (canEdit.value) {
-        nodes.push(
-          h(
-            'button',
-            {
-              class: 'ml-1 text-xs text-primary-600 hover:underline cursor-pointer',
-              onClick: () => openRoleModal(row)
-            },
-            'Sửa'
-          )
-        )
-      }
-      return h('div', { class: 'flex items-center flex-wrap' }, nodes)
+      if (!row.assignments?.length) return h('span', { class: 'text-neutral-500' }, 'Chưa có');
+      
+      const assignmentNodes = row.assignments.map(asg => {
+        const displayInfo = roleDisplay[asg.role_code] || roleDisplay.default;
+        // Sửa lại để hiển thị name thay vì code
+        const context = [asg.game_name, asg.business_area_name].filter(Boolean).join(' / ');
+
+        const roleNode = h('div', { class: 'flex items-center gap-1.5' }, [
+          h(NIcon, { component: displayInfo.icon, color: displayInfo.color, title: asg.role_name }),
+          h('span', { style: `color: ${displayInfo.color}; font-weight: 500;` }, asg.role_name)
+        ]);
+        
+        const contextNode = h('span', { class: 'text-xs text-neutral-500 ml-5' }, context);
+
+        return h('div', { class: 'my-1' }, [roleNode, context ? contextNode : null]);
+      });
+
+      return h('div', { class: 'flex flex-col' }, assignmentNodes);
     }
   },
   {
     title: 'Trạng thái',
     key: 'status',
+    width: 180,
     render: (row) => {
-      const nodes: any[] = [h('span', {}, row.status || '—')]
-      if (canEdit.value) {
-        nodes.push(
-          h(
-            'button',
-            {
-              class: 'ml-2 text-xs text-primary-600 hover:underline cursor-pointer',
-              onClick: () => openStatusModal(row)
-            },
-            'Sửa'
-          )
-        )
-      }
-      return h('div', { class: 'flex items-center' }, nodes)
+      const statusText = statusOptions.value.find(s => s.value === row.status)?.label || row.status || 'Chưa rõ';
+      const statusTag = h(NTag, {
+          type: row.status === 'active' ? 'success' : row.status === 'blocked' ? 'error' : 'warning',
+          size: 'small'
+      }, { default: () => statusText });
+
+      const editButton = h(
+          NButton,
+          { size: 'tiny', tertiary: true, style: 'margin-left: 8px;', onClick: () => openStatusModal(row) },
+          { default: () => 'Sửa' }
+      );
+      return h('div', { class: 'flex items-center' }, [statusTag, editButton]);
     }
+  },
+  {
+    title: 'Hành động',
+    key: 'actions',
+    align: 'right',
+    fixed: 'right',
+    width: 120,
+    render: (row) => h(NButton, { size: 'small', onClick: () => openModal(row) }, { default: () => 'Sửa quyền' })
   }
-  // ĐÃ LOẠI BỎ cột "Thao tác"
-]
+];
 
-const filteredRows = computed(() => {
-  const s = q.value.trim().toLowerCase()
-  if (!s) return rows.value
-  return rows.value.filter(r =>
-    r.name.toLowerCase().includes(s) ||
-    r.email.toLowerCase().includes(s) ||
-    r.roles.some(role => role.label.toLowerCase().includes(s)) ||
-    (r.status || '').toLowerCase().includes(s)
-  )
-})
-
-function openRoleModal(row: Row) {
-  editingRow.value = row
-  selectedRoleIds.value = row.roles.map(r => r.id)
-  showRoleModal.value = true
-}
-
-function openStatusModal(row: Row) {
-  editingRow.value = row
-  selectedStatus.value = row.status ?? 'active'
-  showStatusModal.value = true
-}
-
-async function saveRoles() {
-  if (!editingRow.value) return
-  saving.value = true
+// Methods
+async function reload() {
+  loading.value = true;
   try {
-    const uid = editingRow.value.id
-    const current = new Set(editingRow.value.roles.map(r => r.id))
-    const next = new Set(selectedRoleIds.value)
-
-    const toAdd = [...next].filter(x => !current.has(x))
-    const toRemove = [...current].filter(x => !next.has(x))
-
-    if (toAdd.length) {
-      const payload = toAdd.map(role_id => ({ user_id: uid, role_id }))
-      const { error } = await supabase.from('user_roles').insert(payload)
-      if (error) throw error
-    }
-    if (toRemove.length) {
-      const { error } = await supabase.from('user_roles')
-        .delete()
-        .eq('user_id', uid)
-        .in('role_id', toRemove)
-      if (error) throw error
-    }
-
-    await reload()
-    showRoleModal.value = false
-    message.success('Cập nhật vai trò thành công')
+    const { data, error } = await supabase.rpc('admin_get_all_users');
+    if (error) throw error;
+    rows.value = data || [];
   } catch (e: any) {
-    message.error(e?.message ?? 'Lỗi lưu vai trò')
-    console.error(e)
+    message.error(e.message ?? 'Không tải được danh sách nhân viên.');
   } finally {
-    saving.value = false
+    loading.value = false;
   }
+}
+
+async function loadOptions() {
+  // Load Roles
+  const { data: roleData } = await supabase.from('roles').select('id, name');
+  roleOptions.value = (roleData || []).map(r => ({ label: r.name, value: r.id }));
+
+  // Load Games & Areas from Attributes
+  const { data: attrData } = await supabase.from('attributes').select('id, name, type').in('type', ['GAME', 'BUSINESS_AREA']);
+  gameOptions.value = (attrData || []).filter(a => a.type === 'GAME').map(a => ({ label: a.name, value: a.id }));
+  areaOptions.value = (attrData || []).filter(a => a.type === 'BUSINESS_AREA').map(a => ({ label: a.name, value: a.id }));
+}
+
+function openModal(row: UserRow) {
+  modal.editingUser = row;
+  modal.currentAssignments = JSON.parse(JSON.stringify(row.assignments || [])); // Deep copy
+  modal.open = true;
+}
+
+function openStatusModal(row: UserRow) {
+  modal.editingUser = row; // Dùng lại editingUser từ modal phân quyền
+  statusModal.selectedStatus = row.status || 'active';
+  statusModal.open = true;
 }
 
 async function saveStatus() {
-  if (!editingRow.value) return
-  if (!selectedStatus.value) { message.warning('Chọn trạng thái'); return }
-  savingStatus.value = true
+  if (!modal.editingUser) return;
+  statusModal.saving = true;
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ status: selectedStatus.value })
-      .eq('id', editingRow.value.id)
-    if (error) throw error
+    const { error } = await supabase.rpc('admin_update_user_status', {
+      p_user_id: modal.editingUser.id,
+      p_new_status: statusModal.selectedStatus,
+    });
+    if (error) throw error;
+    
+    message.success('Cập nhật trạng thái thành công!');
+    statusModal.open = false;
+    await reload();
 
-    await reload()
-    showStatusModal.value = false
-    message.success('Cập nhật trạng thái thành công')
   } catch (e: any) {
-    message.error(e?.message ?? 'Lỗi lưu trạng thái')
-    console.error(e)
+    message.error(e.message ?? 'Lỗi khi lưu trạng thái.');
   } finally {
-    savingStatus.value = false
+    statusModal.saving = false;
   }
 }
 
-/** Nạp dữ liệu: roles, profiles, user_roles và gộp */
-async function reload() {
-  // 1) Roles
-  const { data: roleRows, error: rErr } = await supabase
-    .from('roles')
-    .select('id, name, code')
-    .order('id', { ascending: true })
-  if (rErr) { message.error('Không đọc được roles'); console.warn('[roles]', rErr); return }
+function addAssignment() {
+    if (!modal.newAssignment.role_id) return;
 
-  const roleLabel = (r: any) => r?.name || r?.code || ''
-  const roleMap = new Map<number, string>()
-  for (const r of roleRows ?? []) roleMap.set(Number((r as any).id), roleLabel(r))
-  roleOptions.value = (roleRows ?? []).map((r: any) => ({ label: roleLabel(r), value: Number(r.id) }))
+    const newAsg = {
+        ...modal.newAssignment,
+        assignment_id: `new_${Date.now()}`, // temp id
+        role_name: roleOptions.value.find(r => r.value === modal.newAssignment.role_id)?.label || '',
+        game_code: gameOptions.value.find(g => g.value === modal.newAssignment.game_attribute_id)?.label || null,
+        business_area_code: areaOptions.value.find(a => a.value === modal.newAssignment.business_area_attribute_id)?.label || null,
+    };
+    
+    // Kiểm tra trùng lặp
+    const isDuplicate = modal.currentAssignments.some(asg => 
+        asg.role_id === newAsg.role_id &&
+        asg.game_attribute_id === newAsg.game_attribute_id &&
+        asg.business_area_attribute_id === newAsg.business_area_attribute_id
+    );
 
-  // 2) Profiles
-  const { data: profiles, error: pErr } = await supabase
-    .from('profiles')
-    .select('id, display_name, status')
-    .order('display_name', { ascending: true })
-  if (pErr) { message.error('Không đọc được profiles'); console.warn('[profiles]', pErr); return }
+    if (isDuplicate) {
+        message.warning('Gán quyền này đã tồn tại.');
+        return;
+    }
 
-  // 3) user_emails_by_ids RPC (nếu bạn đã tạo)
-  const ids: string[] = (profiles ?? []).map((p: any) => String(p.id))
-  let emailMap = new Map<string, string>()
-  if (ids.length) {
-    const { data: emailRows } = await supabase.rpc('user_emails_by_ids', { uids: ids })
-    emailMap = new Map<string, string>(emailRows?.map((r: any) => [String(r.id), String(r.email)]) ?? [])
-  }
+    modal.currentAssignments.push(newAsg as any);
 
-  // 4) user_roles
-  const { data: urs, error: urErr } = await supabase.from('user_roles').select('user_id, role_id')
-  if (urErr) { message.error('Không đọc được user_roles'); console.warn('[user_roles]', urErr); return }
-
-  // 5) gom roles theo user
-  const mapRoles = new Map<string, { id: number; label: string }[]>()
-  for (const r of urs ?? []) {
-    const uid = String((r as any).user_id)
-    const rid = Number((r as any).role_id)
-    const label = roleMap.get(rid)
-    if (!uid || !rid || !label) continue
-    if (!mapRoles.has(uid)) mapRoles.set(uid, [])
-    const arr = mapRoles.get(uid)!
-    if (!arr.find(x => x.id === rid)) arr.push({ id: rid, label })
-  }
-
-  // 6) map rows
-  rows.value = (profiles ?? []).map((p: any) => {
-    const id = String(p.id)
-    const email = emailMap.get(id) ?? ''
-    const name = (p.display_name || email || id)?.toString()
-    return {
-      id,
-      name,
-      email,
-      status: p.status ?? null,
-      roles: mapRoles.get(id) ?? []
-    } as Row
-  })
+    // Reset form
+    modal.newAssignment.role_id = null;
+    modal.newAssignment.game_attribute_id = null;
+    modal.newAssignment.business_area_attribute_id = null;
 }
 
-onMounted(async () => {
-  await determineCanEdit()
-  await reload()
-})
+
+function removeAssignment(assignmentId: string) {
+    const index = modal.currentAssignments.findIndex(a => a.assignment_id === assignmentId);
+    if (index > -1) {
+        modal.currentAssignments.splice(index, 1);
+    }
+}
+
+async function saveAssignments() {
+  if (!modal.editingUser) return;
+  modal.saving = true;
+  try {
+    const payload = modal.currentAssignments.map(asg => ({
+      role_id: asg.role_id,
+      game_attribute_id: asg.game_attribute_id,
+      business_area_attribute_id: asg.business_area_attribute_id,
+    }));
+    
+    const { error } = await supabase.rpc('admin_update_user_assignments', {
+      p_user_id: modal.editingUser.id,
+      p_assignments: payload,
+    });
+    if (error) throw error;
+    
+    message.success('Cập nhật phân quyền thành công!');
+    modal.open = false;
+    await reload();
+
+  } catch (e: any) {
+    message.error(e.message ?? 'Lỗi khi lưu phân quyền.');
+  } finally {
+    modal.saving = false;
+  }
+}
+
+// Lifecycle
+onMounted(() => {
+  let unwatch: () => void; // Khai báo biến trước
+
+  // Gán watcher cho biến đã khai báo
+  unwatch = watch(() => auth.loading, (isLoading) => {
+    if (!isLoading) {
+      canManage.value = auth.hasPermission('admin:manage_roles');
+      if (canManage.value) {
+        Promise.all([reload(), loadOptions()]);
+      }
+      // Bây giờ có thể gọi unwatch một cách an toàn
+      if (unwatch) {
+        unwatch();
+      }
+    }
+  }, { immediate: true });
+});
 </script>
-
-<style scoped>
-/* chữ "sửa" nhỏ gọn nằm cùng dòng */
-</style>
