@@ -1249,7 +1249,6 @@ async function openDetail(row: OrderRow) {
   collapsedKinds.clear();
 
   try {
-    // KHÔI PHỤC LẠI RPC CALL
     const { data, error } = await supabase.rpc('get_boosting_order_detail_v1', { p_line_id: row.id });
     if (error) throw error;
     if (!data) {
@@ -1258,16 +1257,14 @@ async function openDetail(row: OrderRow) {
       return;
     }
 
-    // Chuẩn hóa service_type 
-    if (data.service_type) {
-      if (String(data.service_type).toLowerCase().includes('pilot')) {
-        data.service_type = 'Pilot';
-      } else if (String(data.service_type).toLowerCase().includes('selfplay')) {
-        data.service_type = 'Selfplay';
-      }
-    }
-
+    // Gán dữ liệu chi tiết từ RPC vào object 'detail'
     Object.assign(detail, data);
+
+    // ================================================================
+    // SỬA LỖI: Ghi đè service_type bằng giá trị ĐÃ ĐƯỢC CHUẨN HÓA từ bảng.
+    // Điều này đảm bảo nó luôn hiển thị đúng, bất kể RPC chi tiết trả về gì.
+    detail.service_type = row.service_type;
+    // ================================================================
 
     // Xử lý tên người thực hiện (assignee)
     if (data.active_session) {
