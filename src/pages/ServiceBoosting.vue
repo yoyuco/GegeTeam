@@ -1117,10 +1117,24 @@ async function copyToClipboard(text: string) {
 async function loadOrders() {
   loading.value = true;
   try {
-    // THAY ĐỔI 5: Gọi RPC v2 thay vì v1
     const { data, error } = await supabase.rpc('get_boosting_orders_v2');
     if (error) throw error;
-    rows.value = (data as any[] ?? []).map((r: any) => ({ ...r, line_id: r.id }));
+
+    // SỬA ĐỔI NẰM Ở ĐÂY
+    rows.value = (data as any[] ?? []).map((r: any) => {
+      // Thêm khối logic chuẩn hóa service_type vào đây
+      if (r.service_type) {
+        const typeStr = String(r.service_type).toLowerCase();
+        if (typeStr.includes('pilot')) {
+          r.service_type = 'Pilot';
+        } else if (typeStr.includes('selfplay')) {
+          r.service_type = 'Selfplay';
+        }
+      }
+      // Trả về đối tượng đã được chuẩn hóa
+      return { ...r, line_id: r.id };
+    });
+    
   } catch (e: any) {
     console.error('[loadOrders]', e);
     message.error(e?.message || 'Không tải được danh sách đơn hàng');
