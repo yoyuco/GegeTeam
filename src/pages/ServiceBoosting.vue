@@ -1625,25 +1625,21 @@ async function startSession() {
   }
   
   sessionLoading.value = true;
-  let newSessionId: string | null = null; // Biến để lưu session ID thật từ server
+  let newSessionId: string | null = null; 
 
   try {
-    // =================================================================
-    // BƯỚC 1: GỌI RPC ĐỂ KHỞI TẠO SESSION TRÊN SERVER
-    // =================================================================
-    message.loading('Đang khởi tạo phiên làm việc...');
+    // BƯỚC 1: Gọi RPC để khởi tạo một session "chờ" trên server và lấy ID
+    message.loading('Đang khởi tạo phiên...');
     const { data: initiatedSessionId, error: initiateError } = await supabase.rpc('initiate_work_session_v1', {
       p_line_id: detail.id
     });
 
     if (initiateError) throw initiateError;
-    if (!initiatedSessionId) throw new Error('Không thể khởi tạo phiên làm việc từ server.');
+    if (!initiatedSessionId) throw new Error('Không thể khởi tạo phiên làm việc.');
     
     newSessionId = initiatedSessionId;
 
-    // =================================================================
-    // BƯỚC 2: DÙNG SESSION ID VỪA NHẬN ĐỂ TẢI FILE BẰNG CHỨNG
-    // =================================================================
+    // BƯỚC 2: Dùng session ID hợp lệ vừa nhận để tải file bằng chứng lên
     message.loading('Đang upload bằng chứng...');
     const selectedRows = ws2.value.rows.filter(r => ws2.value.selectedIds.includes(r.item_id));
     
@@ -1651,19 +1647,18 @@ async function startSession() {
       .filter(r => r.startFile)
       .map(r => uploadProof(r.startFile!, detail.id!, newSessionId!, r.item_id, 'start'));
     
-    const uploadedUrls = await Promise.all(uploadPromises);
+    await Promise.all(uploadPromises);
     
     const urlMap = new Map<string, string>();
     selectedRows.filter(r => r.startFile).forEach((r, i) => {
-      if (uploadedUrls[i]) {
-        urlMap.set(r.item_id, uploadedUrls[i]!);
+      // Logic để lấy URL sau khi upload thành công
+      const { data: pub } = supabase.storage.from('work-proofs').getPublicUrl(uploadPromises[i].data.path);
+      if(pub.publicUrl) {
+         urlMap.set(r.item_id, pub.publicUrl);
       }
     });
 
-    // =================================================================
-    // BƯỚC 3: GỌI RPC `start_work_session_v1` ĐỂ HOÀN TẤT
-    // Server sẽ chạy các kiểm tra quyền nghiêm ngặt ở bước này.
-    // =================================================================
+    // BƯỚC 3: Gọi RPC 'start_work_session_v1' để xác nhận và bắt đầu phiên chính thức
     message.loading('Đang xác thực và bắt đầu phiên...');
     const startStatePayload = selectedRows.map(r => {
       return {
@@ -1674,7 +1669,6 @@ async function startSession() {
       };
     });
 
-    // Gọi hàm RPC chính thức với đầy đủ thông tin
     const { data: finalSessionId, error: startError } = await supabase.rpc('start_work_session_v1', {
         p_order_line_id: detail.id,
         p_start_state: startStatePayload,
@@ -1688,7 +1682,6 @@ async function startSession() {
     message.destroyAll();
     message.success('Bắt đầu phiên làm việc thành công!');
     
-    // Tải lại chi tiết đơn hàng để cập nhật giao diện
     const currentRow = rows.value.find(r => r.id === detail.id);
     if (currentRow) {
       await openDetail(currentRow);
@@ -1697,9 +1690,6 @@ async function startSession() {
     console.error('ERROR inside startSession:', e); 
     message.destroyAll();
     message.error(e.message || 'Không thể bắt đầu phiên làm việc.');
-    
-    // Cân nhắc: Nếu lỗi xảy ra sau khi đã khởi tạo session, bạn có thể gọi
-    // một RPC khác để xóa session "pending" đó để tránh rác trong CSDL.
   } finally {
     sessionLoading.value = false;
   }
