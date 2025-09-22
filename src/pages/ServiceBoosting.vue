@@ -1771,40 +1771,31 @@ async function uploadOverrunProof(file: File, lineId: string, sessionId: string)
 }
 
 async function startSession() {
+  console.log('startSession CALLED'); // LOG 1: Kiểm tra xem hàm có được gọi không
+
   if (!detail.id) {
-    message.error('Lỗi: Không tìm thấy ID của đơn hàng.');
+    console.error('startSession EXITED: detail.id is missing'); // LOG 2: Kiểm tra điều kiện thoát sớm
     return;
   }
   
   sessionLoading.value = true;
-  let newSessionId: string | null = null;
+  message.loading('Đang upload bằng chứng và tạo phiên...');
+  console.log('STARTING TRY BLOCK'); // LOG 3: Kiểm tra trước khi vào try...catch
 
   try {
-    // =================================================================
-    // BƯỚC 1: GỌI RPC ĐỂ KHỞI TẠO SESSION TRÊN SERVER
-    // =================================================================
-    message.loading('Đang khởi tạo phiên làm việc...');
-    const { data: initiatedSessionId, error: initiateError } = await supabase.rpc('initiate_work_session_v1', {
-      p_line_id: detail.id
-    });
-
-    if (initiateError) throw initiateError;
-    if (!initiatedSessionId) throw new Error('Không thể khởi tạo phiên làm việc từ server.');
-    
-    newSessionId = initiatedSessionId;
-
-    // =================================================================
-    // BƯỚC 2: DÙNG SESSION ID VỪA NHẬN ĐỂ TẢI FILE BẰNG CHỨNG
-    // =================================================================
-    message.loading('Đang upload bằng chứng...');
     const selectedRows = ws2.value.rows.filter(r => ws2.value.selectedIds.includes(r.item_id));
-    
+    console.log('Selected Rows:', selectedRows); // LOG 4: Xem các item đã chọn
+
+    const tempSessionId = globalThis.crypto.randomUUID();
+
     const uploadPromises = selectedRows
       .filter(r => r.startFile)
-      .map(r => uploadProof(r.startFile!, detail.id!, newSessionId!, r.item_id, 'start'));
+      .map(r => uploadProof(r.startFile!, detail.id!, tempSessionId, r.item_id, 'start'));
     
-    // Chờ tất cả các file được tải lên và nhận về mảng các URL
+    console.log('Upload Promises count:', uploadPromises.length); // LOG 5: Xem có bao nhiêu file cần upload
+
     const uploadedUrls = await Promise.all(uploadPromises);
+    console.log('Uploaded URLs:', uploadedUrls); // LOG 6: Xem kết quả upload
     
     const urlMap = new Map<string, string>();
     selectedRows.filter(r => r.startFile).forEach((r, i) => {
@@ -1813,10 +1804,6 @@ async function startSession() {
       }
     });
 
-    // =================================================================
-    // BƯỚC 3: GỌI RPC `start_work_session_v1` ĐỂ HOÀN TẤT
-    // =================================================================
-    message.loading('Đang xác thực và bắt đầu phiên...');
     const startStatePayload = selectedRows.map(r => {
       return {
         item_id: r.item_id,
@@ -1825,30 +1812,25 @@ async function startSession() {
         start_exp: r.start_exp
       };
     });
+    console.log('Payload to RPC:', startStatePayload); // LOG 7: Xem payload cuối cùng
 
-    const { data: finalSessionId, error: startError } = await supabase.rpc('start_work_session_v1', {
-        p_order_line_id: detail.id,
-        p_start_state: startStatePayload,
-        p_initial_note: ws2.value.note
-    });
-
-    if (startError) throw startError;
-
-    ws2.value.sessionId = finalSessionId;
+    const sessionId = await startWorkSession(detail.id, startStatePayload, ws2.value.note);
+    ws2.value.sessionId = sessionId;
     
     message.destroyAll();
     message.success('Bắt đầu phiên làm việc thành công!');
     
-    // Tải lại chi tiết đơn hàng để cập nhật giao diện
     const currentRow = rows.value.find(r => r.id === detail.id);
     if (currentRow) {
       await openDetail(currentRow);
     }
   } catch (e: any) {
+    // LOG 8: BẮT LỖI QUAN TRỌNG
     console.error('ERROR inside startSession:', e); 
     message.destroyAll();
-    message.error(e.message || 'Không thể bắt đầu phiên làm việc.');
+    message.error(e.message || 'Không thể bắt đầu phiên làm việc');
   } finally {
+    console.log('FINALLY block executed'); // LOG 9: Kiểm tra khối finally
     sessionLoading.value = false;
   }
 }
