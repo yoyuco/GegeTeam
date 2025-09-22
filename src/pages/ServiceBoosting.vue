@@ -1153,6 +1153,7 @@ async function uploadProof(
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const path = `${lineId}/${sessionId}/${itemId}/${phase}.${ext}`;
   
+  console.log('Đang upload tới đường dẫn:', path);
   const { error, data } = await supabase.storage
     .from('work-proofs')
     .upload(path, file, { upsert: true });
