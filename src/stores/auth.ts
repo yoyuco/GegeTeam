@@ -18,12 +18,20 @@ type AuthContextPayload = {
   permissions: { permission_code: string; game_code: string | null; business_area_code: string | null }[];
 };
 
+type UserProfile = {
+  id: string;
+  display_name: string | null;
+  status: string | null;
+  // Thêm các trường khác từ bảng profiles nếu cần
+};
+
 export const useAuth = defineStore('auth', {
   state: () => ({
     user: null as User | null,
+    profile: null as UserProfile | null, // <<< THÊM STATE MỚI
     loading: true,
     userPermissions: new Set<string>(),
-    assignments: [] as RoleForUI[], // THÊM LẠI: Mảng để hiển thị UI
+    assignments: [] as RoleForUI[],
   }),
 
   getters: {
@@ -64,16 +72,22 @@ export const useAuth = defineStore('auth', {
 
     async fetchUserContext() {
       if (!this.user) return;
-      
-      const { data, error } = await supabase.rpc('get_user_auth_context_v1');
-      if (error) {
-        console.error("Không thể lấy context phân quyền:", error);
-        this.userPermissions.clear();
-        this.assignments = []; // CẬP NHẬT
-        return;
-      }
 
-      const payload = data as AuthContextPayload;
+      // Sử dụng Promise.all để thực hiện các truy vấn song song
+      const [contextRes, profileRes] = await Promise.all([
+        supabase.rpc('get_user_auth_context_v1'),
+        supabase.from('profiles').select('id, display_name, status').eq('auth_id', this.user.id).single()
+      ]);
+
+      // Xử lý context phân quyền (như cũ)
+      const { data: contextData, error: contextError } = contextRes;
+      if (contextError) {
+        console.error("Không thể lấy context phân quyền:", contextError);
+        this.userPermissions.clear();
+        this.assignments = [];
+      } else {
+        const payload = contextData as AuthContextPayload;
+        this.assignments = payload?.roles || [];
       
       // 1. Lưu assignments để hiển thị UI
       this.assignments = payload?.roles || [];
@@ -88,6 +102,13 @@ export const useAuth = defineStore('auth', {
         });
       }
       this.userPermissions = newPermissions;
+      const { data: profileData, error: profileError } = profileRes;
+      if (profileError) {
+        console.error("Không thể lấy thông tin profile:", profileError);
+        this.profile = null;
+      } else {
+        this.profile = profileData as UserProfile;
+      }}
     },
 
     async signIn(email: string, password: string) {
@@ -102,8 +123,9 @@ export const useAuth = defineStore('auth', {
     async signOut() {
       await supabase.auth.signOut();
       this.user = null;
+      this.profile = null; // <<< RESET PROFILE KHI ĐĂNG XUẤT
       this.userPermissions.clear();
-      this.assignments = []; // CẬP NHẬT
+      this.assignments = [];
     },
 
     hasPermission(code: string, context?: { game_code?: string; business_area_code?: string }): boolean {

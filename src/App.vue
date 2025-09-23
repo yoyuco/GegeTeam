@@ -35,7 +35,7 @@
 
             <div v-if="auth.user" class="mt-auto pt-4 border-t border-neutral-200/80">
               <div class="text-sm font-medium mb-2">
-                {{ auth.user.user_metadata?.display_name || auth.user.email }}
+                {{ auth.profile?.display_name || auth.user?.user_metadata?.display_name || auth.user?.email }}
               </div>
               
               <div class="space-y-1 mb-4">
