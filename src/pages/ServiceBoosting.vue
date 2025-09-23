@@ -223,6 +223,15 @@
                 </template>
               </div>
             </div>
+            <div class="row" v-if="detail.service_type === 'Pilot'">
+              <div class="meta">Máy thực hiện</div>
+              <div class="val flex items-center gap-2">
+                <n-input v-model:value="machineInfoModel" placeholder="Ví dụ: Máy 35" />
+                <n-button size="tiny" tertiary @click="saveMachineInfo" :loading="savingInfo">
+                  Cập nhật
+                </n-button>
+              </div>
+            </div>
           </template>
         </div>
 
@@ -255,23 +264,25 @@
                     <div class="cell cell-actions flex items-center justify-center">
                       <n-tooltip trigger="hover">
                         <template #trigger>
-                          <n-button
-                            text
-                            :disabled="!canCreateReport || isOrderFinalized"
-                            @click="canCreateReport ? openReportModal(it) : null"
-                            :type="it.active_report_id ? 'warning' : 'default'"
-                          >
-                            <template #icon><n-icon :component="InformationCircleOutline" /></template>
-                          </n-button>
+                            <n-button
+                                text
+                                :disabled="!canCreateReport || isOrderFinalized || !!(ws2.sessionId && isPicked(it.id))"
+                                @click="openReportModal(it)"
+                                :type="it.active_report_id ? 'warning' : 'default'"
+                            >
+                                <template #icon><n-icon :component="InformationCircleOutline" /></template>
+                            </n-button>
                         </template>
                         {{
-                          !canCreateReport
-                            ? 'Bạn không có quyền tạo báo cáo'
-                            : it.active_report_id
-                            ? 'Hạng mục đang có báo cáo'
-                            : 'Báo cáo sai lệch'
+                            !canCreateReport
+                                ? 'Bạn không có quyền tạo báo cáo'
+                                : it.active_report_id
+                                ? 'Hạng mục đang có báo cáo'
+                                : (ws2.sessionId && isPicked(it.id))
+                                ? 'Không thể báo cáo hạng mục đang trong phiên làm việc'
+                                : 'Báo cáo sai lệch'
                         }}
-                      </n-tooltip>
+                    </n-tooltip>
                     </div>
                     <div class="cell cell-num">
                       <n-input-number :value="rowMap.get(String(it.id))?.start_value ?? 0" :show-button="false" :disabled="!rowMap.get(String(it.id))?.isStartValueEditable || isOrderFinalized" />
@@ -329,8 +340,8 @@
 
             <div v-if="!svcGroups.length && !detailLoading" class="text-sm text-neutral-500">Chưa có svc_items.</div>
             <div class="flex items-center gap-2 mt-2">
-              <n-button size="small" type="primary" :disabled="!computedCanStart" @click="startSession">Bắt đầu</n-button>
-              <n-button size="small" tertiary :disabled="!ws2.sessionId || !canManageActiveSession" @click="cancelSession">Huỷ phiên</n-button>
+              <n-button size="small" type="primary" :disabled="!computedCanStart" :loading="sessionLoading" @click="startSession">Bắt đầu</n-button>
+              <n-button size="small" tertiary :disabled="!ws2.sessionId || !canManageActiveSession" :loading="submittingFinish" @click="cancelSession">Huỷ phiên</n-button>
               <n-button size="small" type="success" :disabled="!computedCanFinish" :loading="submittingFinish" @click="finishSession">Kết thúc</n-button>
             </div>
           </div>
@@ -347,8 +358,38 @@
             </div>
           </div>
 
-          <div v-if="overrunDetected && !detailLoading" class="mb-2">
-            <n-input v-model:value="ws2.overrun_reason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="Lý do vượt chỉ tiêu (bắt buộc nếu có sub vượt/đạt plan)" :disabled="isOrderFinalized"/>
+          <div v-if="overrunDetected && !detailLoading" class="mb-2 space-y-3">
+            <div class="p-3 border border-orange-300 bg-orange-50 rounded-lg space-y-3">
+                <div class="font-medium text-sm text-orange-800">Phát hiện vượt chỉ tiêu!</div>
+                
+                <n-radio-group v-model:value="ws2.overrun_type" name="overrun_type_rg">
+                    <n-space>
+                        <n-radio value="OBJECTIVE">Lý do khách quan</n-radio>
+                        <n-radio value="KPI_FAIL">Không đạt chỉ tiêu</n-radio>
+                    </n-space>
+                </n-radio-group>
+                
+                <div>
+                    <div class="text-xs text-neutral-600 mb-1">
+                        Bằng chứng
+                        <span v-if="ws2.overrun_type === 'OBJECTIVE'" class="text-red-600">* (bắt buộc)</span>
+                    </div>
+                    <n-upload
+                        v-model:file-list="ws2.overrun_proofs"
+                        :max="3"
+                        multiple
+                        list-type="image-card"
+                    />
+                </div>
+
+                <n-input
+                    v-model:value="ws2.overrun_reason"
+                    type="textarea"
+                    :autosize="{ minRows: 2, maxRows: 4 }"
+                    placeholder="Vui lòng nhập lý do chi tiết (bắt buộc)"
+                    :disabled="isOrderFinalized"
+                />
+            </div>
           </div>
 
           <div class="mb-2" v-if="!detailLoading">
@@ -364,7 +405,8 @@
             multiple
             list-type="image-card"
             :disabled="isOrderFinalized && !canEditOrderDetails"
-            :show-remove-button="(handleShowRemoveButton as any)"
+            
+            :on-remove="handleProofRemove"
           />
           <n-button 
             v-if="hasNewProofs" 
@@ -509,7 +551,7 @@ import {
   NCard, NButton, NDataTable, NSwitch, NTag, NTooltip, NDrawer, NDrawerContent, NDivider,
   NInput, NUpload, NInputNumber, NCheckbox, NImage, NSpin, createDiscreteApi, useDialog,
   NRadioGroup, NRadioButton, NDatePicker, NRate, NModal, NSelect, NIcon,  NImageGroup,
-  NCollapse, NCollapseItem,
+  NCollapse, NCollapseItem, NRadio, NSpace,
   type UploadFileInfo, type SelectOption, type DataTableColumns
 } from 'naive-ui';
 import { ChevronDown, ChevronUp, Pencil as EditIcon, TrashOutline as TrashIcon,
@@ -544,6 +586,7 @@ type OrderRow = {
   assignees_text: string;
   service_items: SvcItemSummary[] | null;
   review_id: string | null;
+  machine_info: string | null;
 }
 
 type OrderDetail = OrderRow & {
@@ -579,6 +622,8 @@ type ProofUploadFileInfo = UploadFileInfo & { isSaved?: boolean };
 const { message } = createDiscreteApi(['message']);
 const dialog = useDialog();
 const auth = useAuth();
+const machineInfoModel = ref('');
+
 
 const rows = ref<OrderRow[]>([]);
 const loading = ref(false);
@@ -627,6 +672,8 @@ const ws2 = ref({
   activityRows: [{ label: null as string | null, qty: null as number | null }],
   note: '',
   overrun_reason: null as string | null,
+  overrun_type: null as 'OBJECTIVE' | 'KPI_FAIL' | null,
+  overrun_proofs: [] as UploadFileInfo[],
   sessionId: null as string | null,
   selectedIds: [] as string[],
   rows: [] as WsRow[]
@@ -688,8 +735,7 @@ const computedCanStart = computed(() => {
 });
 
 const computedCanFinish = computed(() => {
-  if (!ws2.value.sessionId) return false;
-  if (!canManageActiveSession.value) return false;
+  if (!ws2.value.sessionId || !canManageActiveSession.value) return false;
 
   // Giữ lại logic kiểm tra bằng chứng và EXP cũ
   for (const itemId of ws2.value.selectedIds) {
@@ -703,21 +749,25 @@ const computedCanFinish = computed(() => {
       if (row.kind_code === 'LEVELING' && row.current_exp === null) return false;
     }
   }
-
-  // --- LOGIC MỚI: Kiểm tra hoạt động farm boss cho Mythic ---
-  // 1. Kiểm tra xem có item Mythic nào được chọn trong phiên không
-  const isMythicSession = ws2.value.rows.some(r => 
-    ws2.value.selectedIds.includes(r.item_id) && mythicKinds.has(r.kind_code)
-  );
-
-  // 2. Nếu có, kiểm tra xem đã nhập hoạt động farm boss chưa
+  
+  // Logic kiểm tra hoạt động farm boss cho Mythic
+  const isMythicSession = ws2.value.rows.some(r => ws2.value.selectedIds.includes(r.item_id) && mythicKinds.has(r.kind_code));
   if (isMythicSession) {
     const hasActivity = ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0);
-    if (!hasActivity) {
-      return false; // Vô hiệu hóa nút nếu không có hoạt động nào được nhập
+    if (!hasActivity) return false;
+  }
+  
+  // <<< LOGIC MỚI: Kiểm tra điều kiện vượt chỉ tiêu >>>
+  if (overrunDetected.value) {
+    // 1. Phải chọn loại lý do VÀ nhập chi tiết
+    if (!ws2.value.overrun_type || !ws2.value.overrun_reason?.trim()) {
+      return false;
+    }
+    // 2. Nếu là "Lý do khách quan", bắt buộc phải có bằng chứng
+    if (ws2.value.overrun_type === 'OBJECTIVE' && ws2.value.overrun_proofs.length === 0) {
+      return false;
     }
   }
-  // --- KẾT THÚC LOGIC MỚI ---
 
   return true;
 });
@@ -838,14 +888,17 @@ function generateServiceDescription(items: SvcItemSummary[] | null): { summaryHt
     return { summaryHtml: 'N/A', detailHtml: '—' };
   }
 
+  // Helper function để kiểm tra một item đã hoàn thành chưa
   const isItemCompleted = (item: SvcItemSummary) => {
     const plan = Number(item.plan_qty ?? 0);
-    return plan > 0 && Number(item.done_qty ?? 0) >= plan;
+    // Coi như hoàn thành nếu không có plan_qty (plan = 0)
+    if (plan <= 0) return true;
+    return Number(item.done_qty ?? 0) >= plan;
   };
 
   const kindCodesInOrder = [...new Set(items.map(it => it.kind_code))].sort((a, b) => (KIND_ORDER[a] ?? 999) - (KIND_ORDER[b] ?? 999));
 
-  // Tạo chuỗi tóm tắt (summary)
+  // --- Logic tạo chuỗi tóm tắt (summary) - Giữ nguyên không đổi ---
   const summaryParts = kindCodesInOrder.map(code => {
     const kindName = attributeMap.value.get(code) || code;
     const itemsInKind = items.filter(it => it.kind_code === code);
@@ -854,13 +907,14 @@ function generateServiceDescription(items: SvcItemSummary[] | null): { summaryHt
   });
   const summaryHtml = summaryParts.join(', ');
 
-  // Tạo chuỗi chi tiết (detailed html)
+  // --- Logic tạo chuỗi chi tiết (detailed html) - Cập nhật ở đây ---
   let detailHtml = '<ul class="list-none p-0 m-0 space-y-1">';
   for (const code of kindCodesInOrder) {
     const kindName = attributeMap.value.get(code) || code;
     const itemsInKind = items.filter(it => it.kind_code === code);
     const isGroupCompleted = itemsInKind.length > 0 && itemsInKind.every(isItemCompleted);
 
+    // Vẫn gạch ngang tên kind nếu cả nhóm đã xong
     if (isGroupCompleted) {
       detailHtml += `<li><del><strong>- ${kindName}:</strong></del>`;
     } else {
@@ -870,8 +924,13 @@ function generateServiceDescription(items: SvcItemSummary[] | null): { summaryHt
     if (itemsInKind.length > 0) {
       detailHtml += '<ul class="list-none p-0 m-0 pl-4">';
       for (const item of itemsInKind) {
-        // paramsLabel đã tự xử lý gạch ngang cho từng item
-        detailHtml += `<li>+ ${paramsLabel(item)}</li>`;
+        // <<< THAY ĐỔI NẰM Ở ĐÂY >>>
+        // 1. Lấy nhãn của item
+        const itemLabel = paramsLabel(item);
+        // 2. Kiểm tra xem item này đã hoàn thành chưa
+        const isComplete = isItemCompleted(item);
+        // 3. Thêm thẻ <del> nếu đã hoàn thành
+        detailHtml += `<li>+ ${isComplete ? `<del>${itemLabel}</del>` : itemLabel}</li>`;
       }
       detailHtml += '</ul>';
     }
@@ -893,6 +952,7 @@ function formatDateTime(dateString: string | null | undefined): string {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleString('vi-VN');
 }
+
 // =================================================================
 // DATA TABLE & RENDERERS
 // =================================================================
@@ -1044,7 +1104,29 @@ const columns: DataTableColumns<OrderRow> = [
       const s = statusView(row.status);
       return h(NTag, { size: 'small', type: s.type, bordered: false }, { default: () => s.label });
   }},
-  { title: 'Người thực hiện', key: 'assignees_text', width: 150, ellipsis: true, render: (row: OrderRow) => renderTrunc(row.assignees_text, 30) },
+  {
+    title: 'Người thực hiện',
+    key: 'assignees_text',
+    width: 150,
+    ellipsis: true,
+    render: (row: OrderRow) => {
+      const assignee = row.assignees_text;
+      const machine = row.machine_info;
+      let displayText = '';
+
+      if (assignee && machine) {
+        displayText = `${assignee} - ${machine}`;
+      } else if (assignee) {
+        displayText = assignee;
+      } else if (machine) {
+        displayText = `— - ${machine}`;
+      } else {
+        displayText = '—';
+      }
+      
+      return renderTrunc(displayText, 30);
+    }
+  },
   { 
     title: 'Thao tác', 
     key: 'actions', 
@@ -1259,7 +1341,7 @@ async function openDetail(row: OrderRow) {
 
     // Gán dữ liệu chi tiết từ RPC vào object 'detail'
     Object.assign(detail, data);
-
+    machineInfoModel.value = data.machine_info || '';
     // ================================================================
     // SỬA LỖI: Ghi đè service_type bằng giá trị ĐÃ ĐƯỢC CHUẨN HÓA từ bảng.
     // Điều này đảm bảo nó luôn hiển thị đúng, bất kể RPC chi tiết trả về gì.
@@ -1384,6 +1466,8 @@ function onDrawerClose() {
     activityRows: [{ label: null, qty: null }], 
     note: '', 
     overrun_reason: null, 
+    overrun_type: null,
+    overrun_proofs: [],
     sessionId: null, 
     selectedIds: [], 
     rows: [] 
@@ -1470,6 +1554,34 @@ function paramsLabel(it: SvcItem | SvcItemSummary): string {
   return mainLabel + suffix;
 }
 
+const savingMachineInfo = ref(false); // Có thể dùng chung state savingInfo
+
+async function saveMachineInfo() {
+  if (!detail.id) return;
+  savingInfo.value = true;
+  try {
+    const { error } = await supabase.rpc('update_order_line_machine_info_v1', {
+      p_line_id: detail.id,
+      p_machine_info: machineInfoModel.value.trim() || null
+    });
+    if (error) throw error;
+
+    message.success('Đã cập nhật thông tin máy!');
+
+    // Cập nhật lại dữ liệu local để giao diện phản hồi ngay lập tức
+    detail.machine_info = machineInfoModel.value.trim() || null;
+    const idx = rows.value.findIndex(r => r.id === detail.id);
+    if (idx > -1) {
+      rows.value[idx].machine_info = detail.machine_info;
+    }
+
+  } catch (e: any) {
+    message.error(e.message || 'Cập nhật thất bại.');
+  } finally {
+    savingInfo.value = false;
+  }
+}
+
 function groupAndSort(items: SvcItem[]) {
   const groups = new Map<string, { key: string; label: string; code: string; items: SvcItem[] }>();
   for (const it of items) {
@@ -1517,12 +1629,26 @@ async function submitReport() {
       proofUrls.push(...urls);
     }
     
-    await createServiceReport(reportModal.value.itemId, reportModal.value.description, proofUrls);
+    // Lưu lại ID của item vừa được báo cáo
+    const reportedItemId = reportModal.value.itemId;
+
+    await createServiceReport(reportedItemId, reportModal.value.description, proofUrls);
     
+    // <<< THÊM LOGIC MỚI Ở ĐÂY >>>
+    // Sau khi báo cáo thành công, tìm và xóa item ID ra khỏi danh sách đang chọn
+    if (reportedItemId) {
+      const index = ws2.value.selectedIds.indexOf(reportedItemId);
+      if (index > -1) {
+        ws2.value.selectedIds.splice(index, 1);
+      }
+    }
+    // <<< KẾT THÚC LOGIC MỚI >>>
+
     message.destroyAll();
-    message.success('Gửi báo cáo thành công!');
+    message.success('Gửi báo cáo thành công! Hạng mục đã được bỏ chọn.');
     reportModal.value.open = false;
 
+    // Tải lại chi tiết đơn hàng để cập nhật trạng thái "có báo cáo"
     const currentRow = rows.value.find(r => r.id === detail.id);
     if (currentRow) {
       await openDetail(currentRow);
@@ -1628,6 +1754,20 @@ function onPickEndFile(r: WsRow, f: { file?: UploadFileInfo | null }) {
   if (r.endPreviewUrl) URL.revokeObjectURL(r.endPreviewUrl);
   r.endFile = newFile;
   r.endPreviewUrl = URL.createObjectURL(newFile);
+}
+
+async function uploadOverrunProof(file: File, lineId: string, sessionId: string): Promise<string> {
+  if (!file) throw new Error("File không hợp lệ.");
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+  // Tạo đường dẫn file có cấu trúc rõ ràng
+  const filePath = `${lineId}/${sessionId}/overrun/${fileName}`;
+  
+  const { data, error } = await supabase.storage.from('work-proofs').upload(filePath, file);
+  if (error) throw new Error(`Lỗi upload bằng chứng vượt chỉ tiêu: ${error.message}`);
+  
+  const { data: publicURL } = supabase.storage.from('work-proofs').getPublicUrl(data.path);
+  return publicURL.publicUrl;
 }
 
 async function startSession() {
@@ -1736,10 +1876,23 @@ async function finishSession() {
   
   try {
     submittingFinish.value = true;
-    message.loading('Đang upload bằng chứng và lưu tiến độ...');
+    message.loading('Đang xử lý và upload bằng chứng...');
 
+    // BƯỚC 1: UPLOAD BẰNG CHỨNG VƯỢT CHỈ TIÊU (NẾU CÓ)
+    let overrunProofUrls: string[] = [];
+    if (overrunDetected.value && ws2.value.overrun_proofs.length > 0) {
+        const uploadPromises = ws2.value.overrun_proofs
+            .map(fileInfo => fileInfo.file ? uploadOverrunProof(fileInfo.file, detail.id!, sid) : Promise.resolve(null));
+        
+        const urls = (await Promise.all(uploadPromises)).filter(Boolean) as string[];
+        if (urls.length !== ws2.value.overrun_proofs.length) {
+            throw new Error("Một vài file bằng chứng vượt chỉ tiêu upload không thành công.");
+        }
+        overrunProofUrls = urls;
+    }
+
+    // BƯỚC 2: UPLOAD BẰNG CHỨNG CÔNG VIỆC VÀ TẠO PAYLOAD (LOGIC CŨ)
     const selectedItems = ws2.value.rows.filter(r => ws2.value.selectedIds.includes(r.item_id));
-
     const outputs: SessionOutputRow[] = await Promise.all(
       selectedItems
         .filter(r => {
@@ -1751,56 +1904,48 @@ async function finishSession() {
         .map(async (r) => {
           const startUrl = r.startFile ? await uploadProof(r.startFile, detail.id!, sid, r.item_id, 'start') : (r.startProofUrl ?? null);
           const endUrl = r.endFile ? await uploadProof(r.endFile, detail.id!, sid, r.item_id, 'end') : (r.endProofUrl ?? null);
-          
           const params: any = {};
             if (r.kind_code === 'LEVELING' && r.current_exp != null) {
               params.exp_percent = r.current_exp;
             }
-
           return {
-            item_id: r.item_id,
-            start_value: Number(r.start_value),
-            current_value: Number(r.current_value),
-            start_proof_url: startUrl,
-            end_proof_url: endUrl,
+            item_id: r.item_id, start_value: Number(r.start_value), current_value: Number(r.current_value),
+            start_proof_url: startUrl, end_proof_url: endUrl,
             params: Object.keys(params).length > 0 ? params : undefined
           };
         })
     );
-    
     const acts: ActivityRow[] = [];
-    const selectedMythicItemIds = selectedItems
-      .filter(r => mythicKinds.has(r.kind_code))
-      .map(r => r.item_id);
-
+    const selectedMythicItemIds = selectedItems.filter(r => mythicKinds.has(r.kind_code)).map(r => r.item_id);
     if (selectedMythicItemIds.length > 0) {
       ws2.value.activityRows.forEach(activity => {
         if (activity.label && (activity.qty ?? 0) > 0) {
           selectedMythicItemIds.forEach(mythicId => {
             acts.push({
-              item_id: mythicId,
-              kind_code: 'ACTIVITY',
-              delta: Number(activity.qty),
+              item_id: mythicId, kind_code: 'ACTIVITY', delta: Number(activity.qty),
               params: { label: String(activity.label).trim() || ' ' },
-              start_value: 0,
-              current_value: Number(activity.qty),
-              start_proof_url: null,
-              end_proof_url: null,
+              start_value: 0, current_value: Number(activity.qty),
+              start_proof_url: null, end_proof_url: null,
             });
           });
         }
       });
     }
-
-    const isMythicSession = selectedMythicItemIds.length > 0;
-    const hasActivityInput = ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0);
-
-    if (isMythicSession && hasActivityInput && acts.length === 0) {
-      throw new Error("Lỗi logic: Không thể liên kết hoạt động farm boss với item Mythic đã chọn. Vui lòng bỏ chọn và chọn lại item Mythic.");
+    if (selectedMythicItemIds.length > 0 && ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0) && acts.length === 0) {
+      throw new Error("Lỗi logic: Không thể liên kết hoạt động farm boss với item Mythic đã chọn.");
     }
       
+    // BƯỚC 3: GỌI RPC VỚI ĐẦY ĐỦ THAM SỐ
     const idem = globalThis.crypto?.randomUUID?.() ?? sid;
-    const { error } = await finishWorkSessionIdem(sid, outputs, acts, ws2.value.overrun_reason ?? null, idem);
+    const { error } = await finishWorkSessionIdem(
+      sid,
+      outputs,
+      acts,
+      ws2.value.overrun_reason ?? null,
+      idem,
+      ws2.value.overrun_type ?? null,
+      overrunProofUrls
+    );
     if (error) throw error;
     
     message.destroyAll();
@@ -2072,6 +2217,19 @@ function handleShowRemoveButton({ file }: { file: ProofUploadFileInfo }): boolea
   return !file.isSaved;
 }
 
+function handleProofRemove({ file }: { file: ProofUploadFileInfo }): boolean {
+  // Logic: Kiểm tra ID của file.
+  // Nếu file này là file cũ được tải từ database (có id bắt đầu bằng 'proof-'),
+  // thì không cho phép xóa -> return false.
+  if (file.id.startsWith('proof-')) {
+    message.warning('Bạn không thể xóa bằng chứng đã được lưu trữ.');
+    return false; // Ngăn chặn hành động xóa
+  }
+
+  // Ngược lại, cho phép xóa (đây là file mới do người dùng vừa thêm vào).
+  return true;
+}
+
 // Hàm này sẽ được gọi khi nhấn nút "Lưu bằng chứng mới"
 async function saveAdditionalProofs() {
   if (!detail.id || !hasNewProofs.value) return;
@@ -2119,15 +2277,14 @@ async function saveAdditionalProofs() {
 function groupSessionOutputs(outputs: any[]) {
   if (!outputs || !outputs.length) return [];
   
+  // Bước 1: Tách riêng các hạng mục công việc và các hoạt động farm boss
+  const realItems = outputs.filter(o => !o.is_activity);
+  const activityItems = outputs.filter(o => o.is_activity);
+
+  // Bước 2: Nhóm các hạng mục công việc (logic không đổi)
   const groups = new Map<string, { kind: string; items: any[]; activities?: any[] }>();
-  
-  for (const output of outputs) {
-    let kindName: string;
-    if (output.is_activity) {
-      kindName = 'Hoạt động farm boss';
-    } else {
-      kindName = attributeMap.value.get(output.kind_code) || output.kind_code;
-    }
+  for (const output of realItems) {
+    const kindName = attributeMap.value.get(output.kind_code) || output.kind_code;
     
     if (!groups.has(kindName)) {
       groups.set(kindName, { kind: kindName, items: [] });
@@ -2135,13 +2292,19 @@ function groupSessionOutputs(outputs: any[]) {
     groups.get(kindName)!.items.push(output);
   }
 
-  // Gộp nhóm "Hoạt động farm boss" vào nhóm "Mythic" nếu có
-  const activityGroup = groups.get('Hoạt động farm boss');
-  const mythicGroup = Array.from(groups.values()).find(g => g.kind === 'Mythic');
+  // Bước 3: Lấy ra MỘT hoạt động đại diện và gắn vào nhóm Mythic
+  if (activityItems.length > 0) {
+    // Chỉ cần lấy hoạt động đầu tiên vì chúng đều đại diện cho cùng một kết quả
+    const representativeActivity = activityItems[0];
+    
+    const mythicKindName = attributeMap.value.get('MYTHIC') || 'MYTHIC';
+    const mythicGroup = Array.from(groups.values()).find(g => g.kind === mythicKindName);
 
-  if (activityGroup && mythicGroup) {
-    mythicGroup.activities = activityGroup.items;
-    groups.delete('Hoạt động farm boss');
+    if (mythicGroup) {
+      // Gắn một mảng chỉ chứa MỘT hoạt động duy nhất
+      // Template v-for sẽ chỉ lặp một lần và hiển thị đúng
+      mythicGroup.activities = [representativeActivity];
+    }
   }
 
   return Array.from(groups.values());

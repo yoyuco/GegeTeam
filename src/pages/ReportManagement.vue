@@ -50,137 +50,68 @@
               <n-tab-pane name="edit-item" tab="Sửa Hạng mục Bị báo cáo">
                 <n-form :model="itemEditForm" label-placement="top" class="space-y-2">
                   <div class="grid grid-cols-2 gap-4">
-                    <n-form-item label="Số lượng Kế hoạch (Plan Qty)">
-                      <n-input-number v-model:value="itemEditForm.plan_qty" class="w-full" :min="0"/>
-                    </n-form-item>
-                    <n-form-item label="Số lượng Đã hoàn thành (Done Qty)">
-                      <n-input-number v-model:value="itemEditForm.done_qty" class="w-full" :min="0"/>
-                    </n-form-item>
+                      <n-form-item label="Mục tiêu (Plan)">
+                          <n-input-number v-model:value="itemEditForm.plan_qty" class="w-full" :min="0" disabled />
+                      </n-form-item>
+                      <n-form-item label="Tiến độ đúng là (Actual Done Qty)">
+                          <n-input-number v-model:value="itemEditForm.corrected_end_value" class="w-full" />
+                      </n-form-item>
+                  </div>
+                  <div class="text-xs text-neutral-500 -mt-2 mb-2 px-1">
+                      Nhập chỉ số thực tế tại thời điểm kết thúc phiên cuối cùng. Ví dụ: Farmer báo level thực tế là 9.
                   </div>
 
                   <template v-if="selectedReport.reported_item?.kind_code === 'LEVELING'">
-                    <n-form-item label="Chế độ">
-                      <n-select v-model:value="itemEditForm.params.mode" :options="levelingModeOptions" />
-                    </n-form-item>
-                    <div class="grid grid-cols-2 gap-4">
-                      <n-form-item label="Level Bắt đầu">
-                        <n-input-number v-model:value="itemEditForm.params.start" class="w-full" :min="1" />
+                      <n-form-item label="Chế độ">
+                          <n-select v-model:value="itemEditForm.params.mode" :options="levelingModeOptions" />
                       </n-form-item>
-                      <n-form-item label="Level Kết thúc (Mục tiêu)">
-                        <n-input-number v-model:value="itemEditForm.params.end" class="w-full" :min="1" />
-                      </n-form-item>
-                    </div>
+                      <div class="grid grid-cols-2 gap-4">
+                          <n-form-item label="Level Bắt đầu">
+                              <n-input-number v-model:value="itemEditForm.params.start" class="w-full" :min="1" />
+                          </n-form-item>
+                          <n-form-item label="Level Kết thúc (Mục tiêu)">
+                              <n-input-number v-model:value="itemEditForm.params.end" class="w-full" :min="1" />
+                          </n-form-item>
+                      </div>
                   </template>
 
                   <template v-if="selectedReport.reported_item?.kind_code === 'BOSS'">
-                    <n-form-item label="Tên Boss">
-                      <n-select v-model:value="itemEditForm.params.boss_code" :options="bossDict" filterable />
-                    </n-form-item>
+                      <n-form-item label="Tên Boss">
+                          <n-select v-model:value="itemEditForm.params.boss_code" :options="bossDict" filterable />
+                      </n-form-item>
                   </template>
 
                   <template v-if="selectedReport.reported_item?.kind_code === 'THE_PIT'">
-                    <n-form-item label="Tier">
-                      <n-select v-model:value="itemEditForm.params.tier_code" :options="pitTierDict" filterable />
-                    </n-form-item>
+                      <n-form-item label="Tier">
+                          <n-select v-model:value="itemEditForm.params.tier_code" :options="pitTierDict" filterable />
+                      </n-form-item>
                   </template>
 
                   <template v-if="['MATERIALS', 'MASTERWORKING', 'NIGHTMARE'].includes(selectedReport.reported_item?.kind_code)">
-                    <n-form-item label="Loại">
-                      <n-select v-model:value="itemEditForm.params.attribute_code" :options="materialDict" filterable />
-                    </n-form-item>
+                      <n-form-item label="Loại">
+                          <n-select v-model:value="itemEditForm.params.attribute_code" :options="materialDict" filterable />
+                      </n-form-item>
                   </template>
 
                   <template v-if="selectedReport.reported_item?.kind_code === 'MYTHIC'">
-                    <n-form-item label="Mythic Item">
-                      <n-select v-model:value="itemEditForm.params.item_code" :options="mythicItemDict" filterable />
-                    </n-form-item>
-                    <n-form-item label="Greater Affix (GA)">
-                      <n-select v-model:value="itemEditForm.params.ga_code" :options="mythicGADict" filterable clearable/>
-                    </n-form-item>
-
-                    <div v-if="itemEditForm.params.ga_code?.includes('REQUEST')" class="space-y-2 border p-3 rounded-md">
-                      <div class="text-sm font-medium">Chỉ số yêu cầu</div>
-
-                      <n-form-item v-if="itemEditForm.params.ga_code.startsWith('1GA')" label="Stat 1">
-                        <n-select
-                          v-model:value="itemEditForm.params.stats[0]"
-                          :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[0] || !itemEditForm.params.stats.includes(opt.value))"
-                          filterable clearable
-                        />
+                      <n-form-item label="Mythic Item">
+                          <n-select v-model:value="itemEditForm.params.item_code" :options="mythicItemDict" filterable />
                       </n-form-item>
-
-                      <template v-if="itemEditForm.params.ga_code.startsWith('2GA')">
-                        <n-form-item label="Stat 1">
-                          <n-select
-                            v-model:value="itemEditForm.params.stats[0]"
-                            :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[0] || !itemEditForm.params.stats.includes(opt.value))"
-                            filterable clearable
-                          />
-                        </n-form-item>
-                        <n-form-item label="Stat 2">
-                          <n-select
-                            v-model:value="itemEditForm.params.stats[1]"
-                            :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[1] || !itemEditForm.params.stats.includes(opt.value))"
-                            filterable clearable :disabled="!itemEditForm.params.stats[0]"
-                          />
-                        </n-form-item>
-                      </template>
-
-                      <template v-if="itemEditForm.params.ga_code.startsWith('3GA')">
-                        <n-form-item label="Stat 1">
-                          <n-select
-                            v-model:value="itemEditForm.params.stats[0]"
-                            :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[0] || !itemEditForm.params.stats.includes(opt.value))"
-                            filterable clearable
-                          />
-                        </n-form-item>
-                        <n-form-item label="Stat 2">
-                          <n-select
-                            v-model:value="itemEditForm.params.stats[1]"
-                            :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[1] || !itemEditForm.params.stats.includes(opt.value))"
-                            filterable clearable :disabled="!itemEditForm.params.stats[0]"
-                          />
-                        </n-form-item>
-                        <n-form-item label="Stat 3">
-                          <n-select
-                            v-model:value="itemEditForm.params.stats[2]"
-                            :options="currentMythicStatOptions.filter((opt: SelectOption) => opt.value === itemEditForm.params.stats[2] || !itemEditForm.params.stats.includes(opt.value))"
-                            filterable clearable :disabled="!itemEditForm.params.stats[1]"
-                          />
-                        </n-form-item>
-                      </template>
-                    </div>
+                      <n-form-item label="Greater Affix (GA)">
+                          <n-select v-model:value="itemEditForm.params.ga_code" :options="mythicGADict" filterable clearable />
+                      </n-form-item>
+                      <div v-if="itemEditForm.params.ga_code?.includes('REQUEST')" class="space-y-2 border p-3 rounded-md">
+                          </div>
                   </template>
 
+                  <n-form-item label="Lý do sửa đổi">
+                      <n-input v-model:value="itemEditForm.correction_reason" type="textarea" placeholder="Nhập lý do ngắn gọn..." />
+                  </n-form-item>
                   <n-alert title="Lưu ý" type="warning" class="mt-4">
-                    Việc thay đổi các giá trị này sẽ ảnh hưởng trực tiếp đến tiến độ của đơn hàng. Hãy chắc chắn rằng bạn đã nhập đúng.
+                      Hành động này sẽ thiết lập lại tiến độ của hạng mục về giá trị "Tiến độ đúng là" và vô hiệu hóa lịch sử làm việc cũ.
                   </n-alert>
-                  
-                  <n-button type="primary" block @click="handleSaveItemChanges" class="mt-4">Lưu thay đổi Hạng mục</n-button>
-                </n-form>
-              </n-tab-pane>
-
-              <n-tab-pane name="edit-order" tab="Sửa Đơn hàng Chung">
-                <n-form :model="editForm" label-placement="top">
-                  <n-form-item label="Deadline">
-                    <n-date-picker v-model:value="editForm.deadline" type="datetime" clearable class="w-full" />
-                  </n-form-item>
-                  <n-form-item label="Ghi chú gói">
-                    <n-input v-model:value="editForm.package_note" type="textarea" :autosize="{minRows: 2}" />
-                  </n-form-item>
-                  <n-form-item v-if="selectedReport.service_type === 'Selfplay'" label="Battle Tag">
-                    <n-input v-model:value="editForm.btag" />
-                  </n-form-item>
-                  <template v-if="selectedReport.service_type === 'Pilot'">
-                      <n-form-item label="Login ID">
-                          <n-input v-model:value="editForm.login_id" />
-                      </n-form-item>
-                      <n-form-item label="Login Password">
-                          <n-input v-model:value="editForm.login_pwd" type="password" show-password-on="mousedown" :input-props="{ autocomplete: 'new-password' }" />
-                      </n-form-item>
-                  </template>
-                  <n-button type="primary" block @click="handleSaveChanges">Lưu thay đổi Đơn hàng</n-button>
-                </n-form>
+                  <n-button type="primary" block @click="handleSaveItemChanges" class="mt-4">Chuẩn hóa Tiến độ</n-button>
+              </n-form>
               </n-tab-pane>
 
               <n-tab-pane name="resolve" tab="Giải quyết">
@@ -237,7 +168,8 @@ type ReportRow = {
 
 const itemEditForm = reactive({
   plan_qty: null as number | null,
-  done_qty: null as number | null,
+  corrected_end_value: null as number | null,
+  correction_reason: '',
   params: {} as any
 });
 
@@ -251,13 +183,6 @@ const drawer = reactive({ open: false });
 const selectedReport = ref<ReportRow | null>(null);
 const resolverNotes = ref('');
 const isSubmitting = ref(false);
-const editForm = reactive({
-  deadline: null as number | null,
-  package_note: '',
-  btag: '',
-  login_id: '',
-  login_pwd: ''
-});
 const attributeMap = ref<Map<string, { name: string; type: string }>>(new Map());
 const bossDict = ref<SelectOption[]>([]);
 const pitTierDict = ref<SelectOption[]>([]);
@@ -353,20 +278,14 @@ async function loadAttributeMap() {
 function openDrawer(row: ReportRow) {
   selectedReport.value = row;
   resolverNotes.value = '';
-  
-  // Populate general order edit form
-  editForm.deadline = row.deadline ? new Date(row.deadline).getTime() : null;
-  editForm.package_note = row.package_note || '';
-  editForm.btag = row.btag || '';
-  editForm.login_id = row.login_id || '';
-  editForm.login_pwd = row.login_pwd || '';
 
   // Populate reported item edit form
   const item = row.reported_item;
-  if (item) {
-    itemEditForm.plan_qty = item.plan_qty;
-    itemEditForm.done_qty = item.done_qty;
-    itemEditForm.params = JSON.parse(JSON.stringify(item.params || {}));
+    if (item) {
+        itemEditForm.plan_qty = item.plan_qty;
+        itemEditForm.corrected_end_value = item.done_qty;
+        itemEditForm.correction_reason = ''; // Reset lý do
+        itemEditForm.params = JSON.parse(JSON.stringify(item.params || {}));
     
     // Khởi tạo mảng stats cho Mythic nếu chưa có
     if (item.kind_code === 'MYTHIC' && !itemEditForm.params.stats) {
@@ -377,27 +296,6 @@ function openDrawer(row: ReportRow) {
   drawer.open = true;
 }
 
-async function handleSaveChanges() {
-  if (!selectedReport.value) return;
-  isSubmitting.value = true;
-  try {
-    const { error } = await supabase.rpc('update_order_details_v1', {
-      p_line_id: selectedReport.value.order_line_id,
-      p_deadline: editForm.deadline ? new Date(editForm.deadline).toISOString() : null,
-      p_package_note: editForm.package_note,
-      p_btag: editForm.btag,
-      p_login_id: editForm.login_id,
-      p_login_pwd: editForm.login_pwd
-    });
-    if (error) throw error;
-    message.success('Đã cập nhật thông tin đơn hàng thành công!');
-  } catch (e: any) {
-    message.error(e.message || 'Lỗi khi cập nhật đơn hàng.');
-  } finally {
-    isSubmitting.value = false;
-  }
-}
-
 const currentMythicStatOptions = computed(() => {
   const itemCode = itemEditForm.params.item_code;
   if (!itemCode) return [];
@@ -406,35 +304,29 @@ const currentMythicStatOptions = computed(() => {
 
 async function handleSaveItemChanges() {
   if (!selectedReport.value?.reported_item?.id) return;
-  
-  const item = selectedReport.value.reported_item;
-  const formParams = itemEditForm.params;
-
-  // Logic đặc biệt cho Mythic: tạo ga_note từ stats đã chọn
-  if (item.kind_code === 'MYTHIC' && formParams.ga_code?.includes('REQUEST')) {
-    const selectedStats = formParams.stats?.filter(Boolean) || [];
-    if (selectedStats.length > 0) {
-      formParams.ga_note = selectedStats
-        .map((statCode: string) => itemStatsSortDict.value.find(s => s.value === statCode)?.label || statCode)
-        .join(', ');
-    } else {
-      formParams.ga_note = null;
-    }
+  if (itemEditForm.corrected_end_value === null) {
+    message.error('Vui lòng nhập "Tiến độ đúng là".');
+    return;
+  }
+  if (!itemEditForm.correction_reason.trim()) {
+    message.error('Vui lòng nhập lý do sửa đổi.');
+    return;
   }
 
   isSubmitting.value = true;
   try {
-    const { error } = await supabase.rpc('correct_reported_item_v1', { // <-- ĐỔI TÊN RPC Ở ĐÂY
+    const { error } = await supabase.rpc('admin_rebase_item_progress_v1', {
       p_service_item_id: selectedReport.value.reported_item.id,
-      p_plan_qty: itemEditForm.plan_qty,
-      p_done_qty: itemEditForm.done_qty,
-      p_params: formParams
+      p_authoritative_done_qty: itemEditForm.corrected_end_value,
+      p_new_params: itemEditForm.params,
+      p_reason: itemEditForm.correction_reason
     });
+
     if (error) throw error;
-    message.success('Đã cập nhật thông tin hạng mục thành công!');
+    message.success('Đã chuẩn hóa tiến độ hạng mục thành công!');
     await fetchReports(); // Tải lại danh sách để cập nhật
   } catch (e: any) {
-    message.error(e.message || 'Lỗi khi cập nhật hạng mục.');
+    message.error(e.message || 'Lỗi khi chuẩn hóa tiến độ.');
   } finally {
     isSubmitting.value = false;
   }
