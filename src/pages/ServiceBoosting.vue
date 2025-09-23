@@ -1348,12 +1348,6 @@ async function openDetail(row: OrderRow) {
     detail.service_type = row.service_type;
     // ================================================================
 
-    // ================================================================
-    // SỬA LỖI: Ghi đè service_type bằng giá trị ĐÃ ĐƯỢC CHUẨN HÓA từ bảng.
-    // Điều này đảm bảo nó luôn hiển thị đúng, bất kể RPC chi tiết trả về gì.
-    detail.service_type = row.service_type;
-    // ================================================================
-
     // Xử lý tên người thực hiện (assignee)
     if (data.active_session) {
       detail.assignees_text = data.active_session.farmer_name;
