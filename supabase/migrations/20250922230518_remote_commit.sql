@@ -1,5 +1,4 @@
 
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -148,13 +147,12 @@ ALTER FUNCTION "public"."add_vault_secret"("p_name" "text", "p_secret" "text") O
 CREATE OR REPLACE FUNCTION "public"."admin_get_all_users"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
-    AS $$
-BEGIN
+    AS $$BEGIN
     IF NOT has_permission('admin:manage_roles') THEN RAISE EXCEPTION 'Authorization failed.'; END IF;
     RETURN (
         SELECT jsonb_agg(jsonb_build_object('id', p.id, 'display_name', p.display_name, 'status', p.status, 'email', u.email, 'assignments', COALESCE(asg.assignments, '[]'::jsonb)))
         FROM auth.users u
-        JOIN public.profiles p ON u.id = p.id
+        JOIN public.profiles p ON u.id = p.auth_id
         LEFT JOIN (
             SELECT
                 ura.user_id,
@@ -170,8 +168,7 @@ BEGIN
             GROUP BY ura.user_id
         ) asg ON u.id = asg.user_id
     );
-END;
-$$;
+END;$$;
 
 
 ALTER FUNCTION "public"."admin_get_all_users"() OWNER TO "postgres";
@@ -486,8 +483,7 @@ ALTER FUNCTION "public"."correct_reported_item_v1"("p_service_item_id" "uuid", "
 CREATE OR REPLACE FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_service_type" "text", "p_customer_name" "text", "p_deadline" timestamp with time zone, "p_price" numeric, "p_currency_code" "text", "p_package_type" "text", "p_package_note" "text", "p_customer_account_id" "uuid", "p_new_account_details" "jsonb", "p_game_code" "text", "p_service_items" "jsonb") RETURNS TABLE("order_id" "uuid", "line_id" "uuid")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
-    AS $$
-DECLARE
+    AS $$DECLARE
     v_party_id uuid;
     v_channel_id uuid;
     v_currency_id uuid;
@@ -535,7 +531,7 @@ BEGIN
     END IF;
 
     INSERT INTO public.orders (party_id, channel_id, currency_id, price_total, created_by, game_code, package_type, package_note, status)
-    VALUES (v_party_id, v_channel_id, v_currency_id, p_price, (select auth.uid()), p_game_code, p_package_type, p_package_note, 'new')
+    VALUES (v_party_id, v_channel_id, v_currency_id, p_price, (select get_current_profile_id()), p_game_code, p_package_type, p_package_note, 'new')
     RETURNING id INTO v_new_order_id;
 
     INSERT INTO public.order_lines (order_id, variant_id, customer_account_id, qty, unit_price, deadline_to)
@@ -550,8 +546,7 @@ BEGIN
     END IF;
 
     RETURN QUERY SELECT v_new_order_id, v_new_line_id;
-END;
-$$;
+END;$$;
 
 
 ALTER FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_service_type" "text", "p_customer_name" "text", "p_deadline" timestamp with time zone, "p_price" numeric, "p_currency_code" "text", "p_package_type" "text", "p_package_note" "text", "p_customer_account_id" "uuid", "p_new_account_details" "jsonb", "p_game_code" "text", "p_service_items" "jsonb") OWNER TO "postgres";
@@ -560,8 +555,7 @@ ALTER FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_se
 CREATE OR REPLACE FUNCTION "public"."create_service_report_v1"("p_order_service_item_id" "uuid", "p_description" "text", "p_proof_urls" "text"[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
-    AS $$
-DECLARE
+    AS $$DECLARE
     v_order_line_id uuid;
     new_report_id uuid;
     v_context jsonb;
@@ -580,13 +574,12 @@ BEGIN
     END IF;
 
     INSERT INTO public.service_reports (order_line_id, order_service_item_id, reported_by, description, current_proof_urls, status)
-    SELECT order_line_id, id, (select auth.uid()), p_description, p_proof_urls, 'new' FROM public.order_service_items WHERE id = p_order_service_item_id RETURNING id, order_line_id INTO new_report_id, v_order_line_id;
+    SELECT order_line_id, id, (select get_current_profile_id()), p_description, p_proof_urls, 'new' FROM public.order_service_items WHERE id = p_order_service_item_id RETURNING id, order_line_id INTO new_report_id, v_order_line_id;
     IF v_order_line_id IS NULL THEN RAISE EXCEPTION 'Invalid service item ID.'; END IF;
     PERFORM 1 FROM public.service_reports WHERE order_service_item_id = p_order_service_item_id AND status = 'new' AND id <> new_report_id;
     IF FOUND THEN DELETE FROM public.service_reports WHERE id = new_report_id; RAISE EXCEPTION 'This item already has an active report.'; END IF;
     RETURN new_report_id;
-END;
-$$;
+END;$$;
 
 
 ALTER FUNCTION "public"."create_service_report_v1"("p_order_service_item_id" "uuid", "p_description" "text", "p_proof_urls" "text"[]) OWNER TO "postgres";
@@ -816,6 +809,18 @@ $$;
 ALTER FUNCTION "public"."get_boosting_orders_v2"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_current_profile_id"() RETURNS "uuid"
+    LANGUAGE "sql" STABLE
+    AS $$
+  SELECT id
+  FROM public.profiles
+  WHERE auth_id = auth.uid();
+$$;
+
+
+ALTER FUNCTION "public"."get_current_profile_id"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_customers_by_channel_v1"("p_channel_code" "text") RETURNS TABLE("name" "text")
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'public'
@@ -1011,13 +1016,34 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user_with_trial_role"() RETURNS 
     AS $$
 DECLARE
   trial_role_id uuid;
+  user_display_name text;
+  new_profile_id uuid;
 BEGIN
-  INSERT INTO public.profiles (id, display_name) VALUES (new.id, new.raw_user_meta_data->>'display_name');
+  -- 1. Chuẩn bị display_name
+  user_display_name := COALESCE(
+    NEW.raw_user_meta_data ->> 'display_name',
+    SPLIT_PART(NEW.email, '@', 1)
+  );
+
+  -- 2. TẠO DÒNG MỚI TRONG PROFILES VỚI CẤU TRÚC MỚI
+  --    - profiles.id sẽ được tự động tạo bởi `default gen_random_uuid()`
+  --    - profiles.auth_id sẽ là ID từ auth.users (NEW.id)
+  INSERT INTO public.profiles (auth_id, display_name)
+  VALUES (NEW.id, user_display_name)
+  RETURNING id INTO new_profile_id; -- Lấy id của profile vừa tạo
+
+  -- 3. Lấy ID của vai trò 'trial'
   SELECT id INTO trial_role_id FROM public.roles WHERE code = 'trial';
+
+  -- 4. Gán vai trò 'trial' nếu tìm thấy, sử dụng profile_id mới
   IF trial_role_id IS NOT NULL THEN
-    INSERT INTO public.user_role_assignments (user_id, role_id) VALUES (new.id, trial_role_id);
+    INSERT INTO public.user_role_assignments (user_id, role_id)
+    VALUES (new_profile_id, trial_role_id);
+  ELSE
+    RAISE WARNING 'Role with code ''trial'' not found. Skipping role assignment for user %', NEW.id;
   END IF;
-  RETURN new;
+  
+  RETURN NEW;
 END;
 $$;
 
@@ -1099,20 +1125,32 @@ BEGIN
     FROM public.order_lines ol JOIN public.orders o ON ol.order_id = o.id
     WHERE ol.id = p_order_line_id;
 
-    -- SỬA LỖI: Thêm ngữ cảnh vào kiểm tra quyền
+    -- Kiểm tra quyền với ngữ cảnh
     IF NOT has_permission('work_session:start', v_context) THEN
         RAISE EXCEPTION 'Authorization failed.';
     END IF;
 
+    -- Lấy thông tin và kiểm tra session đang hoạt động
     SELECT o.id, o.status, ol.paused_at INTO v_order_id, v_current_status, v_paused_at FROM public.order_lines ol JOIN public.orders o ON ol.order_id = o.id WHERE ol.id = p_order_line_id;
     PERFORM 1 FROM public.work_sessions WHERE order_line_id = p_order_line_id AND ended_at IS NULL;
     IF FOUND THEN RAISE EXCEPTION 'Đơn hàng này đã có một phiên làm việc đang hoạt động.'; END IF;
+    
+    -- Xử lý logic tạm dừng
     IF v_current_status = 'paused_selfplay' AND v_paused_at IS NOT NULL THEN
         v_paused_duration := NOW() - v_paused_at;
         UPDATE public.order_lines SET deadline_to = deadline_to + v_paused_duration, total_paused_duration = total_paused_duration + v_paused_duration, paused_at = NULL WHERE id = p_order_line_id;
     END IF;
-    IF v_current_status IN ('new', 'pending_pilot', 'paused_selfplay') THEN UPDATE public.orders SET status = 'in_progress' WHERE id = v_order_id; END IF;
-    INSERT INTO public.work_sessions (order_line_id, farmer_id, notes, start_state, unpaused_duration) VALUES (p_order_line_id, (select auth.uid()), p_initial_note, p_start_state, v_paused_duration) RETURNING id INTO new_session_id;
+    
+    -- Cập nhật status trên bảng orders
+    IF v_current_status IN ('new', 'pending_pilot', 'paused_selfplay') THEN 
+        UPDATE public.orders SET status = 'in_progress' WHERE id = v_order_id; 
+    END IF;
+    
+    -- Tạo một bản ghi work_session mới hoàn toàn
+    INSERT INTO public.work_sessions (order_line_id, farmer_id, notes, start_state, unpaused_duration) 
+    VALUES (p_order_line_id, (select auth.uid()), p_initial_note, p_start_state, v_paused_duration) 
+    RETURNING id INTO new_session_id;
+
     RETURN new_session_id;
 END;
 $$;
@@ -1124,17 +1162,15 @@ ALTER FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_sta
 CREATE OR REPLACE FUNCTION "public"."submit_order_review_v1"("p_line_id" "uuid", "p_rating" numeric, "p_comment" "text", "p_proof_urls" "text"[]) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
-    AS $$
-BEGIN
+    AS $$BEGIN
   -- SỬA LẠI: Kiểm tra quyền 'orders:add_review'
   IF NOT has_permission('orders:add_review') THEN
     RAISE EXCEPTION 'User does not have permission to submit a review';
   END IF;
 
   INSERT INTO public.order_reviews (order_line_id, rating, comment, proof_urls, created_by)
-  VALUES (p_line_id, p_rating, p_comment, p_proof_urls, auth.uid());
-END;
-$$;
+  VALUES (p_line_id, p_rating, p_comment, p_proof_urls, get_current_profile_id());
+END;$$;
 
 
 ALTER FUNCTION "public"."submit_order_review_v1"("p_line_id" "uuid", "p_rating" numeric, "p_comment" "text", "p_proof_urls" "text"[]) OWNER TO "postgres";
@@ -1549,17 +1585,22 @@ ALTER TABLE "public"."products" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
-    "id" "uuid" NOT NULL,
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "display_name" "text",
     "status" "text" DEFAULT 'ok'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "auth_id" "uuid" NOT NULL
 );
 
 ALTER TABLE ONLY "public"."profiles" FORCE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."profiles"."auth_id" IS 'Foreign key to auth.users.id';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."role_permissions" (
@@ -1761,6 +1802,11 @@ ALTER TABLE ONLY "public"."product_variants"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_auth_id_key" UNIQUE ("auth_id");
 
 
 
@@ -1983,7 +2029,7 @@ ALTER TABLE ONLY "public"."product_variants"
 
 
 ALTER TABLE ONLY "public"."profiles"
-    ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "profiles_auth_id_fkey" FOREIGN KEY ("auth_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -2377,7 +2423,7 @@ CREATE POLICY "Block updates" ON "public"."work_sessions" FOR UPDATE TO "authent
 
 
 
-CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (("auth"."uid"() = "id")) WITH CHECK (("auth"."uid"() = "id"));
+CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE USING (("auth"."uid"() = "auth_id")) WITH CHECK (("auth"."uid"() = "auth_id"));
 
 
 
@@ -2464,10 +2510,6 @@ ALTER TABLE "public"."work_sessions" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
-
-
-
-
 
 
 REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
@@ -2636,166 +2678,786 @@ GRANT ALL ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRANT ALL ON FUNCTION "public"."add_vault_secret"("p_name" "text", "p_secret" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."add_vault_secret"("p_name" "text", "p_secret" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."add_vault_secret"("p_name" "text", "p_secret" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_all_users"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_all_users"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_all_users"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_get_roles_and_permissions"() TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_get_roles_and_permissions"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_get_roles_and_permissions"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_permissions_for_role"("p_role_id" "uuid", "p_permission_ids" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_permissions_for_role"("p_role_id" "uuid", "p_permission_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_permissions_for_role"("p_role_id" "uuid", "p_permission_ids" "uuid"[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."admin_update_user_status"("p_user_id" "uuid", "p_new_status" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_update_user_status"("p_user_id" "uuid", "p_new_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_update_user_status"("p_user_id" "uuid", "p_new_status" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."audit_ctx_v1"() TO "anon";
+GRANT ALL ON FUNCTION "public"."audit_ctx_v1"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."audit_ctx_v1"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."audit_diff_v1"("old_row" "jsonb", "new_row" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."audit_diff_v1"("old_row" "jsonb", "new_row" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."audit_diff_v1"("old_row" "jsonb", "new_row" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."cancel_order_line_v1"("p_line_id" "uuid", "p_cancellation_proof_urls" "text"[], "p_reason" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."cancel_order_line_v1"("p_line_id" "uuid", "p_cancellation_proof_urls" "text"[], "p_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_order_line_v1"("p_line_id" "uuid", "p_cancellation_proof_urls" "text"[], "p_reason" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."complete_order_line_v1"("p_line_id" "uuid", "p_completion_proof_urls" "text"[], "p_reason" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."complete_order_line_v1"("p_line_id" "uuid", "p_completion_proof_urls" "text"[], "p_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."complete_order_line_v1"("p_line_id" "uuid", "p_completion_proof_urls" "text"[], "p_reason" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."correct_reported_item_v1"("p_service_item_id" "uuid", "p_plan_qty" numeric, "p_done_qty" numeric, "p_params" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."correct_reported_item_v1"("p_service_item_id" "uuid", "p_plan_qty" numeric, "p_done_qty" numeric, "p_params" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."correct_reported_item_v1"("p_service_item_id" "uuid", "p_plan_qty" numeric, "p_done_qty" numeric, "p_params" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_service_type" "text", "p_customer_name" "text", "p_deadline" timestamp with time zone, "p_price" numeric, "p_currency_code" "text", "p_package_type" "text", "p_package_note" "text", "p_customer_account_id" "uuid", "p_new_account_details" "jsonb", "p_game_code" "text", "p_service_items" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_service_type" "text", "p_customer_name" "text", "p_deadline" timestamp with time zone, "p_price" numeric, "p_currency_code" "text", "p_package_type" "text", "p_package_note" "text", "p_customer_account_id" "uuid", "p_new_account_details" "jsonb", "p_game_code" "text", "p_service_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_service_order_v1"("p_channel_code" "text", "p_service_type" "text", "p_customer_name" "text", "p_deadline" timestamp with time zone, "p_price" numeric, "p_currency_code" "text", "p_package_type" "text", "p_package_note" "text", "p_customer_account_id" "uuid", "p_new_account_details" "jsonb", "p_game_code" "text", "p_service_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_service_report_v1"("p_order_service_item_id" "uuid", "p_description" "text", "p_proof_urls" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."create_service_report_v1"("p_order_service_item_id" "uuid", "p_description" "text", "p_proof_urls" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_service_report_v1"("p_order_service_item_id" "uuid", "p_description" "text", "p_proof_urls" "text"[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."current_user_id"() TO "anon";
+GRANT ALL ON FUNCTION "public"."current_user_id"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."current_user_id"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."finish_work_session_idem_v1"("p_session_id" "uuid", "p_outputs" "jsonb", "p_activity_rows" "jsonb", "p_overrun_reason" "text", "p_idem_key" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."finish_work_session_idem_v1"("p_session_id" "uuid", "p_outputs" "jsonb", "p_activity_rows" "jsonb", "p_overrun_reason" "text", "p_idem_key" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."finish_work_session_idem_v1"("p_session_id" "uuid", "p_outputs" "jsonb", "p_activity_rows" "jsonb", "p_overrun_reason" "text", "p_idem_key" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_boosting_order_detail_v1"("p_line_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_boosting_order_detail_v1"("p_line_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_boosting_order_detail_v1"("p_line_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_boosting_orders_v2"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_boosting_orders_v2"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_boosting_orders_v2"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_current_profile_id"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_current_profile_id"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_current_profile_id"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_customers_by_channel_v1"("p_channel_code" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_customers_by_channel_v1"("p_channel_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customers_by_channel_v1"("p_channel_code" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_last_item_proof_v1"("p_item_ids" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_last_item_proof_v1"("p_item_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_last_item_proof_v1"("p_item_ids" "uuid"[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_my_assignments"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_my_assignments"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_my_assignments"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_reviews_for_order_line_v1"("p_line_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_reviews_for_order_line_v1"("p_line_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_reviews_for_order_line_v1"("p_line_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_service_reports_v1"("p_status" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_service_reports_v1"("p_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_service_reports_v1"("p_status" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_session_history_v1"("p_line_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_session_history_v1"("p_line_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_session_history_v1"("p_line_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_user_auth_context_v1"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_user_auth_context_v1"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_auth_context_v1"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_new_user_with_trial_role"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_new_user_with_trial_role"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_new_user_with_trial_role"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_orders_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_orders_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_orders_updated_at"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."has_permission"("p_permission_code" "text", "p_context" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."has_permission"("p_permission_code" "text", "p_context" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_permission"("p_permission_code" "text", "p_context" "jsonb") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."resolve_service_report_v1"("p_report_id" "uuid", "p_resolver_notes" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."resolve_service_report_v1"("p_report_id" "uuid", "p_resolver_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resolve_service_report_v1"("p_report_id" "uuid", "p_resolver_notes" "text") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_start_state" "jsonb", "p_initial_note" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_start_state" "jsonb", "p_initial_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_start_state" "jsonb", "p_initial_note" "text") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."submit_order_review_v1"("p_line_id" "uuid", "p_rating" numeric, "p_comment" "text", "p_proof_urls" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."submit_order_review_v1"("p_line_id" "uuid", "p_rating" numeric, "p_comment" "text", "p_proof_urls" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."submit_order_review_v1"("p_line_id" "uuid", "p_rating" numeric, "p_comment" "text", "p_proof_urls" "text"[]) TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."tr_audit_row_v1"() TO "anon";
+GRANT ALL ON FUNCTION "public"."tr_audit_row_v1"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tr_audit_row_v1"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."tr_check_all_items_completed_v1"() TO "anon";
+GRANT ALL ON FUNCTION "public"."tr_check_all_items_completed_v1"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tr_check_all_items_completed_v1"() TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."attribute_relationships" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."attribute_relationships" TO "authenticated";
+GRANT ALL ON FUNCTION "public"."try_uuid"("p" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."try_uuid"("p" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."try_uuid"("p" "text") TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."attributes" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."attributes" TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_action_proofs_v1"("p_line_id" "uuid", "p_new_urls" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."update_action_proofs_v1"("p_line_id" "uuid", "p_new_urls" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_action_proofs_v1"("p_line_id" "uuid", "p_new_urls" "text"[]) TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."audit_logs" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."audit_logs" TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_order_details_v1"("p_line_id" "uuid", "p_service_type" "text", "p_deadline" timestamp with time zone, "p_package_note" "text", "p_btag" "text", "p_login_id" "text", "p_login_pwd" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_order_details_v1"("p_line_id" "uuid", "p_service_type" "text", "p_deadline" timestamp with time zone, "p_package_note" "text", "p_btag" "text", "p_login_id" "text", "p_login_pwd" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_order_details_v1"("p_line_id" "uuid", "p_service_type" "text", "p_deadline" timestamp with time zone, "p_package_note" "text", "p_btag" "text", "p_login_id" "text", "p_login_pwd" "text") TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."channels" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."channels" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."currencies" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."currencies" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."customer_accounts" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."customer_accounts" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."debug_log" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."debug_log" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."level_exp" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."level_exp" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."order_lines" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."order_lines" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."order_reviews" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."order_reviews" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."order_service_items" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."order_service_items" TO "authenticated";
 
 
 
-GRANT SELECT ON TABLE "public"."orders" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."orders" TO "authenticated";
+GRANT ALL ON TABLE "public"."attribute_relationships" TO "anon";
+GRANT ALL ON TABLE "public"."attribute_relationships" TO "authenticated";
+GRANT ALL ON TABLE "public"."attribute_relationships" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."parties" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."parties" TO "authenticated";
+GRANT ALL ON TABLE "public"."attributes" TO "anon";
+GRANT ALL ON TABLE "public"."attributes" TO "authenticated";
+GRANT ALL ON TABLE "public"."attributes" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."permissions" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."permissions" TO "authenticated";
+GRANT ALL ON TABLE "public"."audit_logs" TO "anon";
+GRANT ALL ON TABLE "public"."audit_logs" TO "authenticated";
+GRANT ALL ON TABLE "public"."audit_logs" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."product_variant_attributes" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."product_variant_attributes" TO "authenticated";
+GRANT ALL ON TABLE "public"."channels" TO "anon";
+GRANT ALL ON TABLE "public"."channels" TO "authenticated";
+GRANT ALL ON TABLE "public"."channels" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."product_variants" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."product_variants" TO "authenticated";
+GRANT ALL ON TABLE "public"."currencies" TO "anon";
+GRANT ALL ON TABLE "public"."currencies" TO "authenticated";
+GRANT ALL ON TABLE "public"."currencies" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."products" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."products" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_accounts" TO "anon";
+GRANT ALL ON TABLE "public"."customer_accounts" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_accounts" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."profiles" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."debug_log" TO "anon";
+GRANT ALL ON TABLE "public"."debug_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."debug_log" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."role_permissions" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."role_permissions" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."debug_log_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."debug_log_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."debug_log_id_seq" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."roles" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."roles" TO "authenticated";
+GRANT ALL ON TABLE "public"."level_exp" TO "anon";
+GRANT ALL ON TABLE "public"."level_exp" TO "authenticated";
+GRANT ALL ON TABLE "public"."level_exp" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."service_reports" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."service_reports" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_lines" TO "anon";
+GRANT ALL ON TABLE "public"."order_lines" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_lines" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."user_role_assignments" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."user_role_assignments" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_reviews" TO "anon";
+GRANT ALL ON TABLE "public"."order_reviews" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_reviews" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."work_session_outputs" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."work_session_outputs" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_service_items" TO "anon";
+GRANT ALL ON TABLE "public"."order_service_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."order_service_items" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."work_sessions" TO "anon";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."work_sessions" TO "authenticated";
+GRANT ALL ON TABLE "public"."orders" TO "anon";
+GRANT ALL ON TABLE "public"."orders" TO "authenticated";
+GRANT ALL ON TABLE "public"."orders" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."parties" TO "anon";
+GRANT ALL ON TABLE "public"."parties" TO "authenticated";
+GRANT ALL ON TABLE "public"."parties" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."permissions" TO "anon";
+GRANT ALL ON TABLE "public"."permissions" TO "authenticated";
+GRANT ALL ON TABLE "public"."permissions" TO "service_role";
 
 
 
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT SELECT ON TABLES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "authenticated";
+GRANT ALL ON TABLE "public"."product_variant_attributes" TO "anon";
+GRANT ALL ON TABLE "public"."product_variant_attributes" TO "authenticated";
+GRANT ALL ON TABLE "public"."product_variant_attributes" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."product_variants" TO "anon";
+GRANT ALL ON TABLE "public"."product_variants" TO "authenticated";
+GRANT ALL ON TABLE "public"."product_variants" TO "service_role";
 
+
+
+GRANT ALL ON TABLE "public"."products" TO "anon";
+GRANT ALL ON TABLE "public"."products" TO "authenticated";
+GRANT ALL ON TABLE "public"."products" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."profiles" TO "anon";
+GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."role_permissions" TO "anon";
+GRANT ALL ON TABLE "public"."role_permissions" TO "authenticated";
+GRANT ALL ON TABLE "public"."role_permissions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."roles" TO "anon";
+GRANT ALL ON TABLE "public"."roles" TO "authenticated";
+GRANT ALL ON TABLE "public"."roles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."service_reports" TO "anon";
+GRANT ALL ON TABLE "public"."service_reports" TO "authenticated";
+GRANT ALL ON TABLE "public"."service_reports" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_role_assignments" TO "anon";
+GRANT ALL ON TABLE "public"."user_role_assignments" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_role_assignments" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."work_session_outputs" TO "anon";
+GRANT ALL ON TABLE "public"."work_session_outputs" TO "authenticated";
+GRANT ALL ON TABLE "public"."work_session_outputs" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."work_sessions" TO "anon";
+GRANT ALL ON TABLE "public"."work_sessions" TO "authenticated";
+GRANT ALL ON TABLE "public"."work_sessions" TO "service_role";
+
+
+
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 
 
 

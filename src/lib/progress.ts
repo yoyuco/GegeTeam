@@ -82,7 +82,9 @@ export async function finishWorkSessionIdem(
   outputs: SessionOutputRow[],
   activityRows: ActivityRow[],
   overrunReason: string | null,
-  idemKey: string
+  idemKey: string,
+  overrunType: string | null,
+  overrunProofUrls: string[] | null // <-- Thêm tham số này
 ) {
   return supabase.rpc('finish_work_session_idem_v1', {
     p_session_id: sessionId,
@@ -90,6 +92,8 @@ export async function finishWorkSessionIdem(
     p_activity_rows: activityRows,
     p_overrun_reason: overrunReason,
     p_idem_key: idemKey,
+    p_overrun_type: overrunType,
+    p_overrun_proof_urls: overrunProofUrls // <-- Thêm tham số này
   });
 }
 
