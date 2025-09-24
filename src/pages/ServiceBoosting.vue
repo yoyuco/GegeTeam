@@ -740,66 +740,44 @@ const computedCanStart = computed(() => {
 });
 
 const computedCanFinish = computed(() => {
-  console.log("--- [DEBUG] Bắt đầu kiểm tra computedCanFinish ---");
-
-  if (!ws2.value.sessionId) {
-    console.log("[DEBUG] Lỗi: Không có sessionId.");
+  // Điều kiện 1: Phải có session đang hoạt động và người dùng phải có quyền quản lý
+  if (!ws2.value.sessionId || !canManageActiveSession.value) {
     return false;
   }
-  if (!canManageActiveSession.value) {
-    // In ra các giá trị để kiểm tra tại sao canManageActiveSession lại false
-    console.log(`[DEBUG] Lỗi: canManageActiveSession là false.`);
-    console.log(`  -> session.farmer_id: ${detail.active_session?.farmer_id}`);
-    console.log(`  -> auth.profile?.id: ${auth.profile?.id}`);
-    console.log(`  -> có quyền 'finish'?: ${auth.hasPermission('work_session:finish', D4_SERVICE_CONTEXT)}`);
-    console.log(`  -> có quyền 'override'?: ${auth.hasPermission('work_session:override', D4_SERVICE_CONTEXT)}`);
-    return false;
-  }
-  console.log("[DEBUG] ✓ Bước 1: Quyền hạn & Session OK.");
 
+  // Điều kiện 2: Các hạng mục có tiến độ phải có đủ bằng chứng
   for (const itemId of ws2.value.selectedIds) {
     const row = rowMap.value.get(itemId);
     if (!row) continue;
+    
     const hasProgress = (row.kind_code === 'LEVELING')
       ? (round2(row.current_value) >= round2(row.start_value))
       : (round2(row.current_value) > round2(row.start_value));
 
     if (hasProgress) {
-      if (!row.endFile && !row.endProofUrl) {
-        console.log(`[DEBUG] Lỗi: Hạng mục "${row.label}" có tiến độ nhưng thiếu bằng chứng KẾT THÚC.`);
-        return false;
-      }
-      if (row.kind_code === 'LEVELING' && row.current_exp === null) {
-        console.log(`[DEBUG] Lỗi: Hạng mục Leveling "${row.label}" thiếu chỉ số EXP KẾT THÚC.`);
-        return false;
-      }
+      if (!row.endFile && !row.endProofUrl) return false;
+      if (row.kind_code === 'LEVELING' && row.current_exp === null) return false;
     }
   }
-  console.log("[DEBUG] ✓ Bước 2: Bằng chứng tiến độ OK.");
-
+  
+  // Điều kiện 3: Phiên Mythic phải có hoạt động farm boss đi kèm
   const isMythicSession = ws2.value.rows.some(r => ws2.value.selectedIds.includes(r.item_id) && mythicKinds.has(r.kind_code));
   if (isMythicSession) {
     const hasActivity = ws2.value.activityRows.some(a => a.label && (a.qty ?? 0) > 0);
-    if (!hasActivity) {
-      console.log("[DEBUG] Lỗi: Phiên Mythic nhưng thiếu thông tin hoạt động farm boss.");
-      return false;
-    }
+    if (!hasActivity) return false;
   }
-  console.log("[DEBUG] ✓ Bước 3: Hoạt động Mythic OK.");
-
+  
+  // Điều kiện 4: Nếu vượt chỉ tiêu, phải có đủ lý do và bằng chứng
   if (overrunDetected.value) {
     if (!ws2.value.overrun_type || !ws2.value.overrun_reason?.trim()) {
-      console.log("[DEBUG] Lỗi: Vượt chỉ tiêu nhưng thiếu loại lý do hoặc nội dung lý do.");
       return false;
     }
     if (ws2.value.overrun_type === 'OBJECTIVE' && ws2.value.overrun_proofs.length === 0) {
-      console.log("[DEBUG] Lỗi: Lý do khách quan nhưng thiếu bằng chứng.");
       return false;
     }
   }
-  console.log("[DEBUG] ✓ Bước 4: Vượt chỉ tiêu OK.");
 
-  console.log("--- [DEBUG] TẤT CẢ ĐIỀU KIỆN ĐẠT. Nút nên được kích hoạt. ---");
+  // Nếu tất cả điều kiện đều đạt
   return true;
 });
 
