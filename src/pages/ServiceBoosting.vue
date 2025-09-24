@@ -715,9 +715,14 @@ const canManageActiveSession = computed(() => {
   const session = detail.active_session;
   if (!session) return false;
   
-  if (session.farmer_id === auth.user?.id) {
+  // <<< SỬA LỖI NẰM Ở ĐÂY >>>
+  // So sánh farmer_id (profile_id) với profile.id của người dùng đang đăng nhập
+  if (session.farmer_id === auth.profile?.id) {
+    // Nếu là chủ phiên, kiểm tra quyền kết thúc hoặc hủy
     return auth.hasPermission('work_session:finish', D4_SERVICE_CONTEXT) || auth.hasPermission('work_session:cancel', D4_SERVICE_CONTEXT);
   }
+
+  // Nếu không phải chủ phiên, kiểm tra quyền override
   return auth.hasPermission('work_session:override', D4_SERVICE_CONTEXT);
 });
 
