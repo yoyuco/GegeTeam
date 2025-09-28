@@ -7,8 +7,18 @@
       <button class="px-3 py-2 rounded bg-black text-white">Thêm</button>
     </form>
     <table class="w-full border">
-      <thead><tr class="bg-neutral-100"><th class="p-2 text-left">Tên</th><th class="p-2 text-left">Email</th></tr></thead>
-      <tbody><tr v-for="c in customers" :key="c.id" class="border-t"><td class="p-2">{{c.name}}</td><td class="p-2">{{c.email}}</td></tr></tbody>
+      <thead>
+        <tr class="bg-neutral-100">
+          <th class="p-2 text-left">Tên</th>
+          <th class="p-2 text-left">Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="c in customers" :key="c.id" class="border-t">
+          <td class="p-2">{{ c.name }}</td>
+          <td class="p-2">{{ c.email }}</td>
+        </tr>
+      </tbody>
     </table>
   </section>
 </template>
@@ -16,8 +26,18 @@
 import { ref, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
 const customers = ref<any[]>([])
-const form = ref({ name:'', email:'' })
-async function load(){ const { data } = await supabase.from('customers').select('*').order('created_at',{ascending:false}); customers.value = data||[] }
-async function add(){ await supabase.from('customers').insert(form.value); form.value={name:'',email:''}; await load() }
+const form = ref({ name: '', email: '' })
+async function load() {
+  const { data } = await supabase
+    .from('customers')
+    .select('*')
+    .order('created_at', { ascending: false })
+  customers.value = data || []
+}
+async function add() {
+  await supabase.from('customers').insert(form.value)
+  form.value = { name: '', email: '' }
+  await load()
+}
 onMounted(load)
 </script>

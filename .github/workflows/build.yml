@@ -3,9 +3,9 @@ name: build
 
 on:
   pull_request:
-    branches: [ develop ]
+    branches: [develop]
   push:
-    branches: [ develop ]
+    branches: [develop]
 
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'   # giờ pnpm đã có, cache hoạt động
+          cache: 'pnpm' # giờ pnpm đã có, cache hoạt động
 
       - name: Install
         run: pnpm install --frozen-lockfile

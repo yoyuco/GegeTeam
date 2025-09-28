@@ -69,7 +69,7 @@ async function loadRevenueSeries() {
   const { data, error } = await supabase
     .from('monthly_revenue_v')
     .select('d, revenue_base')
-    .eq('y', y)        // nếu view có cột năm; nếu không có có thể bỏ dòng này
+    .eq('y', y) // nếu view có cột năm; nếu không có có thể bỏ dòng này
     .order('d', { ascending: true })
 
   if (!error && Array.isArray(data) && data.length) {
