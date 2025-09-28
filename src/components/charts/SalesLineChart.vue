@@ -5,29 +5,24 @@
       <!-- grid ngang -->
       <g v-for="(g, i) in 11" :key="i">
         <line
-          :x1="P" :x2="W-P"
-          :y1="P + i * stepY" :y2="P + i * stepY"
-          stroke="#e5e7eb" stroke-width="1"
+          :x1="P"
+          :x2="W - P"
+          :y1="P + i * stepY"
+          :y2="P + i * stepY"
+          stroke="#e5e7eb"
+          stroke-width="1"
         />
       </g>
 
       <!-- trục -->
-      <line :x1="P" :y1="P" :x2="P" :y2="H-P" stroke="#a3a3a3" stroke-width="1.5"/>
-      <line :x1="P" :y1="H-P" :x2="W-P" :y2="H-P" stroke="#a3a3a3" stroke-width="1.5"/>
+      <line :x1="P" :y1="P" :x2="P" :y2="H - P" stroke="#a3a3a3" stroke-width="1.5" />
+      <line :x1="P" :y1="H - P" :x2="W - P" :y2="H - P" stroke="#a3a3a3" stroke-width="1.5" />
 
       <!-- đường doanh thu -->
-      <polyline
-        :points="points"
-        fill="none"
-        stroke="#6b7280"
-        stroke-width="2"
-      />
+      <polyline :points="points" fill="none" stroke="#6b7280" stroke-width="2" />
 
       <!-- label giữa -->
-      <text
-        x="50%" y="18" text-anchor="middle"
-        font-size="10" fill="#9ca3af"
-      >Doanh thu</text>
+      <text x="50%" y="18" text-anchor="middle" font-size="10" fill="#9ca3af">Doanh thu</text>
     </svg>
   </div>
 </template>

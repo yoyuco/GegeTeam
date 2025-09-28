@@ -15,13 +15,13 @@ export interface CoreForm {
   customer_name: string
 
   // Chỉ 1 trong 2 cặp dưới được dùng tuỳ service_type
-  btag?: string               // selfplay
-  login_id?: string           // pilot
-  login_pwd?: string          // pilot
+  btag?: string // selfplay
+  login_id?: string // pilot
+  login_pwd?: string // pilot
 
-  deadline?: string           // ISO string (VD: new Date().toISOString())
+  deadline?: string // ISO string (VD: new Date().toISOString())
   price: number
-  currency: string            // 'USD' | 'VND' | ...
+  currency: string // 'USD' | 'VND' | ...
   package_type: PackageType
   package_note?: string
 }
@@ -47,8 +47,8 @@ export type BossRow = {
 
 export type PitRow = {
   kind: 'PIT'
-  tier: number        // số tier
-  runs: number        // số lần chạy
+  tier: number // số tier
+  runs: number // số lần chạy
 }
 
 export type NightmareRow = {
@@ -104,7 +104,7 @@ export type SubServiceRow =
 
 // (Tuỳ chọn) Kiểu item khi upsert qua RPC svc_upsert_line_items_v1
 export type RpcItem = {
-  kind_code: string         // VD: 'BOSS', 'PIT', ...
-  params: any               // payload tuỳ KIND
-  plan_qty?: number | null  // nếu có (VD: số lượng dự kiến)
+  kind_code: string // VD: 'BOSS', 'PIT', ...
+  params: any // payload tuỳ KIND
+  plan_qty?: number | null // nếu có (VD: số lượng dự kiến)
 }

@@ -11,7 +11,6 @@ export const supabase = createClient(url, anon, {
     detectSessionInUrl: true,
   },
   global: {
-    headers: { 'x-application-name': 'gegeteam' }
-  }
+    headers: { 'x-application-name': 'gegeteam' },
+  },
 })
-

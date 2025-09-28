@@ -6,5 +6,5 @@ import path from 'node:path'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   css: { transformer: 'postcss' },
-  resolve: { alias: { '@': path.resolve(__dirname, 'src') } }
+  resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
 })
