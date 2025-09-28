@@ -50,7 +50,12 @@
                 </div>
               </n-checkbox-group>
             </div>
-            <n-button type="primary" @click="savePermissions" :loading="saving" :disabled="!hasChanges">
+            <n-button
+              type="primary"
+              @click="savePermissions"
+              :loading="saving"
+              :disabled="!hasChanges"
+            >
               Lưu thay đổi cho vai trò {{ selectedRoleName }}
             </n-button>
           </div>
@@ -61,118 +66,131 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/stores/auth';
-import { NCard, NButton, NSpin, NCheckboxGroup, NCheckbox, NAlert, NTooltip, createDiscreteApi } from 'naive-ui';
-import type { Role, Permission, RolePermissionAssignment } from '@/types/app';
+import { ref, onMounted, computed, watch } from 'vue'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/stores/auth'
+import {
+  NCard,
+  NButton,
+  NSpin,
+  NCheckboxGroup,
+  NCheckbox,
+  NAlert,
+  NTooltip,
+  createDiscreteApi,
+} from 'naive-ui'
+import type { Role, Permission, RolePermissionAssignment } from '@/types/app'
 
 // TYPES (Bạn có thể đặt trong file riêng, ví dụ: src/types/app.ts)
-const { message } = createDiscreteApi(['message']);
-const auth = useAuth();
+const { message } = createDiscreteApi(['message'])
+const auth = useAuth()
 
 // STATE
-const canManage = ref(false);
-const loading = ref(true);
-const saving = ref(false);
+const canManage = ref(false)
+const loading = ref(true)
+const saving = ref(false)
 
-const roles = ref<Role[]>([]);
-const permissions = ref<Permission[]>([]);
-const assignments = ref<RolePermissionAssignment[]>([]);
+const roles = ref<Role[]>([])
+const permissions = ref<Permission[]>([])
+const assignments = ref<RolePermissionAssignment[]>([])
 
-const selectedRoleId = ref<string | null>(null);
-const selectedPermissionIds = ref<string[]>([]);
-const initialPermissionIds = ref<string[]>([]);
+const selectedRoleId = ref<string | null>(null)
+const selectedPermissionIds = ref<string[]>([])
+const initialPermissionIds = ref<string[]>([])
 
 // COMPUTED
 const groupedPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {};
+  const groups: Record<string, Permission[]> = {}
   for (const perm of permissions.value) {
     if (!groups[perm.group]) {
-      groups[perm.group] = [];
+      groups[perm.group] = []
     }
-    groups[perm.group].push(perm);
+    groups[perm.group].push(perm)
   }
-  return groups;
-});
+  return groups
+})
 
 const selectedRoleName = computed(() => {
-  return roles.value.find(r => r.id === selectedRoleId.value)?.name || '';
-});
+  return roles.value.find((r) => r.id === selectedRoleId.value)?.name || ''
+})
 
 const hasChanges = computed(() => {
-  if (!selectedRoleId.value) return false;
-  const initialSet = new Set(initialPermissionIds.value);
-  const currentSet = new Set(selectedPermissionIds.value);
-  if (initialSet.size !== currentSet.size) return true;
+  if (!selectedRoleId.value) return false
+  const initialSet = new Set(initialPermissionIds.value)
+  const currentSet = new Set(selectedPermissionIds.value)
+  if (initialSet.size !== currentSet.size) return true
   for (const id of initialSet) {
-    if (!currentSet.has(id)) return true;
+    if (!currentSet.has(id)) return true
   }
-  return false;
-});
+  return false
+})
 
 // METHODS
 async function loadData() {
-  loading.value = true;
+  loading.value = true
   try {
-    const { data, error } = await supabase.rpc('admin_get_roles_and_permissions');
-    if (error) throw error;
-    roles.value = data.roles || [];
-    permissions.value = data.permissions || [];
-    assignments.value = data.assignments || [];
+    const { data, error } = await supabase.rpc('admin_get_roles_and_permissions')
+    if (error) throw error
+    roles.value = data.roles || []
+    permissions.value = data.permissions || []
+    assignments.value = data.assignments || []
   } catch (e: any) {
-    message.error(e.message || "Không thể tải dữ liệu phân quyền.");
+    message.error(e.message || 'Không thể tải dữ liệu phân quyền.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 function selectRole(roleId: string) {
-  selectedRoleId.value = roleId;
+  selectedRoleId.value = roleId
   const currentAssignments = assignments.value
-    .filter(a => a.role_id === roleId)
-    .map(a => a.permission_id);
-  
-  selectedPermissionIds.value = [...currentAssignments];
-  initialPermissionIds.value = [...currentAssignments];
+    .filter((a) => a.role_id === roleId)
+    .map((a) => a.permission_id)
+
+  selectedPermissionIds.value = [...currentAssignments]
+  initialPermissionIds.value = [...currentAssignments]
 }
 
 async function savePermissions() {
-  if (!selectedRoleId.value) return;
-  saving.value = true;
+  if (!selectedRoleId.value) return
+  saving.value = true
   try {
     const { error } = await supabase.rpc('admin_update_permissions_for_role', {
       p_role_id: selectedRoleId.value,
       p_permission_ids: selectedPermissionIds.value,
-    });
-    if (error) throw error;
-    message.success(`Đã cập nhật quyền cho vai trò "${selectedRoleName.value}"`);
+    })
+    if (error) throw error
+    message.success(`Đã cập nhật quyền cho vai trò "${selectedRoleName.value}"`)
     // Tải lại dữ liệu để đồng bộ
-    await loadData();
+    await loadData()
     // Cập nhật lại initial state sau khi lưu
-    initialPermissionIds.value = [...selectedPermissionIds.value];
+    initialPermissionIds.value = [...selectedPermissionIds.value]
   } catch (e: any) {
-    message.error(e.message || "Lưu thất bại.");
+    message.error(e.message || 'Lưu thất bại.')
   } finally {
-    saving.value = false;
+    saving.value = false
   }
 }
 
 // LIFECYCLE
 onMounted(() => {
-  let unwatch: () => void;
-  unwatch = watch(() => auth.loading, (isLoading) => {
-    if (!isLoading) {
-      canManage.value = auth.hasPermission('admin:manage_roles');
-      if (canManage.value) {
-        loadData();
-      } else {
-        loading.value = false;
+  let unwatch: () => void
+  unwatch = watch(
+    () => auth.loading,
+    (isLoading) => {
+      if (!isLoading) {
+        canManage.value = auth.hasPermission('admin:manage_roles')
+        if (canManage.value) {
+          loadData()
+        } else {
+          loading.value = false
+        }
+        if (unwatch) {
+          unwatch()
+        }
       }
-      if (unwatch) {
-        unwatch();
-      }
-    }
-  }, { immediate: true });
-});
+    },
+    { immediate: true }
+  )
+})
 </script>

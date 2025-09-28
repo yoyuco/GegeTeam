@@ -14,10 +14,7 @@ type Task = {
 const tasks = ref<Task[]>([])
 
 const fetchTasks = async () => {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('position')
+  const { data, error } = await supabase.from('tasks').select('*').order('position')
 
   if (error) {
     console.error(error)
@@ -32,11 +29,7 @@ onMounted(async () => {
   await fetchTasks()
   channel = supabase
     .channel('rt-tasks')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'tasks' },
-      fetchTasks
-    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
     .subscribe()
 })
 

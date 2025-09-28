@@ -38,11 +38,10 @@ export async function isPrivileged(): Promise<boolean> {
   return !!data
 }
 
-
 export async function fetchLastProofs(itemIds: string[]) {
   if (!itemIds?.length) return []
   const { data, error } = await supabase.rpc('get_last_item_proof_v1', {
-    p_item_ids: itemIds
+    p_item_ids: itemIds,
   })
   if (error) throw error
   return (Array.isArray(data) ? data : []) as Array<{
@@ -61,20 +60,20 @@ export async function startWorkSession(
   note?: string | null
 ): Promise<string> {
   if (!lineId) {
-    throw new Error('Order Line ID is required.');
+    throw new Error('Order Line ID is required.')
   }
 
   const { data, error } = await supabase.rpc('start_work_session_v1', {
     p_order_line_id: lineId,
     p_start_state: startState,
-    p_initial_note: note
-  });
+    p_initial_note: note,
+  })
 
   if (error) {
-    console.error('Error starting work session:', error);
-    throw new Error(`Không thể bắt đầu phiên làm việc: ${error.message}`);
+    console.error('Error starting work session:', error)
+    throw new Error(`Không thể bắt đầu phiên làm việc: ${error.message}`)
   }
-  return data;
+  return data
 }
 
 export async function finishWorkSessionIdem(
@@ -93,8 +92,8 @@ export async function finishWorkSessionIdem(
     p_overrun_reason: overrunReason,
     p_idem_key: idemKey,
     p_overrun_type: overrunType,
-    p_overrun_proof_urls: overrunProofUrls
-  });
+    p_overrun_proof_urls: overrunProofUrls,
+  })
 }
 
 // 🚫 ĐÃ XOÁ HOÀN TOÀN:
