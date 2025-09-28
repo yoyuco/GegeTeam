@@ -52,9 +52,9 @@ export async function createServiceOrder(
     p_service_type: core.service_type,
     p_customer_name: (core.customer_name || '').trim() || null,
 
-    p_btag: core.service_type === 'selfplay' ? (core.btag || null) : null,
-    p_login_id: core.service_type === 'pilot' ? (core.login_id || null) : null,
-    p_login_pwd: core.service_type === 'pilot' ? (core.login_pwd || null) : null,
+    p_btag: core.service_type === 'selfplay' ? core.btag || null : null,
+    p_login_id: core.service_type === 'pilot' ? core.login_id || null : null,
+    p_login_pwd: core.service_type === 'pilot' ? core.login_pwd || null : null,
 
     p_deadline: deadlineIso,
     p_price: price,
@@ -68,10 +68,9 @@ export async function createServiceOrder(
 
     p_created_by: uid,
     p_service_desc: service_desc || null,
-    p_sub_rows
+    p_sub_rows,
   }
 
-  
   // DEBUG cuối trước khi gọi RPC
   console.debug('[TEST] p_sub_rows (FINAL) =', p_sub_rows)
   const { data, error } = await supabase.rpc('create_service_order_v1', payload)
