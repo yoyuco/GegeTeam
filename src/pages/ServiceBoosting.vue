@@ -8,83 +8,77 @@
     </div>
 
     <n-card :bordered="false" class="shadow-sm">
-      <div class="flex items-end gap-3 mb-4 flex-wrap">
-        <n-form-item label="Kênh bán" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.channels"
-            multiple
-            clearable
-            max-tag-count="responsive"
-            :options="channelOptions"
-            placeholder="Kênh bán"
-            style="width: 200px"
-          />
-        </n-form-item>
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <n-select
+          v-model:value="filters.channels"
+          multiple
+          clearable
+          max-tag-count="responsive"
+          :options="channelOptions"
+          placeholder="Kênh bán"
+          style="width: 200px"
+        />
 
-        <n-form-item label="Loại dịch vụ" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.serviceTypes"
-            multiple
-            clearable
-            max-tag-count="responsive"
-            :options="serviceTypeOptions"
-            placeholder="Loại"
-            style="width: 150px"
-          />
-        </n-form-item>
+        <n-select
+          v-model:value="filters.serviceTypes"
+          multiple
+          clearable
+          max-tag-count="responsive"
+          :options="serviceTypeOptions"
+          placeholder="Loại dịch vụ"
+          style="width: 150px"
+        />
 
-        <n-form-item label="Gói dịch vụ" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.packageTypes"
-            multiple
-            clearable
-            max-tag-count="responsive"
-            :options="packageTypeOptions"
-            placeholder="Gói dịch vụ"
-            style="width: 150px"
-          />
-        </n-form-item>
+        <n-select
+          v-model:value="filters.packageTypes"
+          multiple
+          clearable
+          max-tag-count="responsive"
+          :options="packageTypeOptions"
+          placeholder="Gói dịch vụ"
+          style="width: 150px"
+        />
 
-        <n-form-item label="Trạng thái" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.statuses"
-            multiple
-            clearable
-            max-tag-count="responsive"
-            :options="statusOptions"
-            placeholder="Trạng thái"
-            style="width: 200px"
-            class="wide-dropdown"
-          />
-        </n-form-item>
+        <n-select
+          v-model:value="filters.statuses"
+          multiple
+          clearable
+          max-tag-count="responsive"
+          :options="statusOptions"
+          placeholder="Trạng thái"
+          style="width: 200px"
+          class="wide-dropdown"
+        />
 
-        <n-form-item label="Tên khách hàng" size="small" class="mb-0">
-          <n-input v-model:value="filters.customerName" clearable placeholder="Tên khách hàng" />
-        </n-form-item>
+        <n-input
+          v-model:value="filters.customerName"
+          clearable
+          placeholder="Tên khách hàng"
+          style="width: 150px"
+        />
 
-        <n-form-item label="Người thực hiện" size="small" class="mb-0">
-          <n-input v-model:value="filters.assignee" clearable placeholder="Người thực hiện" />
-        </n-form-item>
+        <n-input
+          v-model:value="filters.assignee"
+          clearable
+          placeholder="Người thực hiện"
+          style="width: 150px"
+        />
 
-        <n-form-item label="Trạng thái giao hàng" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.deliveryStatus"
-            clearable
-            :options="deliveryStatusOptions"
-            placeholder="TT giao hàng"
-            style="width: 150px"
-          />
-        </n-form-item>
+        <n-select
+          v-model:value="filters.deliveryStatus"
+          clearable
+          :options="deliveryStatusOptions"
+          placeholder="TT giao hàng"
+          style="width: 150px"
+        />
 
-        <n-form-item label="Trạng thái review" size="small" class="mb-0">
-          <n-select
-            v-model:value="filters.reviewStatus"
-            clearable
-            :options="reviewStatusOptions"
-            placeholder="TT Review"
-            style="width: 150px"
-          />
-        </n-form-item>
+        <n-select
+          v-model:value="filters.reviewStatus"
+          clearable
+          :options="reviewStatusOptions"
+          placeholder="TT Review"
+          style="width: 150px"
+        />
         <n-button size="small" tertiary @click="resetFilters">Xóa bộ lọc</n-button>
       </div>
 
