@@ -105,6 +105,6 @@ export type SubServiceRow =
 // (Tuỳ chọn) Kiểu item khi upsert qua RPC svc_upsert_line_items_v1
 export type RpcItem = {
   kind_code: string // VD: 'BOSS', 'PIT', ...
-  params: any // payload tuỳ KIND
+  params: Record<string, unknown> // payload tuỳ KIND
   plan_qty?: number | null // nếu có (VD: số lượng dự kiến)
 }

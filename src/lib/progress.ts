@@ -29,15 +29,6 @@ export function newIdem(): string {
 
 /* ============== RPC Wrappers ============== */
 
-export async function isPrivileged(): Promise<boolean> {
-  const { data, error } = await supabase.rpc('is_privileged_v1')
-  if (error) {
-    console.warn('[isPrivileged] rpc error', error)
-    return false
-  }
-  return !!data
-}
-
 export async function fetchLastProofs(itemIds: string[]) {
   if (!itemIds?.length) return []
   const { data, error } = await supabase.rpc('get_last_item_proof_v1', {
@@ -56,7 +47,7 @@ export async function fetchLastProofs(itemIds: string[]) {
 
 export async function startWorkSession(
   lineId: string,
-  startState: any[],
+  startState: unknown[],
   note?: string | null
 ): Promise<string> {
   if (!lineId) {
