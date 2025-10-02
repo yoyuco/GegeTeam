@@ -218,8 +218,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeGeneric(i)"
                         :disabled="svc.generic.offers.length === 1"
+                        @click="removeGeneric(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -256,8 +256,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeLv(i)"
                         :disabled="svc.leveling.offers.length === 1"
+                        @click="removeLv(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -292,8 +292,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removePit(i)"
                         :disabled="svc.pit.offers.length === 1"
+                        @click="removePit(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -328,8 +328,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeBoss(i)"
                         :disabled="svc.boss.offers.length === 1"
+                        @click="removeBoss(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -371,8 +371,8 @@
                         <n-button
                           size="tiny"
                           tertiary
-                          @click="removeMyth(i)"
                           :disabled="svc.mythic.offers.length === 1"
+                          @click="removeMyth(i)"
                           >Xoá</n-button
                         >
                       </div>
@@ -440,8 +440,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeMw(i)"
                         :disabled="svc.masterwork.offers.length === 1"
+                        @click="removeMw(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -476,8 +476,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeMat(i)"
                         :disabled="svc.materials.offers.length === 1"
+                        @click="removeMat(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -512,8 +512,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeHorde(i)"
                         :disabled="svc.infernalHordes.offers.length === 1"
+                        @click="removeHorde(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -547,8 +547,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="removeNm(i)"
                         :disabled="svc.nightmare.offers.length === 1"
+                        @click="removeNm(i)"
                         >Xoá</n-button
                       >
                     </div>
@@ -584,8 +584,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="svc.renown.offers.splice(i, 1)"
                         :disabled="svc.renown.offers.length === 1"
+                        @click="svc.renown.offers.splice(i, 1)"
                         >Xoá</n-button
                       >
                     </div>
@@ -625,8 +625,8 @@
                       <n-button
                         size="tiny"
                         tertiary
-                        @click="svc.altars.offers.splice(i, 1)"
                         :disabled="svc.altars.offers.length === 1"
+                        @click="svc.altars.offers.splice(i, 1)"
                         >Xoá</n-button
                       >
                     </div>
@@ -738,7 +738,6 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { makeLabelMapsFromOptions, type LabelMaps } from '@/lib/service-desc'
-import type { SubServiceRow } from '@/types/service'
 
 /* ===== Types ===== */
 type OrderWithChannel = {
@@ -767,11 +766,6 @@ type CustomerAccount = {
 type Opt = SelectOption & { _db?: boolean }
 type CreateKind = 'channel' | 'customer' | 'currency'
 const MIN_CHAN_CUST = 2
-
-type SellableBoss = {
-  code: string
-  label: string
-}
 
 /* ===== State ===== */
 const mode = ref<Mode>('service')
@@ -869,8 +863,8 @@ const accountOptions = computed(() => {
   return options
 })
 const pricePrecision = computed(() => (form.value.currency === 'VND' ? 0 : 2))
-const asVL = (arr: any[]) =>
-  (arr ?? []).map((o: any) => ({
+const asVL = (arr: SelectOption[]) =>
+  (arr ?? []).map((o) => ({
     value: String(o.value ?? ''),
     label: String(o.label ?? o.value ?? ''),
   }))
@@ -925,7 +919,7 @@ const rules: FormRules = {
   selectedAccountId: [
     {
       required: true,
-      validator: (rule, value) => {
+      validator: (_rule, value) => {
         if (!isAddingNewAccount.value && !value) {
           return new Error('Vui lòng chọn một tài khoản có sẵn')
         }
@@ -978,7 +972,11 @@ async function loadChannels() {
     console.error('channels/select', error)
     return message.error('Không tải được Nguồn bán: ' + error.message)
   }
-  channelOptions.value = (data ?? []).map((r: any) => ({ label: r.code, value: r.code, _db: true }))
+  channelOptions.value = (data ?? []).map((r: { code: string }) => ({
+    label: r.code,
+    value: r.code,
+    _db: true,
+  }))
   hasLoadedChannels.value = true
 }
 async function loadAllCustomers() {
@@ -991,7 +989,7 @@ async function loadAllCustomers() {
     console.error('parties/select', error)
     return message.error('Không tải được Khách hàng: ' + error.message)
   }
-  customerOptions.value = (data ?? []).map((r: any) => ({
+  customerOptions.value = (data ?? []).map((r: { name: string }) => ({
     label: r.name,
     value: r.name,
     _db: true,
@@ -1010,10 +1008,10 @@ async function loadCustomersForChannel(code: string) {
     if (error) throw error
 
     // Kết quả trả về là một mảng các object { name: '...' }
-    const names = (data || []).map((r: any) => r.name)
+    const names = (data || []).map((r: { name: string }) => r.name)
 
     customersByChannel.value[code] = names.map((n: string) => ({ label: n, value: n, _db: true }))
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[loadCustomersForChannel]', e)
     customersByChannel.value[code] = []
     message.error('Không tải được danh sách khách hàng cho kênh này.')
@@ -1026,7 +1024,7 @@ async function loadCurrencies() {
     console.error('currencies/select', error)
     return message.error('Không tải được Tiền tệ: ' + error.message)
   }
-  currencyOptions.value = (data ?? []).map((r: any) => ({
+  currencyOptions.value = (data ?? []).map((r: { code: string }) => ({
     label: r.code,
     value: r.code,
     _db: true,
@@ -1090,7 +1088,10 @@ async function loadServiceDict() {
     dictCodeToIdMap.value = newDictCodeToIdMap
 
     // === BƯỚC 2: Xây dựng các SelectOption cho UI ===
-    const toSelectOption = (attr: any) => ({ label: attr.name, value: attr.code })
+    const toSelectOption = (attr: { name: string; code: string }) => ({
+      label: attr.name,
+      value: attr.code,
+    })
     const sortFn = (a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label)
 
     const sellableBosses: { label: string; value: string }[] = []
@@ -1142,9 +1143,10 @@ async function loadServiceDict() {
       newMythicStatsMap.set(mythicAttr.code, statsOptions.sort(sortFn))
     }
     mythicStatsMap.value = newMythicStatsMap
-  } catch (e: any) {
-    console.error('[loadServiceDict]', e)
-    message.error('Không tải được danh mục dịch vụ: ' + e.message)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[loadServiceDict]', error)
+    message.error('Không tải được danh mục dịch vụ: ' + error.message)
   }
 }
 
@@ -1191,7 +1193,7 @@ watch(
           .eq('customer_id', party.id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .maybeSingle()) as { data: OrderWithChannel | null; error: any }
+          .maybeSingle()) as { data: OrderWithChannel | null; error: unknown }
         if (e2) throw e2
         const chan = ord?.channels
         const code = Array.isArray(chan) ? chan[0]?.code : chan?.code
@@ -1204,8 +1206,9 @@ watch(
       }
       await nextTick()
       formRef.value?.restoreValidation?.()
-    } catch (e: any) {
-      console.error(e)
+    } catch (e: unknown) {
+      const error = e as Error
+      console.error(error)
       message.error('Không tải được dữ liệu khách hàng hoặc tài khoản.')
     } finally {
       loadingAccounts.value = false
@@ -1317,7 +1320,7 @@ const fid = (s: string) => `sales-${s}`
 const lid = (s: string) => `${fid(s)}-label`
 function acInputProps(kind: CreateKind, idBase: string, name: string, ariaId: string) {
   const ac = kind === 'customer' ? 'name' : 'off'
-  const props: Record<string, any> = {
+  const props: Record<string, unknown> = {
     id: fid(idBase),
     name,
     autocomplete: ac,
@@ -1474,8 +1477,14 @@ const kindCodeToIdMap = ref<Map<string, string>>(new Map())
 const dictCodeToIdMap = ref<Map<string, string>>(new Map())
 
 // TÌM HÀM NÀY TRONG Sales.vue VÀ THAY THẾ NÓ
-function buildServiceItemsPayload(): any[] {
-  const items: any[] = []
+interface ServiceItemPayload {
+  service_kind_id: string
+  params: Record<string, unknown>
+  plan_qty: number | null
+}
+
+function buildServiceItemsPayload(): ServiceItemPayload[] {
+  const items: ServiceItemPayload[] = []
 
   for (const kindCode of svc.selected) {
     const serviceKindId = kindCodeToIdMap.value.get(kindCode)
@@ -1565,7 +1574,7 @@ function buildServiceItemsPayload(): any[] {
         break
 
       case 'MATERIALS':
-      case 'MASTERWORKING':
+      case 'MASTERWORKING': {
         const offersToProcess =
           kindCode === 'MATERIALS' ? svc.materials.offers : svc.masterwork.offers
         for (const offer of offersToProcess) {
@@ -1578,9 +1587,10 @@ function buildServiceItemsPayload(): any[] {
           }
         }
         break
+      }
 
       case 'INFERNAL_HORDES':
-      case 'NIGHTMARE':
+      case 'NIGHTMARE': {
         const tierOffers =
           kindCode === 'INFERNAL_HORDES' ? svc.infernalHordes.offers : svc.nightmare.offers
         for (const offer of tierOffers) {
@@ -1593,9 +1603,10 @@ function buildServiceItemsPayload(): any[] {
           }
         }
         break
+      }
 
       case 'RENOWN':
-      case 'ALTARS_OF_LILITH':
+      case 'ALTARS_OF_LILITH': {
         const regionOffers = kindCode === 'RENOWN' ? svc.renown.offers : svc.altars.offers
         for (const offer of regionOffers) {
           if (offer.region) {
@@ -1607,6 +1618,7 @@ function buildServiceItemsPayload(): any[] {
           }
         }
         break
+      }
     }
   }
   return items
@@ -1655,9 +1667,10 @@ async function submit() {
 
     message.success(`Đã tạo đơn hàng thành công!`)
     resetForm()
-  } catch (e: any) {
-    console.error('LỖI CHI TIẾT KHI LƯU ĐƠN:', JSON.stringify(e, null, 2))
-    message.error(e?.message || 'Không thể lưu đơn. Vui lòng kiểm tra Console (F12).')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('LỖI CHI TIẾT KHI LƯU ĐƠN:', JSON.stringify(error, null, 2))
+    message.error(error?.message || 'Không thể lưu đơn. Vui lòng kiểm tra Console (F12).')
   } finally {
     saving.value = false
   }

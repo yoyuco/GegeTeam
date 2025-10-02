@@ -12,18 +12,18 @@
 
         <n-form
           v-else
+          ref="formRef"
           :model="form"
           :rules="rules"
-          ref="formRef"
           size="large"
           label-placement="top"
           @keyup.enter.prevent="handleReset"
         >
           <n-form-item label="Mật khẩu mới" path="password">
             <n-input
+              v-model:value="form.password"
               type="password"
               show-password-on="mousedown"
-              v-model:value="form.password"
               placeholder="Ít nhất 6 ký tự"
               :input-props="{ autocomplete: 'new-password' }"
             />
@@ -31,9 +31,9 @@
 
           <n-form-item label="Xác nhận mật khẩu mới" path="confirmPassword">
             <n-input
+              v-model:value="form.confirmPassword"
               type="password"
               show-password-on="mousedown"
-              v-model:value="form.confirmPassword"
               placeholder="Nhập lại mật khẩu mới"
               :input-props="{ autocomplete: 'new-password' }"
             />
@@ -98,9 +98,10 @@ async function handleReset() {
     if (error) throw error
 
     successMessage.value = 'Mật khẩu của bạn đã được cập nhật thành công!'
-  } catch (err: any) {
-    console.error(err)
-    message.error(err?.message || 'Không thể đặt lại mật khẩu. Link có thể đã hết hạn.')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(error)
+    message.error(error?.message || 'Không thể đặt lại mật khẩu. Link có thể đã hết hạn.')
   } finally {
     loading.value = false
   }

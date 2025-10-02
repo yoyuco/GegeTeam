@@ -44,7 +44,9 @@ const kpi = ref<KPI>({ month_revenue: 0, orders_count: 0, new_customers: 0 })
 /** Mảng 12 tháng, mặc định 0 để chắc chắn không 404 Storage */
 const revenueSeries = ref<number[]>(Array.from({ length: 12 }, () => 0))
 
-async function loadKPIs() {
+// Placeholder function for future KPI loading
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _loadKPIs() {
   // Ưu tiên RPC (nếu có). Nếu chưa có sẽ throw → giữ kpi mặc định = 0
   const { data, error } = await supabase.rpc('dashboard_kpis', { _year: y, _month: m })
   if (!error && data) {
@@ -65,7 +67,8 @@ async function loadKPIs() {
  * - Nếu có view `monthly_revenue_v(d int, revenue_base numeric)`, sẽ map vào mảng 12 phần tử.
  * - Nếu chưa có, giữ nguyên mảng 0.
  */
-async function loadRevenueSeries() {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _loadRevenueSeries() {
   const { data, error } = await supabase
     .from('monthly_revenue_v')
     .select('d, revenue_base')
@@ -75,7 +78,7 @@ async function loadRevenueSeries() {
   if (!error && Array.isArray(data) && data.length) {
     const arr = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1
-      const row = data.find((r: any) => Number(r.d) === month)
+      const row = data.find((r: { d: number; revenue_base?: number }) => Number(r.d) === month)
       return Number(row?.revenue_base ?? 0)
     })
     revenueSeries.value = arr

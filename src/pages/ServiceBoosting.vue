@@ -4,10 +4,6 @@
       <h1 class="text-xl font-semibold tracking-tight">Service – Boosting</h1>
       <div class="flex items-center gap-2">
         <n-button size="small" :loading="loading" @click="loadOrders">Làm mới</n-button>
-        <n-switch v-model:value="autoRefresh" size="small">
-          <template #checked>Auto</template>
-          <template #unchecked>Auto</template>
-        </n-switch>
       </div>
     </div>
 
@@ -95,9 +91,10 @@
       <div class="table-wrap overflow-x-auto">
         <n-data-table
           :columns="columns"
-          :data="filteredRows"
+          :data="rows"
           :loading="loading"
           :pagination="pagination"
+          :remote="true"
           size="small"
           :row-key="(r) => r.id"
           class="datatable--tight"
@@ -121,7 +118,7 @@
               >
             </template>
             <template v-else>
-              <n-button size="tiny" type="primary" @click="saveInfo" :loading="savingInfo"
+              <n-button size="tiny" type="primary" :loading="savingInfo" @click="saveInfo"
                 >Lưu</n-button
               >
               <n-button size="tiny" tertiary @click="cancelEdit">Huỷ</n-button>
@@ -168,7 +165,7 @@
                   :disabled="isOrderFinalized"
                 />
               </div>
-              <div class="text-sm text-neutral-500 mt-1" v-else-if="detail.package_note">
+              <div v-else-if="detail.package_note" class="text-sm text-neutral-500 mt-1">
                 {{ detail.package_note }}
               </div>
             </div>
@@ -192,8 +189,8 @@
                   text
                   size="tiny"
                   type="primary"
-                  @click="isDescCollapsed = !isDescCollapsed"
                   class="mt-1"
+                  @click="isDescCollapsed = !isDescCollapsed"
                 >
                   {{ isDescCollapsed ? 'Xem thêm' : 'Thu gọn' }}
                 </n-button>
@@ -217,7 +214,7 @@
                 />
               </template>
               <template v-else>
-                <n-tooltip trigger="hover" v-if="detail.deadline">
+                <n-tooltip v-if="detail.deadline" trigger="hover">
                   <template #trigger>
                     <n-tag size="small" :type="drawerDeadlineDisplay.color" :bordered="false">
                       {{ drawerDeadlineDisplay.text }}
@@ -244,7 +241,7 @@
               <span class="text-sm">{{ detail.assignees_text || '—' }}</span>
             </div>
           </div>
-          <div class="row" v-if="detail.service_type === 'Selfplay'">
+          <div v-if="detail.service_type === 'Selfplay'" class="row">
             <div class="meta">Btag</div>
             <div class="val flex items-center gap-2">
               <n-input
@@ -304,7 +301,7 @@
                 </template>
               </div>
             </div>
-            <div class="row" v-if="detail.service_type === 'Pilot'">
+            <div v-if="detail.service_type === 'Pilot'" class="row">
               <div class="meta">Máy thực hiện</div>
               <div class="val flex items-center gap-2">
                 <n-input
@@ -322,8 +319,8 @@
                   v-if="isEditingMachineInfo"
                   size="tiny"
                   tertiary
-                  @click="saveMachineInfo"
                   :loading="savingInfo"
+                  @click="saveMachineInfo"
                 >
                   Lưu
                 </n-button>
@@ -357,10 +354,10 @@
                     <div class="cell cell-check">
                       <n-checkbox
                         :checked="isPicked(it.id)"
-                        @update:checked="(c: boolean) => togglePick(it, c)"
                         :disabled="
                           isLevelingItemDisabled(it) || !!it.active_report_id || isOrderFinalized
                         "
+                        @update:checked="(c: boolean) => togglePick(it, c)"
                       />
                     </div>
                     <div class="cell cell-label">
@@ -392,8 +389,8 @@
                               isOrderFinalized ||
                               !!(ws2.sessionId && isPicked(it.id))
                             "
-                            @click="openReportModal(it)"
                             :type="it.active_report_id ? 'warning' : 'default'"
+                            @click="openReportModal(it)"
                           >
                             <template #icon
                               ><n-icon :component="InformationCircleOutline"
@@ -517,13 +514,13 @@
                             circle
                             size="tiny"
                             title="Xóa ảnh"
+                            :disabled="!!ws2.sessionId || isOrderFinalized"
                             @click="
                               () => {
                                 const r = rowMap.get(String(it.id))
                                 if (r) removeProof(r, 'start')
                               }
                             "
-                            :disabled="!!ws2.sessionId || isOrderFinalized"
                             ><template #icon><n-icon :component="TrashIcon" /></template
                           ></n-button>
                         </div>
@@ -677,12 +674,12 @@
                     <n-button
                       size="tiny"
                       tertiary
-                      @click="rmActRow(i)"
                       :disabled="ws2.activityRows.length === 1"
+                      @click="rmActRow(i)"
                       >Xoá</n-button
                     >
                   </div>
-                  <n-button size="tiny" tertiary @click="addActRow" :disabled="isOrderFinalized"
+                  <n-button size="tiny" tertiary :disabled="isOrderFinalized" @click="addActRow"
                     >Thêm hoạt động</n-button
                   >
                 </div>
@@ -758,7 +755,7 @@
             </div>
           </div>
 
-          <div class="mb-2" v-if="!detailLoading">
+          <div v-if="!detailLoading" class="mb-2">
             <n-input
               v-model:value="ws2.note"
               type="textarea"
@@ -770,8 +767,8 @@
         </n-spin>
 
         <div
-          class="mt-4"
           v-if="!isOrderFinalized || detail.action_proof_urls?.length || hasNewProofs"
+          class="mt-4"
         >
           <div class="font-medium mb-2">Bằng chứng (Hoàn thành / Hủy bỏ)</div>
           <n-upload
@@ -840,8 +837,8 @@
           <n-button
             tertiary
             size="small"
-            @click="reportModal.open = false"
             :disabled="reportModal.loading"
+            @click="reportModal.open = false"
             >Huỷ</n-button
           >
           <n-button type="primary" size="small" :loading="reportModal.loading" @click="submitReport"
@@ -1013,7 +1010,7 @@
                       >
                         <n-icon :component="BookOutline" />
                         <span
-                          >{{ getAttributeName(activity.activity_label) }}:
+                          >{{ getAttributeName(activity.activity_label || '') }}:
                           <strong>{{ activity.session_delta }}</strong> runs</span
                         >
                       </div>
@@ -1050,8 +1047,8 @@
       <n-divider />
       <n-checkbox
         v-model:checked="deliveryModal.isDelivered"
-        @update:checked="handleDeliveryStatusChange"
         :disabled="deliveryModal.loading"
+        @update:checked="handleDeliveryStatusChange"
       >
         Đã trả đơn hàng cho khách
       </n-checkbox>
@@ -1065,7 +1062,6 @@ import {
   NCard,
   NButton,
   NDataTable,
-  NSwitch,
   NTag,
   NTooltip,
   NDrawer,
@@ -1091,6 +1087,7 @@ import {
   NCollapseItem,
   NRadio,
   NSpace,
+  NFormItem,
   type UploadFileInfo,
   type SelectOption,
   type DataTableColumns,
@@ -1115,8 +1112,6 @@ import {
   type SessionOutputRow,
   type ActivityRow,
 } from '@/lib/progress'
-import { formatDistanceToNowStrict, differenceInMilliseconds } from 'date-fns'
-import { vi } from 'date-fns/locale'
 
 // =================================================================
 // TYPES
@@ -1126,7 +1121,7 @@ type SvcItemSummary = {
   id: string
   kind_code: string
   kind_name: string
-  params: any
+  params: Record<string, unknown>
   plan_qty: number | null
   done_qty: number
   active_report_id: string | null
@@ -1174,7 +1169,7 @@ type OrderDetail = OrderRow & {
 type SvcItem = {
   id: string
   kind_code: string
-  params: any
+  params: Record<string, unknown>
   plan_qty: number | null
   done_qty: number
   active_report_id: string | null
@@ -1206,8 +1201,6 @@ type WsRow = {
   statusText: string
 }
 
-type PkgType = 'BASIC' | 'CUSTOM' | 'BUILD'
-
 type ProofUploadFileInfo = UploadFileInfo & { isSaved?: boolean }
 // =================================================================
 // INITIALIZATION & STATE
@@ -1219,23 +1212,31 @@ const machineInfoModel = ref('')
 
 const rows = ref<OrderRow[]>([])
 const loading = ref(false)
-const autoRefresh = ref(true)
 const pagination = reactive({
   page: 1,
-  pageSize: 100,
+  pageSize: 50,
+  itemCount: 0,
   pageSizes: [20, 50, 100, 200],
   showSizePicker: true,
+  showQuickJumper: true,
+  prefix: (info: { itemCount?: number }) => {
+    return `Tổng: ${info.itemCount || 0}`
+  },
   onUpdatePage: (page: number) => {
     pagination.page = page
+    loadOrders()
   },
   onUpdatePageSize: (pageSize: number) => {
     pagination.pageSize = pageSize
-    pagination.page = 1 // Quay về trang 1 khi đổi kích thước
+    pagination.page = 1
+    loadOrders()
   },
 })
 const isDescCollapsed = ref(true)
 let clock: number | null = null
-let poll: number | null = null
+let realtimeChannels: ReturnType<typeof supabase.channel>[] = []
+let reloadDebounceTimer: number | null = null
+let backgroundPollTimer: number | null = null
 
 const filters = reactive({
   channels: null as string[] | null,
@@ -1295,7 +1296,15 @@ const review = ref({
   proofs: [] as UploadFileInfo[],
   // THÊM CÁC TRƯỜNG MỚI ĐỂ XEM REVIEW
   loadingExisting: false,
-  existingReviews: [] as any[],
+  existingReviews: [] as Array<{
+    id: string
+    stars: number
+    rating: number
+    reviewer_name: string
+    comment: string
+    proof_urls?: string[]
+    created_at: string
+  }>,
 })
 
 const deliveryModal = reactive({
@@ -1495,65 +1504,7 @@ const reviewStatusOptions = [
   { label: 'Chưa review', value: 'not_reviewed' },
 ]
 
-const filteredRows = computed(() => {
-  let data = rows.value
-
-  // Lọc theo trạng thái đơn hàng (giữ nguyên)
-  if (filters.statuses?.length) {
-    const statusSet = new Set(filters.statuses)
-    data = data.filter((row) => statusSet.has(row.status))
-  }
-
-  // Lọc theo kênh bán (giữ nguyên)
-  if (filters.channels?.length) {
-    const channelSet = new Set(filters.channels)
-    data = data.filter((row) => channelSet.has(row.channel_code))
-  }
-
-  // Lọc theo tên khách hàng (giữ nguyên)
-  const customer = filters.customerName.trim().toLowerCase()
-  if (customer) {
-    data = data.filter((row) => row.customer_name.toLowerCase().includes(customer))
-  }
-
-  // Lọc theo người thực hiện (giữ nguyên)
-  const assignee = filters.assignee.trim().toLowerCase()
-  if (assignee) {
-    data = data.filter((row) => (row.assignees_text || '').toLowerCase().includes(assignee))
-  }
-
-  // Lọc theo gói dịch vụ (giữ nguyên)
-  if (filters.packageTypes?.length) {
-    const packageSet = new Set(filters.packageTypes)
-    data = data.filter((row) => packageSet.has(row.package_type))
-  }
-
-  // Lọc theo loại dịch vụ (giữ nguyên)
-  if (filters.serviceTypes?.length) {
-    const serviceSet = new Set(filters.serviceTypes)
-    data = data.filter((row) => serviceSet.has(row.service_type))
-  }
-
-  // <<< THÊM MỚI: Lọc theo trạng thái giao hàng >>>
-  if (filters.deliveryStatus) {
-    if (filters.deliveryStatus === 'delivered') {
-      data = data.filter((row) => !!row.delivered_at)
-    } else if (filters.deliveryStatus === 'not_delivered') {
-      data = data.filter((row) => !row.delivered_at)
-    }
-  }
-
-  // <<< THÊM MỚI: Lọc theo trạng thái review >>>
-  if (filters.reviewStatus) {
-    if (filters.reviewStatus === 'reviewed') {
-      data = data.filter((row) => !!row.review_id)
-    } else if (filters.reviewStatus === 'not_reviewed') {
-      data = data.filter((row) => !row.review_id)
-    }
-  }
-
-  return data
-})
+// filteredRows removed - filtering now handled server-side in get_boosting_orders_v3
 
 // =================================================================
 // CONSTANTS & HELPERS
@@ -1582,12 +1533,11 @@ const KIND_ORDER: Record<string, number> = {
   RENOWN: 90,
   GENERIC: 999,
 }
-const PROOF_BUCKET = 'work-proofs'
 function clip(s: string, n = 220) {
   if (!s) return ''
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
-function round2(n: any): number {
+function round2(n: number | null | undefined): number {
   const x = Number(n)
   return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0
 }
@@ -1658,7 +1608,15 @@ function generateServiceDescription(items: SvcItemSummary[] | null): {
 const historyModal = reactive({
   open: false,
   loading: false,
-  sessions: [] as any[],
+  sessions: [] as Array<{
+    session_id: string
+    farmer_name: string
+    started_at: string
+    ended_at: string
+    outputs: SessionOutput[]
+    note?: string
+    has_zero_progress_item?: boolean
+  }>,
   lineId: null as string | null,
 })
 
@@ -1688,7 +1646,7 @@ function formatDateTime(dateString: string | null | undefined): string {
 // =================================================================
 // DATA TABLE & RENDERERS
 // =================================================================
-function renderTrunc(text: any, len = 30) {
+function renderTrunc(text: string | null | undefined, len = 30) {
   const full = (text ?? '').toString()
   const short = clip(full, len)
   if (!full) return '—'
@@ -1703,14 +1661,14 @@ function renderTrunc(text: any, len = 30) {
   )
 }
 
-function pkgTypeTag(v: any) {
+function pkgTypeTag(v: string | null | undefined) {
   const s = (v ?? '').toString().toUpperCase()
   if (s === 'CUSTOM') return { label: 'Custom', type: 'warning' as const }
   if (s === 'BUILD') return { label: 'Build', type: 'info' as const }
   return { label: 'Basic', type: 'success' as const }
 }
 
-function statusView(s: any) {
+function statusView(s: string | null | undefined) {
   const v = (s ?? '').toString().toLowerCase()
   switch (v) {
     case 'new':
@@ -2084,7 +2042,7 @@ async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text)
     message.success('Đã sao chép!')
-  } catch (err) {
+  } catch {
     message.error('Không thể sao chép.')
   }
 }
@@ -2095,26 +2053,51 @@ async function copyToClipboard(text: string) {
 async function loadOrders() {
   loading.value = true
   try {
-    const { data, error } = await supabase.rpc('get_boosting_orders_v2')
+    const offset = (pagination.page - 1) * pagination.pageSize
+    const { data, error } = await supabase.rpc('get_boosting_orders_v3', {
+      p_limit: pagination.pageSize,
+      p_offset: offset,
+      p_channels: filters.channels?.length ? filters.channels : null,
+      p_statuses: filters.statuses?.length ? filters.statuses : null,
+      p_service_types: filters.serviceTypes?.length ? filters.serviceTypes : null,
+      p_package_types: filters.packageTypes?.length ? filters.packageTypes : null,
+      p_customer_name: filters.customerName.trim() || null,
+      p_assignee: filters.assignee.trim() || null,
+      p_delivery_status: filters.deliveryStatus || null,
+      p_review_status: filters.reviewStatus || null,
+    })
     if (error) throw error
 
-    // SỬA ĐỔI NẰM Ở ĐÂY
-    rows.value = ((data as any[]) ?? []).map((r: any) => {
-      // Thêm khối logic chuẩn hóa service_type vào đây
-      if (r.service_type) {
-        const typeStr = String(r.service_type).toLowerCase()
+    const dataArray = (data as unknown[]) ?? []
+
+    // Extract total_count from first row (all rows have same total_count)
+    if (dataArray.length > 0) {
+      const firstRow = dataArray[0] as Record<string, unknown>
+      pagination.itemCount = Number(firstRow.total_count) || 0
+    } else {
+      pagination.itemCount = 0
+    }
+
+    // Map and normalize data
+    rows.value = dataArray.map((r) => {
+      const row = r as Record<string, unknown>
+      // Normalize service_type
+      let serviceType = row.service_type as string
+      if (serviceType) {
+        const typeStr = String(serviceType).toLowerCase()
         if (typeStr.includes('pilot')) {
-          r.service_type = 'Pilot'
+          serviceType = 'Pilot'
         } else if (typeStr.includes('selfplay')) {
-          r.service_type = 'Selfplay'
+          serviceType = 'Selfplay'
         }
       }
-      // Trả về đối tượng đã được chuẩn hóa
-      return { ...r, line_id: r.id }
+      // Return normalized object as OrderRow
+      return { ...row, line_id: row.id, service_type: serviceType } as OrderRow
     })
-  } catch (e: any) {
-    console.error('[loadOrders]', e)
-    message.error(e?.message || 'Không tải được danh sách đơn hàng')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[loadOrders]', error)
+    message.error(error?.message || 'Không tải được danh sách đơn hàng')
   } finally {
     loading.value = false
   }
@@ -2144,7 +2127,6 @@ async function uploadProof(
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
   const path = `${lineId}/${sessionId}/${itemId}/${phase}.${ext}`
 
-  console.log('Đang upload tới đường dẫn:', path)
   const { error, data } = await supabase.storage
     .from('work-proofs')
     .upload(path, file, { upsert: true })
@@ -2246,8 +2228,9 @@ async function handleDeliveryStatusChange(checked: boolean) {
     if (idx > -1) {
       rows.value[idx].delivered_at = checked ? new Date().toISOString() : null
     }
-  } catch (e: any) {
-    message.error(e.message || 'Cập nhật thất bại.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Cập nhật thất bại.')
     // Trả lại trạng thái cũ của checkbox nếu có lỗi
     deliveryModal.isDelivered = !checked
   } finally {
@@ -2296,7 +2279,9 @@ async function openDetail(row: OrderRow) {
     allGroupKeys.forEach((key) => collapsedKinds.add(key))
 
     if (data.active_session && data.active_session.start_state) {
-      const activeItemIds = new Set(data.active_session.start_state.map((s: any) => s.item_id))
+      const activeItemIds = new Set(
+        data.active_session.start_state.map((s: { item_id: string }) => s.item_id)
+      )
       const kindsToExpand = new Set<string>()
 
       svcItems.value.forEach((it) => {
@@ -2312,7 +2297,12 @@ async function openDetail(row: OrderRow) {
     if (data.active_session) {
       ws2.value.sessionId = data.active_session.session_id
       const startStateMap = new Map(
-        data.active_session.start_state.map((s: any) => [String(s.item_id), s])
+        data.active_session.start_state.map(
+          (s: { item_id: string; start_value: number; start_exp?: number }) => [
+            String(s.item_id),
+            s,
+          ]
+        )
       )
       ws2.value.rows = svcItems.value.map((it) => {
         const state = startStateMap.get(String(it.id))
@@ -2320,17 +2310,22 @@ async function openDetail(row: OrderRow) {
         const plan = Number(it.plan_qty ?? 0)
         let status = 'Đang thực hiện'
         if (plan > 0 && done >= plan) status = 'Hoàn thành'
+        const stateData = state as {
+          start_value?: number
+          start_exp?: number
+          start_proof_url?: string | null
+        } | null
         return {
           item_id: String(it.id),
           kind_code: (it.kind_code || '').toUpperCase(),
           label: paramsLabel(it),
-          start_value: round2((state as any)?.start_value ?? 0),
-          current_value: round2((state as any)?.start_value ?? 0),
-          start_exp: (state as any)?.start_exp ?? 0,
-          current_exp: (state as any)?.start_exp ?? 0,
+          start_value: round2(stateData?.start_value ?? 0),
+          current_value: round2(stateData?.start_value ?? 0),
+          start_exp: stateData?.start_exp ?? 0,
+          current_exp: stateData?.start_exp ?? 0,
           isStartValueEditable: false,
           isExpEditable: false,
-          startProofUrl: (state as any)?.start_proof_url ?? null,
+          startProofUrl: stateData?.start_proof_url ?? null,
           startFile: null,
           endFile: null,
           startPreviewUrl: null,
@@ -2382,9 +2377,10 @@ async function openDetail(row: OrderRow) {
       })
     }
     syncEditModel(true)
-  } catch (e: any) {
-    console.error('[openDetail]', e)
-    message.error(e?.message || 'Không tải được chi tiết đơn hàng')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[openDetail]', error)
+    message.error(error?.message || 'Không tải được chi tiết đơn hàng')
   } finally {
     detailLoading.value = false
   }
@@ -2429,8 +2425,10 @@ function cancelEdit() {
   syncEditModel(true)
 }
 
-function syncEditModel(_reset = false) {
-  deadlineModel.value = detail.deadline ? Date.parse(detail.deadline) : null
+function syncEditModel(reset = false) {
+  if (reset) {
+    deadlineModel.value = detail.deadline ? Date.parse(detail.deadline) : null
+  }
 }
 
 async function saveInfo() {
@@ -2454,24 +2452,24 @@ async function saveInfo() {
     message.success('Đã lưu thay đổi!')
     editing.value = false
     await loadOrders()
-
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
       await openDetail(currentRow)
     }
-  } catch (e: any) {
-    console.error('[saveInfo]', e)
-    message.error(e?.message || 'Không lưu được thay đổi')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[saveInfo]', error)
+    message.error(error?.message || 'Không lưu được thay đổi')
   } finally {
     savingInfo.value = false
   }
 }
 
-function paramsLabel(it: SvcItem | SvcItemSummary): string {
+function paramsLabel(it: SvcItem | SvcItemSummary | SessionOutput): string {
   const k = (it.kind_code || '').toUpperCase()
   const p = it.params || {}
-  const plan = Number(it.plan_qty ?? p.plan_qty ?? p.qty ?? 0)
-  const done = Number(it.done_qty ?? 0)
+  const plan = Number((it as SvcItem | SvcItemSummary).plan_qty ?? p.plan_qty ?? p.qty ?? 0)
+  const done = Number((it as SvcItem | SvcItemSummary).done_qty ?? 0)
   let mainLabel = ''
 
   // KHÔNG CẦN `const getName` ở đây nữa
@@ -2481,34 +2479,34 @@ function paramsLabel(it: SvcItem | SvcItemSummary): string {
       mainLabel = `${p.mode === 'paragon' ? 'Paragon' : 'Level'} ${p.start}→${p.end}`
       break
     case 'BOSS':
-      mainLabel = `${p.boss_label || getAttributeName(p.boss_code)}`
+      mainLabel = `${p.boss_label || getAttributeName(String(p.boss_code || ''))}`
       break // Dùng getAttributeName
     case 'THE_PIT':
-      mainLabel = `${p.tier_label || getAttributeName(p.tier_code)}`
+      mainLabel = `${p.tier_label || getAttributeName(String(p.tier_code || ''))}`
       break // Dùng getAttributeName
     case 'NIGHTMARE':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'INFERNAL_HORDES':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'MATERIALS':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'MASTERWORKING':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'ALTARS_OF_LILITH':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'RENOWN':
-      mainLabel = `${getAttributeName(p.attribute_code)}`
+      mainLabel = `${getAttributeName(String(p.attribute_code || ''))}`
       break // Dùng getAttributeName
     case 'MYTHIC':
-      mainLabel = `${p.item_label || getAttributeName(p.item_code)}${p.ga_label ? ` (${p.ga_label}${p.ga_note ? ': ' + p.ga_note : ''})` : ''}`
+      mainLabel = `${p.item_label || getAttributeName(String(p.item_code || ''))}${p.ga_label ? ` (${p.ga_label}${p.ga_note ? ': ' + p.ga_note : ''})` : ''}`
       break
     case 'GENERIC':
-      mainLabel = p.desc || p.note || 'Generic'
+      mainLabel = String(p.desc || p.note || 'Generic')
       break
     default:
       mainLabel = JSON.stringify(p)
@@ -2525,8 +2523,6 @@ function paramsLabel(it: SvcItem | SvcItemSummary): string {
 
   return mainLabel + suffix
 }
-
-const savingMachineInfo = ref(false) // Có thể dùng chung state savingInfo
 
 async function saveMachineInfo() {
   if (!detail.id) return
@@ -2547,8 +2543,9 @@ async function saveMachineInfo() {
     if (idx > -1) {
       rows.value[idx].machine_info = detail.machine_info
     }
-  } catch (e: any) {
-    message.error(e.message || 'Cập nhật thất bại.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Cập nhật thất bại.')
   } finally {
     savingInfo.value = false
   }
@@ -2632,10 +2629,11 @@ async function submitReport() {
     if (currentRow) {
       await openDetail(currentRow)
     }
-  } catch (e: any) {
-    console.error('[submitReport]', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[submitReport]', error)
     message.destroyAll()
-    message.error(e?.message || 'Không thể gửi báo cáo.')
+    message.error(error?.message || 'Không thể gửi báo cáo.')
   } finally {
     reportModal.value.loading = false
   }
@@ -2649,9 +2647,10 @@ async function openHistoryModal(row: OrderRow) {
     const { data, error } = await supabase.rpc('get_session_history_v2', { p_line_id: row.id })
     if (error) throw error
     historyModal.sessions = data || []
-  } catch (e: any) {
-    console.error('[openHistoryModal]', e)
-    message.error(e.message || 'Không thể tải lịch sử phiên.')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[openHistoryModal]', error)
+    message.error(error.message || 'Không thể tải lịch sử phiên.')
   } finally {
     historyModal.loading = false
   }
@@ -2662,16 +2661,18 @@ function isLevelingItemDisabled(currentItem: SvcItem): boolean {
     return true
   }
 
-  if (!!ws2.value.sessionId) {
+  if (ws2.value.sessionId) {
     return true
   }
 
-  const currentIsParagon = (currentItem.params?.mode || '').toLowerCase() === 'paragon'
+  const currentIsParagon = String(currentItem.params?.mode || '').toLowerCase() === 'paragon'
   if (!currentIsParagon) {
     return false
   }
 
-  const levelItem = svcItems.value.find((it) => (it.params?.mode || '').toLowerCase() === 'level')
+  const levelItem = svcItems.value.find(
+    (it) => String(it.params?.mode || '').toLowerCase() === 'level'
+  )
 
   if (levelItem) {
     const levelPlan = Number(levelItem.plan_qty ?? 0)
@@ -2716,7 +2717,11 @@ function togglePick(it: SvcItem, checked: boolean) {
   }
   const id = String(it.id)
   const set = new Set(ws2.value.selectedIds)
-  checked ? set.add(id) : set.delete(id)
+  if (checked) {
+    set.add(id)
+  } else {
+    set.delete(id)
+  }
   ws2.value.selectedIds = Array.from(set)
 }
 
@@ -2751,8 +2756,6 @@ async function uploadOverrunProof(file: File, lineId: string, sessionId: string)
 }
 
 async function startSession() {
-  console.log('startSession CALLED')
-
   if (!detail.id) {
     return
   }
@@ -2762,7 +2765,6 @@ async function startSession() {
 
   try {
     const selectedRows = ws2.value.rows.filter((r) => ws2.value.selectedIds.includes(r.item_id))
-    console.log('Selected Rows:', selectedRows) // LOG 4: Xem các item đã chọn
 
     const tempSessionId = globalThis.crypto.randomUUID()
 
@@ -2770,10 +2772,7 @@ async function startSession() {
       .filter((r) => r.startFile)
       .map((r) => uploadProof(r.startFile!, detail.id!, tempSessionId, r.item_id, 'start'))
 
-    console.log('Upload Promises count:', uploadPromises.length) // LOG 5: Xem có bao nhiêu file cần upload
-
     const uploadedUrls = await Promise.all(uploadPromises)
-    console.log('Uploaded URLs:', uploadedUrls) // LOG 6: Xem kết quả upload
 
     const urlMap = new Map<string, string>()
     selectedRows
@@ -2792,7 +2791,6 @@ async function startSession() {
         start_exp: r.start_exp,
       }
     })
-    console.log('Payload to RPC:', startStatePayload) // LOG 7: Xem payload cuối cùng
 
     const sessionId = await startWorkSession(detail.id, startStatePayload, ws2.value.note)
     ws2.value.sessionId = sessionId
@@ -2800,17 +2798,19 @@ async function startSession() {
     message.destroyAll()
     message.success('Bắt đầu phiên làm việc thành công!')
 
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    await loadOrders()
+
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
       await openDetail(currentRow)
     }
-  } catch (e: any) {
-    // LOG 8: BẮT LỖI QUAN TRỌNG
-    console.error('ERROR inside startSession:', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[startSession]', error)
     message.destroyAll()
-    message.error(e.message || 'Không thể bắt đầu phiên làm việc')
+    message.error(error.message || 'Không thể bắt đầu phiên làm việc')
   } finally {
-    console.log('FINALLY block executed') // LOG 9: Kiểm tra khối finally
     sessionLoading.value = false
   }
 }
@@ -2840,10 +2840,11 @@ async function cancelSession() {
         if (currentRow) {
           await openDetail(currentRow)
         }
-      } catch (e: any) {
-        console.error('[cancelSession]', e)
+      } catch (e: unknown) {
+        const error = e as Error
+        console.error('[cancelSession]', error)
         message.destroyAll()
-        message.error(e?.message ?? 'Huỷ phiên thất bại')
+        message.error(error?.message ?? 'Huỷ phiên thất bại')
       } finally {
         submittingFinish.value = false
       }
@@ -2883,7 +2884,7 @@ async function finishSession() {
         const endUrl = r.endFile
           ? await uploadProof(r.endFile, detail.id!, sid, r.item_id, 'end')
           : (r.endProofUrl ?? null)
-        const params: any = {}
+        const params: Record<string, unknown> = {}
         if (r.kind_code === 'LEVELING' && r.current_exp != null) {
           params.exp_percent = r.current_exp
         }
@@ -2944,15 +2945,19 @@ async function finishSession() {
     message.success('Đã kết thúc phiên thành công!')
     ws2.value.selectedIds = []
     ws2.value.sessionId = null
+
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
     await loadOrders()
+
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
       await openDetail(currentRow)
     }
-  } catch (e: any) {
-    console.error('[finishSession]', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[finishSession]', error)
     message.destroyAll()
-    message.error(e?.message || 'Không thể kết thúc phiên')
+    message.error(error?.message || 'Không thể kết thúc phiên')
   } finally {
     submittingFinish.value = false
   }
@@ -3000,7 +3005,10 @@ async function loadAttributeMap() {
       }
       childrenMap.get(rel.parent_attribute_id)!.push(rel.child_attribute_id)
     }
-    const toSelectOption = (attr: any) => ({ label: attr.name, value: attr.code })
+    const toSelectOption = (attr: { name: string; code: string }) => ({
+      label: attr.name,
+      value: attr.code,
+    })
     const sortFn = (a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label)
 
     // 2. Populate attributeMap (giữ lại logic cũ)
@@ -3022,9 +3030,10 @@ async function loadAttributeMap() {
       }
     }
     bossDict.value = sellableBosses.sort(sortFn)
-  } catch (e: any) {
-    console.error('[loadAttributeMap]', e)
-    message.error('Không tải được từ điển attributes: ' + e.message)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[loadAttributeMap]', error)
+    message.error('Không tải được từ điển attributes: ' + error.message)
   }
 }
 
@@ -3079,10 +3088,11 @@ async function markLineDone() {
     message.success('Đã hoàn thành đơn hàng!')
     detailOpen.value = false
     await loadOrders()
-  } catch (e: any) {
-    console.error('[markLineDone]', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[markLineDone]', error)
     message.destroyAll()
-    message.error(e?.message || 'Không thể đóng đơn hàng.')
+    message.error(error?.message || 'Không thể đóng đơn hàng.')
   } finally {
     closingOrder.value = false
   }
@@ -3130,10 +3140,11 @@ async function cancelOrderLine() {
     message.success('Đã hủy đơn hàng thành công!')
     detailOpen.value = false
     await loadOrders()
-  } catch (e: any) {
-    console.error('[cancelOrderLine]', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[cancelOrderLine]', error)
     message.destroyAll()
-    message.error(e.message || 'Hủy đơn hàng thất bại.')
+    message.error(error.message || 'Hủy đơn hàng thất bại.')
   } finally {
     cancellingOrder.value = false
   }
@@ -3159,9 +3170,10 @@ async function openReviewModal(row: OrderRow) {
     })
     if (error) throw error
     review.value.existingReviews = data || []
-  } catch (e: any) {
-    console.error('[openReviewModal]', e)
-    message.error(e.message || 'Không thể tải danh sách review.')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[openReviewModal]', error)
+    message.error(error.message || 'Không thể tải danh sách review.')
   } finally {
     review.value.loadingExisting = false
   }
@@ -3203,12 +3215,13 @@ async function submitReview() {
 
     message.destroyAll()
     message.success('Gửi đánh giá thành công!')
-    review.value.open = false // Đóng modal sau khi thành công
-    await loadOrders() // Tải lại bảng chính để cập nhật tag "Đã review"
-  } catch (e: any) {
-    console.error('[submitReview]', e)
+    review.value.open = false
+    await loadOrders()
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[submitReview]', error)
     message.destroyAll()
-    message.error(e?.message || 'Gửi đánh giá thất bại')
+    message.error(error?.message || 'Gửi đánh giá thất bại')
   } finally {
     review.value.saving = false
   }
@@ -3220,11 +3233,6 @@ const savingNewProofs = ref(false)
 const hasNewProofs = computed(() => {
   return isOrderFinalized.value && proofFiles.value.some((f) => !f.isSaved)
 })
-
-function handleShowRemoveButton({ file }: { file: ProofUploadFileInfo }): boolean {
-  // Nếu file có thuộc tính isSaved, nghĩa là file cũ -> không hiện nút xóa
-  return !file.isSaved
-}
 
 function handleProofRemove({ file }: { file: ProofUploadFileInfo }): boolean {
   // Logic: Kiểm tra ID của file.
@@ -3275,16 +3283,33 @@ async function saveAdditionalProofs() {
     if (currentRow) {
       await openDetail(currentRow)
     }
-  } catch (e: any) {
-    console.error('[saveAdditionalProofs]', e)
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[saveAdditionalProofs]', error)
     message.destroyAll()
-    message.error(e.message || 'Lưu bằng chứng thất bại')
+    message.error(error.message || 'Lưu bằng chứng thất bại')
   } finally {
     savingNewProofs.value = false
   }
 }
 
-function groupSessionOutputs(outputs: any[]) {
+interface SessionOutput {
+  kind: string
+  kind_code: string
+  id: string
+  item_id?: string
+  is_activity?: boolean
+  activity_label?: string
+  session_start_value?: number
+  session_end_value?: number
+  session_delta?: number
+  start_proof_url?: string | null
+  end_proof_url?: string | null
+  params?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+function groupSessionOutputs(outputs: SessionOutput[]) {
   if (!outputs || !outputs.length) return []
 
   // Bước 1: Tách riêng các hạng mục công việc và các hoạt động farm boss
@@ -3292,7 +3317,10 @@ function groupSessionOutputs(outputs: any[]) {
   const activityItems = outputs.filter((o) => o.is_activity)
 
   // Bước 2: Nhóm các hạng mục công việc (logic không đổi)
-  const groups = new Map<string, { kind: string; items: any[]; activities?: any[] }>()
+  const groups = new Map<
+    string,
+    { kind: string; items: SessionOutput[]; activities?: SessionOutput[] }
+  >()
   for (const output of realItems) {
     const kindName = attributeMap.value.get(output.kind_code) || output.kind_code
 
@@ -3321,6 +3349,27 @@ function groupSessionOutputs(outputs: any[]) {
 }
 
 // =================================================================
+// FILTERS WATCHER - Reset to page 1 when filters change
+// =================================================================
+watch(
+  () => [
+    filters.channels,
+    filters.statuses,
+    filters.serviceTypes,
+    filters.packageTypes,
+    filters.customerName,
+    filters.assignee,
+    filters.deliveryStatus,
+    filters.reviewStatus,
+  ],
+  () => {
+    pagination.page = 1
+    loadOrders()
+  },
+  { deep: true }
+)
+
+// =================================================================
 // PROOF FILES FOR ORDER ACTIONS
 // =================================================================
 watch(
@@ -3342,7 +3391,7 @@ watch(
 )
 
 // =================================================================
-// LIFECYCLE & POLLING
+// LIFECYCLE & REALTIME
 // =================================================================
 function startClock() {
   stopClock()
@@ -3358,32 +3407,78 @@ function stopClock() {
   }
 }
 
-function startPoll() {
-  stopPoll()
-  poll = window.setInterval(() => {
-    if (autoRefresh.value) {
+function debouncedReload() {
+  // Clear existing timer
+  if (reloadDebounceTimer) {
+    clearTimeout(reloadDebounceTimer)
+  }
+
+  // Set new timer to reload after 500ms of inactivity
+  reloadDebounceTimer = window.setTimeout(() => {
+    loadOrders()
+  }, 500)
+}
+
+function setupRealtimeSubscriptions() {
+  // Subscribe to each table with separate channel
+  const tables = [
+    'orders',
+    'order_lines',
+    'order_reviews',
+    'order_service_items',
+    'profiles',
+    'work_sessions',
+  ]
+
+  tables.forEach((table) => {
+    const channel = supabase
+      .channel(`realtime-${table}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        debouncedReload()
+      })
+      .subscribe()
+
+    realtimeChannels.push(channel)
+  })
+}
+
+function cleanupRealtimeSubscriptions() {
+  realtimeChannels.forEach((channel) => {
+    supabase.removeChannel(channel)
+  })
+  realtimeChannels = []
+}
+
+function startBackgroundPoll() {
+  stopBackgroundPoll()
+  // Poll every 30s to catch changes from other users (for SECURITY DEFINER operations)
+  // Only poll when tab is active (user is watching)
+  backgroundPollTimer = window.setInterval(() => {
+    if (!document.hidden) {
       loadOrders()
     }
   }, 30000)
 }
 
-function stopPoll() {
-  if (poll) {
-    clearInterval(poll)
-    poll = null
+function stopBackgroundPoll() {
+  if (backgroundPollTimer) {
+    clearInterval(backgroundPollTimer)
+    backgroundPollTimer = null
   }
 }
 
 onMounted(() => {
   loadAttributeMap()
   startClock()
-  startPoll()
   loadOrders()
+  setupRealtimeSubscriptions()
+  startBackgroundPoll()
 })
 
 onBeforeUnmount(() => {
   stopClock()
-  stopPoll()
+  cleanupRealtimeSubscriptions()
+  stopBackgroundPoll()
 })
 </script>
 

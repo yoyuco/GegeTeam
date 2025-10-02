@@ -25,7 +25,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
-const customers = ref<any[]>([])
+interface Customer {
+  id: string
+  name: string
+  email: string
+  created_at?: string
+}
+
+const customers = ref<Customer[]>([])
 const form = ref({ name: '', email: '' })
 async function load() {
   const { data } = await supabase
