@@ -13,4 +13,15 @@ export const supabase = createClient(url, anon, {
   global: {
     headers: { 'x-application-name': 'gegeteam' },
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 })
+
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(window as any).supabase = supabase
+}

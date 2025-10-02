@@ -62,8 +62,8 @@
         />
         <div class="flex items-center gap-2">
           <n-button size="small" tertiary @click="resetFilters">Xoá lọc</n-button>
-          <n-button size="small" @click="loadLogs" :loading="loading">Áp dụng</n-button>
-          <n-button size="small" tertiary @click="exportCSV" :disabled="!rows.length">CSV</n-button>
+          <n-button size="small" :loading="loading" @click="loadLogs">Áp dụng</n-button>
+          <n-button size="small" tertiary :disabled="!rows.length" @click="exportCSV">CSV</n-button>
         </div>
         <div class="ml-auto text-xs text-neutral-500">Tổng: {{ totalLabel }}</div>
       </div>
@@ -187,11 +187,11 @@ type LogRow = {
   entity: string | null
   table_name: string | null
   op: 'INSERT' | 'UPDATE' | 'DELETE' | string
-  pk: any
-  diff: any
-  row_old: any
-  row_new: any
-  ctx: any
+  pk: Record<string, unknown> | null
+  diff: Record<string, unknown> | null
+  row_old: Record<string, unknown> | null
+  row_new: Record<string, unknown> | null
+  ctx: Record<string, unknown> | null
 }
 
 const rows = ref<LogRow[]>([])
@@ -292,11 +292,12 @@ async function loadLogs() {
     const { data, error, count } = await q
     if (error) throw error
 
-    rows.value = (data || []) as any
+    rows.value = (data || []) as LogRow[]
     total.value = count ?? null
-  } catch (e: any) {
-    console.error('[loadLogs]', e)
-    message.error(e?.message || 'Không tải được audit logs')
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('[loadLogs]', error)
+    message.error(error?.message || 'Không tải được audit logs')
   } finally {
     loading.value = false
   }
@@ -324,7 +325,7 @@ function dt(iso: string) {
     return iso
   }
 }
-function opTag(op: any) {
+function opTag(op: string | null | undefined) {
   const v = String(op || '').toUpperCase()
   if (v === 'INSERT') return { label: 'INSERT', type: 'success' as const }
   if (v === 'UPDATE') return { label: 'UPDATE', type: 'warning' as const }
@@ -381,7 +382,7 @@ function safeClip(s: string, n = 220) {
   if (!s) return '—'
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
-function pretty(v: any) {
+function pretty(v: unknown) {
   try {
     return JSON.stringify(v ?? null, null, 2)
   } catch {

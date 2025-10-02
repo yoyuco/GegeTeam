@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm run lint:*)",
+      "Bash(pnpm eslint:*)",
+      "Bash(npm run lint)",
+      "Bash(supabase db:*)",
+      "Bash(supabase migration repair:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx eslint:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
