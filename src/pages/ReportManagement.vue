@@ -38,7 +38,9 @@
                     selectedReport.report_description
                   }}</n-descriptions-item>
                   <n-descriptions-item label="Hạng mục bị báo cáo">
-                    <code>{{ paramsLabel(selectedReport.reported_item) }}</code>
+                    <code>{{
+                      selectedReport.reported_item ? paramsLabel(selectedReport.reported_item) : ''
+                    }}</code>
                   </n-descriptions-item>
                 </n-descriptions>
                 <div v-if="selectedReport.report_proof_urls?.length" class="mt-4">
@@ -127,7 +129,7 @@
                   <template
                     v-if="
                       ['MATERIALS', 'MASTERWORKING', 'NIGHTMARE'].includes(
-                        selectedReport.reported_item?.kind_code
+                        selectedReport.reported_item?.kind_code || ''
                       )
                     "
                   >
@@ -157,7 +159,7 @@
                       />
                     </n-form-item>
                     <div
-                      v-if="itemEditForm.params.ga_code?.includes('REQUEST')"
+                      v-if="String(itemEditForm.params.ga_code || '').includes('REQUEST')"
                       class="space-y-2 border p-3 rounded-md"
                     ></div>
                   </template>
@@ -173,7 +175,7 @@
                     Hành động này sẽ thiết lập lại tiến độ của hạng mục về giá trị "Tiến độ đúng là"
                     và vô hiệu hóa lịch sử làm việc cũ.
                   </n-alert>
-                  <n-button type="primary" block @click="handleSaveItemChanges" class="mt-4"
+                  <n-button type="primary" block class="mt-4" @click="handleSaveItemChanges"
                     >Chuẩn hóa Tiến độ</n-button
                   >
                 </n-form>
@@ -205,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h, reactive, computed, watch } from 'vue'
+import { ref, onMounted, h, reactive, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import {
@@ -225,7 +227,6 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NDatePicker,
   NInputNumber,
   NSelect,
   NAlert,
@@ -251,14 +252,21 @@ type ReportRow = {
   login_id: string | null
   login_pwd: string | null
   service_type: string | null
-  reported_item: any
+  reported_item: {
+    id: string
+    kind_code: string
+    plan_qty: number
+    done_qty: number
+    params: Record<string, unknown>
+  } | null
 }
 
 const itemEditForm = reactive({
   plan_qty: null as number | null,
   corrected_end_value: null as number | null,
   correction_reason: '',
-  params: {} as any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params: {} as Record<string, any>,
 })
 
 const auth = useAuth()
@@ -294,8 +302,9 @@ async function fetchReports() {
     const { data, error } = await supabase.rpc('get_service_reports_v1', { p_status: 'new' })
     if (error) throw error
     reports.value = data || []
-  } catch (e: any) {
-    message.error(e.message || 'Không thể tải danh sách báo cáo.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Không thể tải danh sách báo cáo.')
   } finally {
     loading.value = false
   }
@@ -329,7 +338,10 @@ async function loadAttributeMap() {
     attributes.forEach((attr) => newAttrMap.set(attr.code, { name: attr.name, type: attr.type }))
     attributeMap.value = newAttrMap
 
-    const toSelectOption = (attr: any) => ({ label: attr.name, value: attr.code })
+    const toSelectOption = (attr: { name: string; code: string }) => ({
+      label: attr.name,
+      value: attr.code,
+    })
     const sortFn = (a: SelectOption, b: SelectOption) =>
       String(a.label).localeCompare(String(b.label))
 
@@ -363,8 +375,9 @@ async function loadAttributeMap() {
       newMythicStatsMap.set(mythicAttr.code, statsOptions.sort(sortFn))
     }
     mythicStatsMap.value = newMythicStatsMap
-  } catch (e: any) {
-    message.error('Không tải được danh mục attributes: ' + e.message)
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error('Không tải được danh mục attributes: ' + error.message)
   }
 }
 
@@ -383,18 +396,13 @@ function openDrawer(row: ReportRow) {
 
     // Khởi tạo mảng stats cho Mythic nếu chưa có
     if (item.kind_code === 'MYTHIC' && !itemEditForm.params.stats) {
-      itemEditForm.params.stats = [null, null, null]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      itemEditForm.params.stats = [null, null, null] as any
     }
   }
 
   drawer.open = true
 }
-
-const currentMythicStatOptions = computed(() => {
-  const itemCode = itemEditForm.params.item_code
-  if (!itemCode) return []
-  return mythicStatsMap.value.get(itemCode) || []
-})
 
 async function handleSaveItemChanges() {
   if (!selectedReport.value?.reported_item?.id) return
@@ -419,8 +427,9 @@ async function handleSaveItemChanges() {
     if (error) throw error
     message.success('Đã chuẩn hóa tiến độ hạng mục thành công!')
     await fetchReports() // Tải lại danh sách để cập nhật
-  } catch (e: any) {
-    message.error(e.message || 'Lỗi khi chuẩn hóa tiến độ.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Lỗi khi chuẩn hóa tiến độ.')
   } finally {
     isSubmitting.value = false
   }
@@ -446,8 +455,9 @@ function handleResolveReport() {
         message.success('Đã giải quyết báo cáo!')
         drawer.open = false
         await fetchReports() // Refresh the list
-      } catch (e: any) {
-        message.error(e.message || 'Lỗi khi giải quyết báo cáo.')
+      } catch (e: unknown) {
+        const error = e as Error
+        message.error(error.message || 'Lỗi khi giải quyết báo cáo.')
       } finally {
         isSubmitting.value = false
       }
@@ -456,7 +466,7 @@ function handleResolveReport() {
 }
 
 // Helper to display item label (can be copied from ServiceBoosting)
-function paramsLabel(it: any): string {
+function paramsLabel(it: { kind_code?: string; params?: Record<string, unknown> }): string {
   const k = (it.kind_code || '').toUpperCase()
   const p = it.params || {}
   const getName = (code: string) => attributeMap.value.get(code)?.name || code
@@ -467,19 +477,19 @@ function paramsLabel(it: any): string {
       mainLabel = `${p.mode === 'paragon' ? 'Paragon' : 'Level'} ${p.start}→${p.end}`
       break
     case 'BOSS':
-      mainLabel = `${p.boss_label || getName(p.boss_code)}`
+      mainLabel = `${p.boss_label || getName(String(p.boss_code || ''))}`
       break
     case 'THE_PIT':
-      mainLabel = `${p.tier_label || getName(p.tier_code)}`
+      mainLabel = `${p.tier_label || getName(String(p.tier_code || ''))}`
       break
     case 'MATERIALS':
-      mainLabel = `${getName(p.attribute_code)}`
+      mainLabel = `${getName(String(p.attribute_code || ''))}`
       break
     case 'MYTHIC':
-      mainLabel = `${p.item_label || getName(p.item_code)}`
+      mainLabel = `${p.item_label || getName(String(p.item_code || ''))}`
       break
     case 'GENERIC':
-      mainLabel = p.desc || p.note || 'Generic'
+      mainLabel = String(p.desc || p.note || 'Generic')
       break
     default:
       mainLabel = JSON.stringify(p)
@@ -500,7 +510,7 @@ const columns: DataTableColumns<ReportRow> = [
   {
     title: 'Hạng mục',
     key: 'reported_item',
-    render: (row) => h('code', paramsLabel(row.reported_item)),
+    render: (row) => h('code', row.reported_item ? paramsLabel(row.reported_item) : ''),
   },
   {
     title: 'Hành động',

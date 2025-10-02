@@ -15,7 +15,7 @@
           clearable
           style="width: 280px"
         />
-        <n-button tertiary @click="reload" :loading="loading">Làm mới</n-button>
+        <n-button tertiary :loading="loading" @click="reload">Làm mới</n-button>
       </div>
     </div>
 
@@ -89,7 +89,7 @@
             />
           </n-form-item>
         </div>
-        <n-button block tertiary @click="addAssignment" :disabled="!modal.newAssignment.role_id"
+        <n-button block tertiary :disabled="!modal.newAssignment.role_id" @click="addAssignment"
           >Thêm</n-button
         >
 
@@ -217,7 +217,9 @@ const modal = reactive({
   },
 })
 
-const roleDisplay: Record<string, { icon: any; color: string }> = {
+import type { Component } from 'vue'
+
+const roleDisplay: Record<string, { icon: Component; color: string }> = {
   admin: { icon: DiamondOutline, color: '#d946ef' },
   mod: { icon: ShieldCheckmarkOutline, color: '#f97316' },
   manager: { icon: ShieldCheckmarkOutline, color: '#f97316' },
@@ -333,8 +335,9 @@ async function reload() {
     const { data, error } = await supabase.rpc('admin_get_all_users')
     if (error) throw error
     rows.value = data || []
-  } catch (e: any) {
-    message.error(e.message ?? 'Không tải được danh sách nhân viên.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message ?? 'Không tải được danh sách nhân viên.')
   } finally {
     loading.value = false
   }
@@ -383,8 +386,9 @@ async function saveStatus() {
     message.success('Cập nhật trạng thái thành công!')
     statusModal.open = false
     await reload()
-  } catch (e: any) {
-    message.error(e.message ?? 'Lỗi khi lưu trạng thái.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message ?? 'Lỗi khi lưu trạng thái.')
   } finally {
     statusModal.saving = false
   }
@@ -418,7 +422,7 @@ function addAssignment() {
     return
   }
 
-  modal.currentAssignments.push(newAsg as any)
+  modal.currentAssignments.push(newAsg as Assignment)
 
   // Reset form
   modal.newAssignment.role_id = null
@@ -452,8 +456,9 @@ async function saveAssignments() {
     message.success('Cập nhật phân quyền thành công!')
     modal.open = false
     await reload()
-  } catch (e: any) {
-    message.error(e.message ?? 'Lỗi khi lưu phân quyền.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message ?? 'Lỗi khi lưu phân quyền.')
   } finally {
     modal.saving = false
   }

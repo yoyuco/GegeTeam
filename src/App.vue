@@ -3,7 +3,7 @@
     <n-dialog-provider>
       <n-message-provider>
         <div class="min-h-screen flex bg-neutral-100/50 text-neutral-900">
-          <aside class="w-64 flex flex-col bg-white border-r border-neutral-200/80 p-4">
+          <aside class="sidebar-fixed">
             <div class="flex items-center gap-3 mb-6 px-2">
               <img src="@/assets/gege_icon.png" alt="Gege Team Logo" class="h-8 w-8" />
               <span class="text-lg font-bold text-neutral-800">Gege Team</span>
@@ -107,7 +107,7 @@
             </div>
           </aside>
 
-          <main class="flex-1 p-4">
+          <main class="main-content">
             <RouterView />
           </main>
         </div>
@@ -143,12 +143,13 @@ import {
   HourglassOutline,
   NewspaperOutline,
 } from '@vicons/ionicons5'
+import type { Component } from 'vue'
 
 const router = useRouter()
 const auth = useAuth()
 const { message } = createDiscreteApi(['message'])
 
-const roleDisplay: Record<string, { icon: any; color: string }> = {
+const roleDisplay: Record<string, { icon: Component; color: string }> = {
   admin: { icon: DiamondOutline, color: '#d946ef' },
   mod: { icon: ShieldCheckmarkOutline, color: '#f97316' },
   manager: { icon: ShieldCheckmarkOutline, color: '#f97316' },
@@ -171,13 +172,34 @@ const logout = async () => {
     message.success('Đã đăng xuất')
     // THÊM DÒNG CHUYỂN TRANG VÀO ĐÂY
     router.replace('/login')
-  } catch (e: any) {
-    message.error(e?.message ?? 'Đăng xuất thất bại')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error?.message ?? 'Đăng xuất thất bại')
   }
 }
 </script>
 
 <style scoped>
+.sidebar-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 16rem; /* 256px = w-64 */
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  border-right: 1px solid rgba(229, 229, 229, 0.8);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.main-content {
+  margin-left: 16rem; /* Same as sidebar width */
+  flex: 1;
+  padding: 1rem;
+}
+
 .menu-item {
   display: flex;
   align-items: center;

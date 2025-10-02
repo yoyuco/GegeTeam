@@ -52,9 +52,9 @@
             </div>
             <n-button
               type="primary"
-              @click="savePermissions"
               :loading="saving"
               :disabled="!hasChanges"
+              @click="savePermissions"
             >
               Lưu thay đổi cho vai trò {{ selectedRoleName }}
             </n-button>
@@ -134,8 +134,9 @@ async function loadData() {
     roles.value = data.roles || []
     permissions.value = data.permissions || []
     assignments.value = data.assignments || []
-  } catch (e: any) {
-    message.error(e.message || 'Không thể tải dữ liệu phân quyền.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Không thể tải dữ liệu phân quyền.')
   } finally {
     loading.value = false
   }
@@ -165,8 +166,9 @@ async function savePermissions() {
     await loadData()
     // Cập nhật lại initial state sau khi lưu
     initialPermissionIds.value = [...selectedPermissionIds.value]
-  } catch (e: any) {
-    message.error(e.message || 'Lưu thất bại.')
+  } catch (e: unknown) {
+    const error = e as Error
+    message.error(error.message || 'Lưu thất bại.')
   } finally {
     saving.value = false
   }

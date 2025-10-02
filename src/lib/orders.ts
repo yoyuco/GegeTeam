@@ -1,7 +1,7 @@
 // src/lib/orders.ts
 import { supabase } from '@/lib/supabase'
 import type { CoreForm, SubServiceRow } from '@/types/service'
-import { type LabelMaps, buildServiceDesc, mapRowsToRpcItems } from '@/lib/service-desc'
+import { buildServiceDesc, mapRowsToRpcItems } from '@/lib/service-desc'
 
 export type CreateOrderResult = { order_id: string; line_id: string }
 
@@ -17,7 +17,7 @@ function toNumberOr(v: unknown, fallback: number): number {
 function toIsoOrNull(v?: string | number | Date | null): string | null {
   if (v === null || v === undefined || v === '') return null
   try {
-    const d = typeof v === 'number' ? new Date(v) : new Date(v as any)
+    const d = typeof v === 'number' ? new Date(v) : new Date(v)
     return isNaN(d.getTime()) ? null : d.toISOString()
   } catch {
     return null
@@ -29,8 +29,7 @@ function toIsoOrNull(v?: string | number | Date | null): string | null {
  */
 export async function createServiceOrder(
   core: CoreForm,
-  rows: SubServiceRow[],
-  labelMaps?: LabelMaps
+  rows: SubServiceRow[]
 ): Promise<CreateOrderResult> {
   // Lấy uid
   const { data: authData, error: authErr } = await supabase.auth.getUser()
@@ -43,8 +42,8 @@ export async function createServiceOrder(
   const price = toNumberOr(core.price, 0)
   const deadlineIso = toIsoOrNull(core.deadline)
   const pkg = String(core.package_type || 'BASIC').toUpperCase() as CoreForm['package_type']
-  const service_desc = buildServiceDesc(rows, labelMaps)
-  const p_sub_rows = mapRowsToRpcItems(rows, labelMaps ?? ({} as any)) // <-- CHUẨN cho RPC
+  const service_desc = buildServiceDesc(rows)
+  const p_sub_rows = mapRowsToRpcItems(rows) // <-- CHUẨN cho RPC
 
   // Payload RPC
   const payload = {

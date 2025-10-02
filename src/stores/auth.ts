@@ -97,7 +97,6 @@ export const useAuth = defineStore('auth', {
         this.assignments = []
       } else {
         const payload = contextData as AuthContextPayload
-        this.assignments = payload?.roles || []
 
         // 1. Lưu assignments để hiển thị UI
         this.assignments = payload?.roles || []

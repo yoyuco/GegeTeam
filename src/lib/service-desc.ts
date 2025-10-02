@@ -63,13 +63,14 @@ export function makeLabelMapsFromOptions(opts: LabelOptions): LabelMaps {
 // nếu file này đã có 2 hàm đó, khối dưới KHÔNG gây xung đột vì tên trùng sẽ bị chặn bởi khai báo trước đó.
 // nếu chưa có, khối dưới cung cấp triển khai tối thiểu đủ cho build/preview chạy.
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type _SvcRow = any
 export type _LabelMaps = {
   [k: string]: Map<string, string> | undefined
 }
 
 /** gộp mô tả đơn giản: "<kind>: <json>" – đủ để xem preview */
-export function buildServiceDesc(rows: _SvcRow[] = [], _lm?: _LabelMaps): string {
+export function buildServiceDesc(rows: _SvcRow[] = []): string {
   try {
     if (!Array.isArray(rows) || rows.length === 0) return ''
     const segs: string[] = []
@@ -84,7 +85,8 @@ export function buildServiceDesc(rows: _SvcRow[] = [], _lm?: _LabelMaps): string
 }
 
 /** map tối thiểu sang payload RPC; giữ nguyên dữ liệu đầu vào */
-export function mapRowsToRpcItems(rows: _SvcRow[] = [], _lm?: _LabelMaps) {
+export function mapRowsToRpcItems(rows: _SvcRow[] = []) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (rows || []).map((r: any) => ({
     kind_code: String((r && r.kind) || 'GENERIC').toUpperCase(),
     params: r,

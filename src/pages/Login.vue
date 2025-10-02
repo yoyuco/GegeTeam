@@ -31,9 +31,9 @@
 
         <n-form
           v-if="tab === 'signin'"
+          ref="formSignin"
           :model="signin"
           :rules="rulesSignin"
-          ref="formSignin"
           size="large"
           label-placement="top"
           @keyup.enter.prevent="handleSignin"
@@ -49,8 +49,8 @@
 
           <n-form-item label="Mật khẩu" path="password">
             <n-input
-              :type="showPassword ? 'text' : 'password'"
               v-model:value="signin.password"
+              :type="showPassword ? 'text' : 'password'"
               placeholder="********"
               :input-props="{ autocomplete: 'current-password' }"
             >
@@ -68,7 +68,7 @@
 
           <div class="flex items-center justify-between mb-3">
             <label class="inline-flex items-center gap-2 text-xs text-neutral-600">
-              <input type="checkbox" v-model="rememberEmail" />
+              <input v-model="rememberEmail" type="checkbox" />
               Ghi nhớ email
             </label>
 
@@ -81,7 +81,7 @@
             </button>
           </div>
 
-          <n-button type="primary" block :loading="loading" @click="handleSignin" class="mb-3">
+          <n-button type="primary" block :loading="loading" class="mb-3" @click="handleSignin">
             Đăng nhập
           </n-button>
 
@@ -116,9 +116,9 @@
 
         <n-form
           v-else
+          ref="formSignup"
           :model="signup"
           :rules="rulesSignup"
-          ref="formSignup"
           size="large"
           label-placement="top"
           @keyup.enter.prevent="handleSignup"
@@ -143,8 +143,8 @@
 
           <n-form-item label="Mật khẩu" path="password">
             <n-input
-              :type="showPassword ? 'text' : 'password'"
               v-model:value="signup.password"
+              :type="showPassword ? 'text' : 'password'"
               placeholder="Ít nhất 6 ký tự"
               :input-props="{ autocomplete: 'new-password' }"
             >
@@ -167,7 +167,7 @@
       </n-card>
 
       <div class="text-center mt-4">
-        <n-button text @click="toHome" v-if="auth.user"> ← Trở về Dashboard </n-button>
+        <n-button v-if="auth.user" text @click="toHome"> ← Trở về Dashboard </n-button>
       </div>
     </div>
   </div>
@@ -225,7 +225,9 @@ onMounted(() => {
     if (rememberEmail.value) {
       signin.value.email = localStorage.getItem(LS_KEY_EMAIL) || ''
     }
-  } catch {}
+  } catch {
+    // Empty catch block - localStorage access may fail in some environments
+  }
 })
 
 function toHome() {
@@ -248,14 +250,17 @@ async function handleSignin() {
         localStorage.removeItem(LS_KEY_REMEMBER)
         localStorage.removeItem(LS_KEY_EMAIL)
       }
-    } catch {}
+    } catch {
+      // Empty catch block - localStorage access may fail in some environments
+    }
 
     message.success('Đăng nhập thành công!')
     const to = (route.query.redirect as string) || '/'
     router.replace(to)
-  } catch (err: any) {
-    console.error(err)
-    message.error(err?.message || 'Không thể đăng nhập')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(error)
+    message.error(error?.message || 'Không thể đăng nhập')
   } finally {
     loading.value = false
   }
@@ -267,7 +272,7 @@ async function handleSignup() {
   try {
     const displayName =
       signup.value.displayName?.trim() || signup.value.email.trim().split('@')[0] || 'User'
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: signup.value.email.trim(),
       password: signup.value.password,
       options: {
@@ -279,9 +284,10 @@ async function handleSignup() {
     message.success('Tạo tài khoản thành công! Vui lòng kiểm tra email để xác minh.')
     tab.value = 'signin'
     signin.value.email = signup.value.email
-  } catch (err: any) {
-    console.error(err)
-    message.error(err?.message || 'Không thể đăng ký')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(error)
+    message.error(error?.message || 'Không thể đăng ký')
   } finally {
     loading.value = false
   }
@@ -296,9 +302,10 @@ async function oauth(provider: Provider) {
       options: { redirectTo },
     })
     if (error) throw error
-  } catch (err: any) {
-    console.error(err)
-    message.error(err?.message || 'Không thể đăng nhập với OAuth')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(error)
+    message.error(error?.message || 'Không thể đăng nhập với OAuth')
   } finally {
     loading.value = false
   }
@@ -318,9 +325,10 @@ async function resetPassword() {
     })
     if (error) throw error
     message.success('Đã gửi email đặt lại mật khẩu! Vui lòng kiểm tra hộp thư của bạn.')
-  } catch (err: any) {
-    console.error(err)
-    message.error(err?.message || 'Không thể gửi email đặt lại mật khẩu')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(error)
+    message.error(error?.message || 'Không thể gửi email đặt lại mật khẩu')
   } finally {
     loading.value = false // Dừng loading
   }
