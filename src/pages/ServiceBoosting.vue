@@ -1477,9 +1477,9 @@ async function loadFilterOptions() {
         value: c,
       }))
 
-      // Map service types
+      // Map service types - remove "Service-" prefix for display
       serviceTypeOptions.value = (options.service_types || []).map((t: string) => ({
-        label: t,
+        label: t.replace(/^Service-/i, ''),
         value: t,
       }))
 
@@ -1816,11 +1816,12 @@ const columns: DataTableColumns<OrderRow> = [
     align: 'center',
     titleAlign: 'center',
     render: (row: OrderRow) => {
-      const typeIsPilot = String(row.service_type || '').toLowerCase() === 'pilot'
+      const displayType = (row.service_type || '').replace(/^Service-/i, '')
+      const typeIsPilot = displayType.toLowerCase() === 'pilot'
       return h(
         NTag,
         { size: 'small', bordered: false, type: typeIsPilot ? 'warning' : 'primary' },
-        { default: () => row.service_type || 'N/A' }
+        { default: () => displayType || 'N/A' }
       )
     },
   },
