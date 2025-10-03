@@ -1710,8 +1710,11 @@ function formatDeadline(
   if (!endTs) return { text: '—', color: 'default' as const }
 
   const isSelfplay = serviceType === 'Selfplay'
-  if (isSelfplay && (status === 'new' || status === 'paused_selfplay')) {
-    const referenceTs = status === 'paused_selfplay' && pausedAt ? toTs(pausedAt) : startTs
+  if (isSelfplay && (status === 'new' || status === 'paused_selfplay' || status === 'pending_completion')) {
+    const referenceTs =
+      status === 'paused_selfplay' && pausedAt ? toTs(pausedAt) :
+      status === 'pending_completion' && pausedAt ? toTs(pausedAt) :
+      startTs
 
     if (referenceTs) {
       const remainingMs = endTs - referenceTs
@@ -1729,13 +1732,17 @@ function formatDeadline(
       if (status === 'paused_selfplay') {
         return { text: `Tạm dừng (còn ${timeString})`, color: 'info' as const }
       }
+      if (status === 'pending_completion') {
+        return { text: `Chờ duyệt (còn ${timeString})`, color: 'warning' as const }
+      }
       return { text: `Chờ (còn ${timeString})`, color: 'default' as const }
     }
   }
 
   // Logic cho các trạng thái còn lại giữ nguyên
   if (status === 'completed') {
-    const completionTs = toTs(updatedAt) ?? nowMs
+    // Ưu tiên paused_at (thời điểm dừng deadline), fallback về updatedAt
+    const completionTs = toTs(pausedAt) ?? toTs(updatedAt) ?? nowMs
     const diffMs = endTs - completionTs
     const absDiffMs = Math.abs(diffMs)
 
