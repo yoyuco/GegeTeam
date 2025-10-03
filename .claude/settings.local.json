@@ -10,7 +10,20 @@
       "Bash(npx eslint:*)",
       "Bash(pnpm lint:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase link:*)",
+      "Bash(supabase projects:*)",
+      "Bash(cat:*)",
+      "Bash(supabase logout:*)",
+      "Bash(where psql)",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres.fvgjmfytzdnrdlluktdx:Yoyuco2214!@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres\" -f supabase/schema_prod_full.sql)",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214!@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -f supabase/schema_prod_full.sql)",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214!@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -c \"SELECT routine_name FROM information_schema.routines WHERE routine_schema = ''public'' AND routine_name = ''create_service_order_v1'';\")",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214!@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -c \"SELECT extname FROM pg_extension WHERE extname IN (''pgsodium'', ''btree_gin'', ''pg_trgm'');\")",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214!@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -c \"SELECT schema_name FROM information_schema.schemata WHERE schema_name = ''reporting'';\")",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214Y@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -c \"\\df+ get_boosting_orders_v3\")",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe\" \"postgresql://postgres:Yoyuco2214Y@db.fvgjmfytzdnrdlluktdx.supabase.co:5432/postgres\" -c \"SELECT pg_get_functiondef(''public.get_boosting_orders_v3''::regproc);\" -t)"
     ],
     "deny": [],
     "ask": []
