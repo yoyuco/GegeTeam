@@ -1454,38 +1454,51 @@ const isOrderFinalized = computed(() => {
   return detail.status === 'completed' || detail.status === 'cancelled'
 })
 
-//Lọc dịch vụ
-const statusOptions = computed(() => {
-  const allStatuses = [...new Set(rows.value.map((r) => r.status))]
-  return allStatuses.map((s) => ({
-    label: statusView(s).label,
-    value: s,
-  }))
-})
+//Lọc dịch vụ - Load từ database thay vì từ rows hiện tại
+const statusOptions = ref<SelectOption[]>([])
+const channelOptions = ref<SelectOption[]>([])
+const packageTypeOptions = ref<SelectOption[]>([])
+const serviceTypeOptions = ref<SelectOption[]>([])
 
-const channelOptions = computed(() => {
-  const allChannels = [...new Set(rows.value.map((r) => r.channel_code).filter(Boolean))]
-  return allChannels.map((c) => ({
-    label: c,
-    value: c,
-  }))
-})
+// Load filter options from database
+async function loadFilterOptions() {
+  try {
+    const { data, error } = await supabase.rpc('get_boosting_filter_options')
+    if (error) {
+      console.error('Error loading filter options:', error)
+      return
+    }
+    if (data && data.length > 0) {
+      const options = data[0]
 
-const packageTypeOptions = computed(() => {
-  const allTypes = [...new Set(rows.value.map((r) => r.package_type))]
-  return allTypes.map((t) => ({
-    label: pkgTypeTag(t).label,
-    value: t,
-  }))
-})
+      // Map channels
+      channelOptions.value = (options.channels || []).map((c: string) => ({
+        label: c,
+        value: c,
+      }))
 
-const serviceTypeOptions = computed(() => {
-  const allTypes = [...new Set(rows.value.map((r) => r.service_type).filter(Boolean))]
-  return allTypes.map((t) => ({
-    label: t,
-    value: t,
-  }))
-})
+      // Map service types - remove "Service-" prefix for display
+      serviceTypeOptions.value = (options.service_types || []).map((t: string) => ({
+        label: t.replace(/^Service-/i, ''),
+        value: t,
+      }))
+
+      // Map package types
+      packageTypeOptions.value = (options.package_types || []).map((t: string) => ({
+        label: pkgTypeTag(t).label,
+        value: t,
+      }))
+
+      // Map statuses
+      statusOptions.value = (options.statuses || []).map((s: string) => ({
+        label: statusView(s).label,
+        value: s,
+      }))
+    }
+  } catch (err) {
+    console.error('Error loading filter options:', err)
+  }
+}
 
 const deliveryStatusOptions = [
   { label: 'Đã trả đơn', value: 'delivered' },
@@ -1803,11 +1816,12 @@ const columns: DataTableColumns<OrderRow> = [
     align: 'center',
     titleAlign: 'center',
     render: (row: OrderRow) => {
-      const typeIsPilot = String(row.service_type || '').toLowerCase() === 'pilot'
+      const displayType = (row.service_type || '').replace(/^Service-/i, '')
+      const typeIsPilot = displayType.toLowerCase() === 'pilot'
       return h(
         NTag,
         { size: 'small', bordered: false, type: typeIsPilot ? 'warning' : 'primary' },
-        { default: () => row.service_type || 'N/A' }
+        { default: () => displayType || 'N/A' }
       )
     },
   },
@@ -3462,6 +3476,7 @@ function stopBackgroundPoll() {
 
 onMounted(() => {
   loadAttributeMap()
+  loadFilterOptions()
   startClock()
   loadOrders()
   setupRealtimeSubscriptions()

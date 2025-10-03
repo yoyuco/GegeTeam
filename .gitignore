@@ -48,4 +48,4 @@ supabase/.temp
 # Migration scripts
 config_data-backup.json
 convert_json_to_sql.py
-data_insert.sql
+data_insert.sql.claude/settings.local.json
