@@ -118,3 +118,4 @@
 ### Kết luận
 
 GegeTeam giúp **tổ chức vận hành trơn tru, giảm rủi ro, tăng tốc độ và minh bạch**, đồng thời cung cấp **bức tranh tài chính rõ ràng** để các lãnh đạo ra quyết định nhanh và chính xác.ss
+# Force rebuild
