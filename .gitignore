@@ -49,3 +49,6 @@ supabase/.temp
 config_data-backup.json
 convert_json_to_sql.py
 data_insert.sql.claude/settings.local.json
+
+# Claude Code temp files
+.claude/
