@@ -1,250 +1,206 @@
-# Contributing Guidelines
+# Contributing Guide
 
-Hướng dẫn quy trình làm việc với Git cho team GegeTeam.
-
-## 📋 Git Flow Strategy
-
-```
-main (production)
-  ↑
-develop (staging)
-  ↑
-feature/*, fix/*, hotfix/*
-```
-
-### Branch Types
-
-- **`main`**: Nhánh production, chỉ chứa code đã release
-- **`develop`**: Nhánh staging, tích hợp tất cả features mới
-- **`feature/*`**: Nhánh phát triển tính năng mới
-- **`fix/*`**: Nhánh sửa lỗi thông thường
-- **`hotfix/*`**: Nhánh sửa lỗi khẩn cấp trên production
+Tài liệu này mô tả **cách làm việc chuẩn** cho repo, nhằm tránh kẹt PR/CI (đặc biệt với Vercel Preview) và xử lý migratons của Supabase.
 
 ---
 
-## 🚀 Quy trình làm việc chuẩn
+## 1) Nhánh & vai trò
 
-### 1. Bắt đầu feature/fix mới
+- **main**: production. lịch sử **tuyến tính**. **Squash & merge only**.
+- **develop**: nhánh tích hợp. **Cho phép merge commit** (để đồng bộ `main → develop`).
+- Nhánh làm việc: `feature/*`, `fix/*`, `chore/*`, `docs/*`, …
 
-```bash
-# Checkout develop và cập nhật
-git checkout develop
-git pull origin develop
-
-# Tạo nhánh mới
-git checkout -b feature/ten-tinh-nang
-# hoặc
-git checkout -b fix/ten-loi
-```
-
-### 2. Làm việc và commit
-
-```bash
-# Làm việc với code...
-
-# Kiểm tra code
-pnpm lint
-pnpm type-check  # Nếu có
-
-# Add và commit
-git add .
-git commit -m "feat: mô tả ngắn gọn tính năng"
-
-# Push lên remote
-git push -u origin feature/ten-tinh-nang
-```
-
-### 3. Tạo Pull Request
-
-1. Truy cập: https://github.com/yoyuco/GegeTeam/pulls
-2. Click **New pull request**
-3. Chọn: `base: develop` ← `compare: feature/ten-tinh-nang`
-4. Điền title và description:
-   ```
-   Title: feat: thêm filter UI cho ServiceBoosting
-
-   Description:
-   ## Thay đổi
-   - Loại bỏ labels khỏi filter form
-   - Thêm width cố định cho inputs
-   - Căn giữa các elements
-
-   ## Test plan
-   - [ ] Kiểm tra filter hiển thị đúng
-   - [ ] Test trên Chrome/Firefox
-   - [ ] Chạy pnpm lint
-   ```
-5. Assign reviewers (nếu có)
-6. Click **Create pull request**
-
-### 4. Review và Merge
-
-- **Reviewer**: Review code, comment, approve
-- **Author**: Fix comments nếu có
-- Sau khi approved: **Merge pull request** vào `develop`
-- **Xóa nhánh** sau khi merge
-
-### 5. Deploy lên Production
-
-```bash
-# Sau khi test kỹ trên develop
-git checkout main
-git pull origin main
-git merge develop
-
-# Tag version
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin main
-git push origin v1.0.0
-```
+> **Không push trực tiếp** vào `main`/`develop`. Mọi thay đổi đều qua Pull Request (PR).
 
 ---
 
-## 📝 Commit Message Convention
+## 2) Quy tắc merge theo nhánh
 
-Sử dụng [Conventional Commits](https://www.conventionalcommits.org/):
+### main
 
-```
-<type>: <description>
+- Allowed: **Squash & merge** (duy nhất).
+- Bật: **Require linear history**, **Require PR**, **Require status checks**, **Require up-to-date**, **Block force pushes**, **Require deployments to succeed (Preview)**.
+- Required checks: **Vercel** (đủ), _không bắt buộc_ “Vercel Preview Comments”.
 
-[optional body]
+### develop
 
-[optional footer]
-```
-
-### Types
-
-- **feat**: Tính năng mới
-- **fix**: Sửa lỗi
-- **docs**: Cập nhật documentation
-- **style**: Format code (không ảnh hưởng logic)
-- **refactor**: Refactor code
-- **test**: Thêm/sửa tests
-- **chore**: Công việc maintenance (update deps, config...)
-
-### Ví dụ
-
-```bash
-git commit -m "feat: add user authentication"
-git commit -m "fix: resolve null pointer in order processing"
-git commit -m "docs: update API documentation"
-git commit -m "refactor: simplify filter logic"
-```
+- Allowed: **Merge commit**, có thể bật thêm Squash (tùy nhóm).
+- Bật: **Require PR**, **Require status checks**, **Require deployments to succeed (Preview)**, **Block force pushes**.
+- Tắt: **Require linear history** (để có merge-commit khi sync `main → develop`).
+- _Có thể tắt_ “Require branches to be up to date” để giảm kẹt khi review.
 
 ---
 
-## 🔥 Hotfix (Sửa lỗi khẩn cấp)
+## 3) Quy trình làm việc hằng ngày
+
+### 3.1 Tạo tính năng/sửa lỗi
+
+1. Tạo nhánh: `feature/xxx` (hoặc `fix/xxx`, `chore/xxx`).
+2. Commit theo **Conventional Commits**:  
+   `feat: …`, `fix: …`, `chore: …`, `docs: …`
+3. Mở PR **base = develop, compare = feature/xxx**
+   - Chờ checks xanh (Vercel Preview).
+   - Merge: **Squash** hoặc **Create a merge commit** (tùy nhóm; khuyến nghị _Squash_ để gọn lịch sử).
+
+### 3.2 Đồng bộ khi `develop` bị out-of-date so với `main` ⟵ **rất quan trọng**
+
+> Mục tiêu: tạo **merge commit thật** `main → develop` trên **remote**.
+
+1. Mở PR **base = develop, compare = main**
+2. Chọn **Merge pull request (Create a merge commit)** _(không Squash/Rebase)_.
+3. Sau khi merge xong, `develop` đã “nuốt” hết `main`.
+
+### 3.3 Release lên production
+
+1. Mở PR **base = main, compare = develop**.
+2. Đợi checks & Preview xanh.
+3. **Squash & merge**.
+4. (tuỳ chọn) Tag phiên bản: `vX.Y.Z`.
+
+---
+
+## 4) Supabase Migrations (chuẩn hoá)
+
+- Thư mục chuẩn:
+  ```
+  supabase/
+    migrations/            # chỉ giữ baseline/consolidate mới nhất (file .sql gần nhất)
+    migrations_archive/    # toàn bộ migrations cũ
+  ```
+- **Luôn dùng `git mv`** khi di chuyển file để Git nhận rename (tránh “hồi sinh” file cũ sau merge).
+- Không đặt `__init__.py` trong `migrations_archive/`.
+- Tool chỉ nên quét `supabase/migrations/`.
+
+### 4.1 Di chuyển nhanh (PowerShell)
+
+```powershell
+# sửa tên file baseline cần giữ lại (ví dụ: 20251004011427_remote_schema.sql)
+$keep = @("supabase/migrations/20251004011427_remote_schema.sql")
+
+$files = git ls-files supabase/migrations
+foreach ($f in $files) {
+  if ($keep -contains $f) { continue }
+  $leaf = Split-Path $f -Leaf
+  $dest = "supabase/migrations_archive/$leaf"
+  if (Test-Path $dest) { git rm --quiet $f } else { git mv $f $dest }
+}
+git commit -m "chore: move legacy supabase migrations to migrations_archive; keep latest baseline"
+```
+
+_(bash tương đương có thể bổ sung khi cần)._
+
+---
+
+## 5) CI/Preview (Vercel)
+
+- Required check: **Vercel**.
+- Nếu Preview không chạy:
+  - mở tab **Checks** → **Re-run** (nếu có), hoặc
+  - đẩy commit rỗng để trigger:
+    ```bash
+    git commit --allow-empty -m "ci: trigger preview"
+    git push
+    ```
+- Tránh dùng “Vercel Preview Comments” như required check (dễ flake).
+
+---
+
+## 6) Troubleshooting nhanh
+
+### 6.1 “Update branch” bị chặn / “Changes must be made through a pull request”
+
+Repo/ruleset đang cấm push trực tiếp. Hãy **làm PR ngược**:
+
+- PR **base = develop, compare = main** → **Create a merge commit**.
+- Xong quay lại PR chính.
+
+### 6.2 “Merging is blocked: Missing successful active Preview deployment”
+
+Preview chưa chạy/đỏ:
+
+- Mở tab **Checks → Vercel** xem log.
+- Sửa lỗi build hoặc trigger lại CI (commit rỗng như trên).
+
+### 6.3 Kiểm tra develop đã “nuốt” hết main chưa?
 
 ```bash
-# Tạo từ main
-git checkout main
-git pull origin main
-git checkout -b hotfix/critical-bug
+git fetch origin
+git rev-list --left-right --count origin/main...origin/develop
+# Kỳ vọng: 0   N   (bên trái = 0)
+```
 
-# Fix và test
-# ...
+### 6.4 Sơ đồ sync chuẩn
 
-# Merge vào main
-git checkout main
-git merge hotfix/critical-bug
-git push origin main
-
-# Merge về develop
-git checkout develop
-git merge hotfix/critical-bug
-git push origin develop
-
-# Xóa nhánh
-git branch -d hotfix/critical-bug
+```
+(main)  ——(PR squash)—>  main
+  ^                       ^
+  |                       |
+  |        (PR merge-commit)    (khi develop out-of-date)
+  └———— develop  <———————————— main
 ```
 
 ---
 
-## ⚙️ Git Configuration
+## 7) Thiết lập khuyến nghị
 
-### Line Endings (Windows)
-
-```bash
-# Tắt auto CRLF conversion
-git config core.autocrlf false
-
-# Hoặc set global
-git config --global core.autocrlf false
-```
-
-### Editor
-
-```bash
-git config --global core.editor "code --wait"
-```
+- `.gitattributes`
+  ```
+  * text=auto eol=lf
+  *.sql diff
+  ```
+- Commit nhỏ, mô tả rõ; PR có tiêu đề ngắn gọn:  
+  `feat: …`, `fix: …`, `chore: consolidate migrations`, …
+- Không commit secrets; dùng môi trường/Secrets của Vercel/GitHub.
 
 ---
 
-## ✅ Checklist trước khi tạo PR
+## 8) Liên hệ
 
-- [ ] Code chạy không lỗi
-- [ ] `pnpm lint` pass
-- [ ] Đã test thủ công
-- [ ] Commit message rõ ràng
-- [ ] Không commit file không cần thiết (.env, node_modules, ...)
-- [ ] Branch được rebase/merge từ develop mới nhất
+- Chủ repo/Reviewers: @…
+- CI/Deploy: Vercel (project: `gege-team`).
 
----
+### Lệnh làm việc nhanh
 
-## 🚫 Những điều KHÔNG nên làm
+## pre-flight
 
-❌ Commit trực tiếp vào `main` hoặc `develop`
-❌ Force push (`git push -f`) lên shared branches
-❌ Merge nhiều features cùng lúc
-❌ Commit code chưa test
-❌ Commit file có chứa secrets (.env, credentials, ...)
+git fetch origin
+git switch develop
+git pull
+git rev-list --left-right --count origin/main...origin/develop # cần 0 N
 
----
+## nếu ≠ 0: sync main -> develop bằng merge-commit
 
-## 💡 Tips
+git switch -c sync/main-into-develop-$(Get-Date -Format "yyyyMMdd-HHmm") origin/develop
+git merge --no-ff origin/main
 
-### Sync fork với upstream
+# giải conflict nếu có -> git add . ; git commit
 
-```bash
-git remote add upstream https://github.com/yoyuco/GegeTeam.git
-git fetch upstream
-git checkout develop
-git merge upstream/develop
-```
+git push -u origin HEAD
 
-### Squash commits trước khi merge
+# -> mở PR base=develop, compare=sync/... ; Merge pull request (Create a merge commit)
 
-```bash
-# Interactive rebase 3 commits cuối
-git rebase -i HEAD~3
-# Chọn 'squash' cho commits muốn gộp
-```
+## nhánh mới
 
-### Stash changes tạm thời
+git switch develop
+$ts = Get-Date -Format "yyyyMMdd-HHmm"
+git switch -c feature/<slug>-$ts
 
-```bash
-# Lưu changes
-git stash
+## làm việc
 
-# List stashes
-git stash list
+git add -A
+git commit -m "feat: <mô tả>"
+git push -u origin $(git branch --show-current)
 
-# Apply lại
-git stash pop
-```
+## mở PR base=develop ; nếu preview không chạy:
 
----
+git commit --allow-empty -m "ci: trigger preview"
+git push
 
-## 🆘 Cần giúp đỡ?
+## tạm cất (stash) thay đổi rồi làm feature
 
-- Slack: #dev-team
-- Email: dev@gegeteam.com
-- GitHub Issues: https://github.com/yoyuco/GegeTeam/issues
+git stash push -m "wip: contributing" -- CONTRIBUTING.md
 
----
+# bắt đầu nhánh mới
 
-## 📚 Tài liệu tham khảo
-
-- [Git Flow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)
-- [Conventional Commits](https://www.conventionalcommits.org/)
-- [GitHub Flow](https://guides.github.com/introduction/flow/)
+$ts = Get-Date -Format "yyyyMMdd-HHmm"
+git switch -c feature/<slug>-$ts
