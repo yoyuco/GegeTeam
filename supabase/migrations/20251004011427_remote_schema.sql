@@ -631,23 +631,23 @@ BEGIN
     END IF;
 
     -- 6. Tìm hoặc Tạo (Upsert) Product Variant chuẩn
-    IF p_service_type = 'selfplay' THEN
-        v_variant_name := 'Service-Selfplay';
+    IF LOWER(p_service_type) = 'selfplay' THEN
+        v_variant_name := 'Service - Selfplay';
     ELSE
-        v_variant_name := 'Service-Pilot';
+        v_variant_name := 'Service - Pilot';
     END IF;
 
     SELECT id INTO v_product_id FROM public.products WHERE type = 'SERVICE' LIMIT 1;
     IF v_product_id IS NULL THEN
         RAISE EXCEPTION 'Product with type SERVICE not found.';
     END IF;
-    
+
     INSERT INTO public.product_variants (product_id, display_name, price)
     VALUES (v_product_id, v_variant_name, 0)
     ON CONFLICT (product_id, display_name) DO UPDATE SET display_name = EXCLUDED.display_name
     RETURNING id INTO v_variant_id;
-    
-    SELECT id INTO v_service_type_attr_id FROM public.attributes WHERE type = 'SERVICE_TYPE' AND code = (CASE WHEN p_service_type = 'selfplay' THEN 'SELFPAY' ELSE 'PILOT' END);
+
+    SELECT id INTO v_service_type_attr_id FROM public.attributes WHERE type = 'SERVICE_TYPE' AND code = (CASE WHEN LOWER(p_service_type) = 'selfplay' THEN 'SELFPLAY' ELSE 'PILOT' END);
     IF v_service_type_attr_id IS NOT NULL THEN
         INSERT INTO public.product_variant_attributes (variant_id, attribute_id) 
         VALUES (v_variant_id, v_service_type_attr_id)
