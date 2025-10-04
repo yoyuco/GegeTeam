@@ -160,7 +160,18 @@
                 />
               </div>
               <div v-else-if="detail.package_note" class="text-sm text-neutral-500 mt-1">
-                {{ detail.package_note }}
+                <template v-for="(part, idx) in parsePackageNote(detail.package_note)" :key="idx">
+                  <a
+                    v-if="part.isUrl"
+                    :href="part.text"
+                    target="_blank"
+                    class="text-blue-600 hover:text-blue-700 hover:underline font-medium"
+                    style="color: #2563eb"
+                  >
+                    Link
+                  </a>
+                  <span v-else>{{ part.text }}</span>
+                </template>
               </div>
             </div>
           </div>
@@ -169,15 +180,7 @@
             <div class="meta">Mô tả</div>
             <div class="val">
               <template v-if="detail.service_items?.length">
-                <div
-                  v-if="isDescCollapsed"
-                  class="whitespace-pre-line"
-                  v-html="generateServiceDescription(detail.service_items).summaryHtml"
-                ></div>
-                <div
-                  v-else
-                  v-html="generateServiceDescription(detail.service_items).detailHtml"
-                ></div>
+                <ServiceDescription :items="detail.service_items" :collapsed="isDescCollapsed" />
 
                 <n-button
                   text
@@ -356,7 +359,7 @@
                     </div>
                     <div class="cell cell-label">
                       <div class="flex items-center gap-2">
-                        <span v-html="paramsLabel(it)"></span>
+                        <ServiceItemLabel :item="it" :show-progress="true" />
                         <n-tag
                           v-if="rowMap.has(String(it.id))"
                           size="tiny"
@@ -944,7 +947,9 @@
                     :key="output.id"
                     class="p-3 border rounded-lg bg-neutral-50/50"
                   >
-                    <div class="font-medium text-sm mb-2" v-html="paramsLabel(output)"></div>
+                    <div class="font-medium text-sm mb-2">
+                      <ServiceItemLabel :item="output" :show-progress="true" />
+                    </div>
                     <div class="grid grid-cols-2 gap-4 items-start">
                       <div>
                         <div class="text-xs text-neutral-500">Bắt đầu</div>
@@ -1051,7 +1056,17 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  h,
+  ref,
+  reactive,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+  provide,
+  type VNode,
+} from 'vue'
 import {
   NCard,
   NButton,
@@ -1098,6 +1113,8 @@ import {
 } from '@vicons/ionicons5'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
+import ServiceDescription from '@/components/service/ServiceDescription.vue'
+import ServiceItemLabel from '@/components/service/ServiceItemLabel.vue'
 import {
   fetchLastProofs,
   startWorkSession,
@@ -1255,6 +1272,9 @@ const attributeMap = ref<Map<string, string>>(new Map())
 const bossDict = ref<SelectOption[]>([])
 const collapsedKinds = reactive(new Set<string>())
 
+// Provide attributeMap cho child components
+provide('attributeMap', attributeMap)
+
 const sessionLoading = ref(false)
 const ws2 = ref({
   activityRows: [{ label: null as string | null, qty: null as number | null }],
@@ -1359,20 +1379,25 @@ const computedCanFinish = computed(() => {
     return false
   }
 
-  // Điều kiện 2: Các hạng mục có tiến độ phải có đủ bằng chứng
+  // Điều kiện 1.5: Phải chọn ít nhất 1 item
+  if (ws2.value.selectedIds.length === 0) {
+    return false
+  }
+
+  // Điều kiện 2: Tất cả hạng mục được chọn phải có tiến độ và bằng chứng kết thúc
   for (const itemId of ws2.value.selectedIds) {
     const row = rowMap.value.get(itemId)
     if (!row) continue
 
-    const hasProgress =
-      row.kind_code === 'LEVELING'
-        ? round2(row.current_value) >= round2(row.start_value)
-        : round2(row.current_value) > round2(row.start_value)
+    // Bắt buộc current_value >= start_value
+    const hasProgress = round2(row.current_value) >= round2(row.start_value)
+    if (!hasProgress) return false
 
-    if (hasProgress) {
-      if (!row.endFile && !row.endProofUrl) return false
-      if (row.kind_code === 'LEVELING' && row.current_exp === null) return false
-    }
+    // Bắt buộc phải có bằng chứng kết thúc
+    if (!row.endFile && !row.endProofUrl) return false
+
+    // Nếu là LEVELING, bắt buộc phải có EXP
+    if (row.kind_code === 'LEVELING' && row.current_exp === null) return false
   }
 
   // Điều kiện 3: Phiên Mythic phải có hoạt động farm boss đi kèm
@@ -1477,9 +1502,9 @@ async function loadFilterOptions() {
         value: c,
       }))
 
-      // Map service types - remove "Service-" prefix for display
+      // Map service types - remove "Service-" or "Service - " prefix for display
       serviceTypeOptions.value = (options.service_types || []).map((t: string) => ({
-        label: t.replace(/^Service-/i, ''),
+        label: t.replace(/^Service[\s-]+/i, ''),
         value: t,
       }))
 
@@ -1543,72 +1568,32 @@ function clip(s: string, n = 220) {
   if (!s) return ''
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
+function parsePackageNote(text: string): Array<{ text: string; isUrl: boolean }> {
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts: Array<{ text: string; isUrl: boolean }> = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    // Add text before URL
+    if (match.index > lastIndex) {
+      parts.push({ text: text.substring(lastIndex, match.index), isUrl: false })
+    }
+    // Add URL
+    parts.push({ text: match[0], isUrl: true })
+    lastIndex = match.index + match[0].length
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push({ text: text.substring(lastIndex), isUrl: false })
+  }
+
+  return parts.length > 0 ? parts : [{ text, isUrl: false }]
+}
 function round2(n: number | null | undefined): number {
   const x = Number(n)
   return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0
-}
-
-function generateServiceDescription(items: SvcItemSummary[] | null): {
-  summaryHtml: string
-  detailHtml: string
-} {
-  if (!items || items.length === 0) {
-    return { summaryHtml: 'N/A', detailHtml: '—' }
-  }
-
-  // Helper function để kiểm tra một item đã hoàn thành chưa
-  const isItemCompleted = (item: SvcItemSummary) => {
-    const plan = Number(item.plan_qty ?? 0)
-    // Coi như hoàn thành nếu không có plan_qty (plan = 0)
-    if (plan <= 0) return true
-    return Number(item.done_qty ?? 0) >= plan
-  }
-
-  const kindCodesInOrder = [...new Set(items.map((it) => it.kind_code))].sort(
-    (a, b) => (KIND_ORDER[a] ?? 999) - (KIND_ORDER[b] ?? 999)
-  )
-
-  // --- Logic tạo chuỗi tóm tắt (summary) - Giữ nguyên không đổi ---
-  const summaryParts = kindCodesInOrder.map((code) => {
-    const kindName = attributeMap.value.get(code) || code
-    const itemsInKind = items.filter((it) => it.kind_code === code)
-    const isGroupCompleted = itemsInKind.length > 0 && itemsInKind.every(isItemCompleted)
-    return isGroupCompleted ? `<del>${kindName}</del>` : kindName
-  })
-  const summaryHtml = summaryParts.join(', ')
-
-  // --- Logic tạo chuỗi chi tiết (detailed html) - Cập nhật ở đây ---
-  let detailHtml = '<ul class="list-none p-0 m-0 space-y-1">'
-  for (const code of kindCodesInOrder) {
-    const kindName = attributeMap.value.get(code) || code
-    const itemsInKind = items.filter((it) => it.kind_code === code)
-    const isGroupCompleted = itemsInKind.length > 0 && itemsInKind.every(isItemCompleted)
-
-    // Vẫn gạch ngang tên kind nếu cả nhóm đã xong
-    if (isGroupCompleted) {
-      detailHtml += `<li><del><strong>- ${kindName}:</strong></del>`
-    } else {
-      detailHtml += `<li><strong>- ${kindName}:</strong>`
-    }
-
-    if (itemsInKind.length > 0) {
-      detailHtml += '<ul class="list-none p-0 m-0 pl-4">'
-      for (const item of itemsInKind) {
-        // <<< THAY ĐỔI NẰM Ở ĐÂY >>>
-        // 1. Lấy nhãn của item
-        const itemLabel = paramsLabel(item)
-        // 2. Kiểm tra xem item này đã hoàn thành chưa
-        const isComplete = isItemCompleted(item)
-        // 3. Thêm thẻ <del> nếu đã hoàn thành
-        detailHtml += `<li>+ ${isComplete ? `<del>${itemLabel}</del>` : itemLabel}</li>`
-      }
-      detailHtml += '</ul>'
-    }
-    detailHtml += '</li>'
-  }
-  detailHtml += '</ul>'
-
-  return { summaryHtml, detailHtml }
 }
 
 const historyModal = reactive({
@@ -1710,11 +1695,16 @@ function formatDeadline(
   if (!endTs) return { text: '—', color: 'default' as const }
 
   const isSelfplay = serviceType === 'Selfplay'
-  if (isSelfplay && (status === 'new' || status === 'paused_selfplay' || status === 'pending_completion')) {
+  if (
+    isSelfplay &&
+    (status === 'new' || status === 'paused_selfplay' || status === 'pending_completion')
+  ) {
     const referenceTs =
-      status === 'paused_selfplay' && pausedAt ? toTs(pausedAt) :
-      status === 'pending_completion' && pausedAt ? toTs(pausedAt) :
-      startTs
+      status === 'paused_selfplay' && pausedAt
+        ? toTs(pausedAt)
+        : status === 'pending_completion' && pausedAt
+          ? toTs(pausedAt)
+          : startTs
 
     if (referenceTs) {
       const remainingMs = endTs - referenceTs
@@ -1823,7 +1813,7 @@ const columns: DataTableColumns<OrderRow> = [
     align: 'center',
     titleAlign: 'center',
     render: (row: OrderRow) => {
-      const displayType = (row.service_type || '').replace(/^Service-/i, '')
+      const displayType = (row.service_type || '').replace(/^Service[\s-]+/i, '')
       const typeIsPilot = displayType.toLowerCase() === 'pilot'
       return h(
         NTag,
@@ -1855,37 +1845,103 @@ const columns: DataTableColumns<OrderRow> = [
     width: 180,
     render: (row: OrderRow) => {
       if (!row.package_note) return '—'
+      const fullText = row.package_note
       const urlRegex = /(https?:\/\/[^\s]+)/g
-      if (urlRegex.test(row.package_note)) {
-        const noteParts = row.package_note.split(urlRegex)
-        const noteContent = noteParts.map((part: string) => {
-          if (urlRegex.test(part)) {
-            return h(
-              'a',
-              { href: part, target: '_blank', class: 'text-primary-600 hover:underline' },
-              '[link]'
-            )
-          }
-          return h('span', part)
-        })
-        return h('div', { class: 'text-left' }, noteContent)
+      const urls = fullText.match(urlRegex) || []
+      const textWithoutUrls = fullText.replace(urlRegex, '').trim()
+
+      // Content for tooltip (full text with original links)
+      const tooltipContent = () => {
+        if (urls.length > 0) {
+          const noteParts = fullText.split(urlRegex)
+          const noteContent = noteParts.map((part: string) => {
+            if (urlRegex.test(part)) {
+              return h(
+                'a',
+                { href: part, target: '_blank', class: 'text-primary-400 hover:underline' },
+                part
+              )
+            }
+            return h('span', part)
+          })
+          return h(
+            'div',
+            { style: 'max-width: 400px; word-wrap: break-word; white-space: pre-wrap;' },
+            noteContent
+          )
+        }
+        return h(
+          'div',
+          { style: 'max-width: 400px; word-wrap: break-word; white-space: pre-wrap;' },
+          fullText
+        )
       }
-      return renderTrunc(row.package_note, 30)
+
+      // Display in cell: [Link] + truncated text
+      const cellContent: VNode[] = []
+      const maxTotalLength = 20
+
+      if (urls.length > 0) {
+        const linkText = 'Link' // 4 chars
+        const spaceLength = 1 // space after link
+        const linkTotalLength = linkText.length + spaceLength // 5 chars
+        const maxTextLength = maxTotalLength - linkTotalLength // 20 - 5 = 15 chars for text
+
+        cellContent.push(
+          h(
+            'a',
+            {
+              href: urls[0],
+              target: '_blank',
+              class: 'text-blue-600 hover:text-blue-700 hover:underline font-medium',
+              style: 'color: #2563eb;',
+              onClick: (e: Event) => e.stopPropagation(),
+            },
+            linkText
+          )
+        )
+
+        cellContent.push(h('span', ' ')) // explicit space
+
+        const remainingText = clip(textWithoutUrls.trim(), maxTextLength)
+        if (remainingText) {
+          cellContent.push(h('span', remainingText))
+        }
+      } else {
+        // No link, use full maxTotalLength for text
+        const remainingText = clip(textWithoutUrls.trim(), maxTotalLength)
+        if (remainingText) {
+          cellContent.push(h('span', remainingText))
+        }
+      }
+
+      return h(
+        NTooltip,
+        { trigger: 'hover', placement: 'top-start' },
+        {
+          trigger: () => h('span', { class: 'cell-text' }, cellContent),
+          default: tooltipContent,
+        }
+      )
     },
   },
-  // THAY ĐỔI NẰM Ở ĐÂY
   {
     title: 'Dịch vụ',
     key: 'service_items',
     minWidth: 250,
     render: (row: OrderRow) => {
-      const { summaryHtml, detailHtml } = generateServiceDescription(row.service_items)
       return h(
         NTooltip,
         { trigger: 'hover', placement: 'top-start' },
         {
-          trigger: () => h('span', { class: 'cell-text', innerHTML: summaryHtml }),
-          default: () => h('div', { class: 'max-w-md', innerHTML: detailHtml }),
+          trigger: () =>
+            h('span', { class: 'cell-text' }, [
+              h(ServiceDescription, { items: row.service_items, collapsed: true }),
+            ]),
+          default: () =>
+            h('div', { class: 'max-w-md' }, [
+              h(ServiceDescription, { items: row.service_items, collapsed: false }),
+            ]),
         }
       )
     },
@@ -3510,9 +3566,21 @@ onBeforeUnmount(() => {
 }
 
 .cell-text {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   max-width: 100%;
   vertical-align: bottom;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-text > * {
+  flex-shrink: 0;
+}
+.cell-text > span:not([class]) {
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .row-actions {
   display: flex;
