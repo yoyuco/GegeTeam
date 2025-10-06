@@ -238,6 +238,57 @@
               <span class="text-sm">{{ detail.assignees_text || '—' }}</span>
             </div>
           </div>
+
+          <!-- Thông tin thời gian pilot - chỉ hiển thị cho pilot orders -->
+          <template
+            v-if="
+              detail.service_type === 'Pilot' &&
+              !['completed', 'cancelled', 'delivered', 'pending_completion'].includes(detail.status)
+            "
+          >
+            <div class="row">
+              <div class="meta">Thời gian online</div>
+              <div class="val">
+                <div class="flex items-center gap-2">
+                  <n-tag size="small" :type="pilotCycleInfo.warningColor" :bordered="false">
+                    {{ pilotCycleInfo.onlineDuration }}
+                  </n-tag>
+                  <n-tag
+                    v-if="pilotCycleInfo.warningLevel >= 1"
+                    size="small"
+                    :type="pilotCycleInfo.warningColor"
+                    :bordered="false"
+                  >
+                    {{ pilotCycleInfo.warningText }}
+                  </n-tag>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="pilotCycleInfo.isResting" class="row">
+              <div class="meta">Thời gian nghỉ</div>
+              <div class="val">
+                <n-tag size="small" type="success" :bordered="false">
+                  {{ pilotCycleInfo.restDuration }}
+                </n-tag>
+                <div class="text-xs text-neutral-500 mt-1">
+                  {{ pilotCycleInfo.restMessage }}
+                </div>
+              </div>
+            </div>
+
+            <div v-if="pilotCycleInfo.isBlocked" class="row">
+              <div class="meta">Trạng thái chu kỳ</div>
+              <div class="val">
+                <n-tag size="small" type="error" :bordered="false">
+                  ⛔️ Đã khóa - Cần nghỉ để reset
+                </n-tag>
+                <div class="text-xs text-neutral-500 mt-1">
+                  {{ pilotCycleInfo.resetRequirement }}
+                </div>
+              </div>
+            </div>
+          </template>
           <div v-if="detail.service_type === 'Selfplay'" class="row">
             <div class="meta">Btag</div>
             <div class="val flex items-center gap-2">
@@ -1052,6 +1103,177 @@
         Đã trả đơn hàng cho khách
       </n-checkbox>
     </n-modal>
+
+    <!-- Customer Play Modal -->
+    <n-modal
+      v-model:show="customerPlayModal.open"
+      preset="card"
+      :title="`Chi tiết pilot: ${customerPlayModal.customerName}`"
+      style="width: 600px"
+    >
+      <div class="space-y-4">
+        <!-- Order Info -->
+        <div class="bg-gray-50 p-4 rounded-lg">
+          <h3 class="font-medium mb-2">Thông tin đơn hàng</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-600">Mã đơn:</span>
+              <span class="font-mono">{{ customerPlayModal.orderId?.slice(0, 8) }}...</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Khách hàng:</span>
+              <span>{{ customerPlayModal.customerName }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Loại dịch vụ:</span>
+              <span>{{ customerPlayModal.serviceType }}</span>
+            </div>
+            <div v-if="customerPlayModal.deadline" class="flex justify-between">
+              <span class="text-gray-600">Deadline:</span>
+              <span>{{ new Date(customerPlayModal.deadline).toLocaleString('vi-VN') }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Customer Playing Section -->
+        <div class="border border-orange-200 bg-orange-50 p-4 rounded-lg">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <n-icon size="20" color="#f97316">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7 2v11h3v9l7-12h-4l4-8z" />
+                </svg>
+              </n-icon>
+              <h3 class="font-medium text-orange-900">Khách chơi</h3>
+            </div>
+            <n-switch
+              v-model:value="customerPlayModal.isCustomerPlaying"
+              :loading="customerPlayModal.loading"
+              size="small"
+              @update:value="handleCustomerPlayToggle"
+            >
+              <template #checked>Đang bật</template>
+              <template #unchecked>Đã tắt</template>
+            </n-switch>
+          </div>
+
+          <div class="text-sm text-orange-800">
+            <p v-if="customerPlayModal.isCustomerPlaying && customerPlayModal.pausedAt">
+              ⏰ Khách đang chơi từ:
+              {{ new Date(customerPlayModal.pausedAt).toLocaleString('vi-VN') }}
+            </p>
+            <p v-else-if="!customerPlayModal.isCustomerPlaying" class="text-gray-600">
+              Khách không được chơi trong quá trình pilot
+            </p>
+          </div>
+
+          <!-- Warning Message -->
+          <n-alert
+            v-if="customerPlayModal.isCustomerPlaying"
+            type="warning"
+            title="Lưu ý quan trọng"
+            :show-icon="true"
+            class="mt-3"
+          >
+            <template #icon>
+              <n-icon>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                  />
+                </svg>
+              </n-icon>
+            </template>
+            <div class="text-sm">
+              <p>• Khi khách chơi, deadline sẽ được tạm dừng</p>
+              <p>• Thời gian khách chơi sẽ không tính vào thời gian làm việc</p>
+              <p>• Khi tắt chế độ khách chơi, deadline sẽ được cộng bù thời gian</p>
+            </div>
+          </n-alert>
+        </div>
+
+        <!-- Pilot Cycle Information - chỉ hiển thị cho pilot orders đang hoạt động -->
+        <template v-if="customerPlayModal.serviceType === 'Pilot' && customerPlayModal.orderId">
+          <!-- Alert Warning/Blocked Layer -->
+          <n-alert
+            v-if="pilotCycleModalInfo.warningLevel >= 1"
+            :type="pilotCycleModalInfo.warningLevel === 2 ? 'error' : 'warning'"
+            :title="
+              pilotCycleModalInfo.warningLevel === 2 ? '⚠️ Cảnh báo quan trọng' : '⚠️ Cảnh báo'
+            "
+            :show-icon="true"
+            class="mb-4"
+          >
+            <div class="text-sm">
+              <p v-if="pilotCycleModalInfo.warningLevel === 1">
+                • Pilot đã online liên tục gần 5 ngày - cần nghỉ để tránh bị khóa
+              </p>
+              <p v-else>• Pilot đã online liên tục trên 6 ngày - đã bị khóa</p>
+              <p>
+                {{ pilotCycleModalInfo.resetRequirement }}
+              </p>
+            </div>
+          </n-alert>
+
+          <div class="border border-blue-200 bg-blue-50 p-4 rounded-lg">
+            <div class="flex items-center gap-2 mb-3">
+              <n-icon size="20" color="#3b82f6">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                  />
+                </svg>
+              </n-icon>
+              <h3 class="font-medium text-blue-900">Thời gian online</h3>
+            </div>
+
+            <div class="space-y-3">
+              <!-- Thời gian online -->
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Online liên tục:</span>
+                <div class="flex items-center gap-2">
+                  <n-tag size="small" :type="pilotCycleModalInfo.warningColor" :bordered="false">
+                    {{ pilotCycleModalInfo.onlineDuration }}
+                  </n-tag>
+                  <n-tag
+                    v-if="pilotCycleModalInfo.warningLevel >= 1"
+                    size="small"
+                    :type="pilotCycleModalInfo.warningColor"
+                    :bordered="false"
+                  >
+                    {{ pilotCycleModalInfo.warningText }}
+                  </n-tag>
+                </div>
+              </div>
+
+              <!-- Thời gian nghỉ -->
+              <div v-if="pilotCycleModalInfo.isResting" class="flex items-start justify-between">
+                <span class="text-sm text-gray-600">Thời gian nghỉ:</span>
+                <div class="text-right">
+                  <n-tag size="small" type="success" :bordered="false">
+                    {{ pilotCycleModalInfo.restDuration }}
+                  </n-tag>
+                  <div class="text-xs text-gray-500 mt-1">
+                    {{ pilotCycleModalInfo.restMessage }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Trạng thái chu kỳ -->
+              <div v-if="pilotCycleModalInfo.isBlocked" class="border-t border-red-200 pt-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-gray-600">Trạng thái chu kỳ:</span>
+                  <n-tag size="small" type="error" :bordered="false"> ⛔️ Đã khóa </n-tag>
+                </div>
+                <div class="text-xs text-red-600 mt-2">
+                  {{ pilotCycleModalInfo.resetRequirement }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -1096,6 +1318,8 @@ import {
   NCollapseItem,
   NRadio,
   NSpace,
+  NSwitch,
+  NAlert,
   type UploadFileInfo,
   type SelectOption,
   type DataTableColumns,
@@ -1110,6 +1334,7 @@ import {
   AlertCircleOutline as WarningIcon,
   BookOutline,
   PaperPlaneOutline as DeliveryIcon,
+  DesktopOutline as PcIcon,
 } from '@vicons/ionicons5'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
@@ -1159,6 +1384,10 @@ type OrderRow = {
   paused_at: string | null
   delivered_at: string | null
   action_proof_urls: string[] | null
+  pilot_warning_level?: number
+  pilot_is_blocked?: boolean
+  pilot_cycle_start_at?: string
+  pilot_online_hours?: number
 }
 
 type OrderDetail = OrderRow & {
@@ -1174,6 +1403,10 @@ type OrderDetail = OrderRow & {
       start_exp?: number | null
     }[]
   } | null
+  pilot_warning_level?: number
+  pilot_is_blocked?: boolean
+  pilot_cycle_start_at?: string
+  pilot_online_hours?: number
 }
 
 type SvcItem = {
@@ -1329,6 +1562,23 @@ const deliveryModal = reactive({
   isDelivered: false,
 })
 
+const customerPlayModal = reactive({
+  open: false,
+  loading: false,
+  orderId: null as string | null,
+  customerName: '',
+  isCustomerPlaying: false,
+  pausedAt: null as string | null,
+  deadline: null as string | null,
+  serviceType: null as string | null,
+  createdAt: null as string | null,
+  status: null as string | null,
+  pilot_warning_level: undefined as number | undefined,
+  pilot_is_blocked: undefined as boolean | undefined,
+  pilot_cycle_start_at: undefined as string | undefined,
+  pilot_online_hours: undefined as number | undefined,
+})
+
 // =================================================================
 // PERMISSION & LOGIC COMPUTED PROPERTIES
 // =================================================================
@@ -1477,6 +1727,280 @@ const overrunDetected = computed(() =>
 )
 const isOrderFinalized = computed(() => {
   return detail.status === 'completed' || detail.status === 'cancelled'
+})
+
+// Pilot cycle information computed - using database values for consistency
+const pilotCycleInfo = computed(() => {
+  // Chỉ tính cho pilot orders đang hoạt động
+  if (
+    detail.service_type !== 'Pilot' ||
+    ['completed', 'cancelled', 'delivered', 'pending_completion'].includes(detail.status)
+  ) {
+    return {
+      onlineDuration: '—',
+      warningLevel: 0,
+      warningColor: 'default' as const,
+      warningText: '',
+      isResting: false,
+      restDuration: '',
+      restMessage: '',
+      isBlocked: false,
+      resetRequirement: '',
+    }
+  }
+
+  // Use database values for consistency across all UI components
+  // Fallback to calculation if database values are not available yet
+  const hasDatabasePilotData = detail.pilot_warning_level !== undefined
+  const warningLevel = hasDatabasePilotData ? detail.pilot_warning_level! : 0
+  const isBlocked = hasDatabasePilotData ? detail.pilot_is_blocked! : false
+  const isResting = !!detail.paused_at
+  const cycleStartAt = hasDatabasePilotData ? detail.pilot_cycle_start_at : detail.created_at
+  const pausedAt = detail.paused_at
+
+  // Calculate real-time online duration using database timestamps
+  const now = new Date()
+  let onlineDurationMs = 0
+
+  if (cycleStartAt) {
+    const startTime = new Date(cycleStartAt).getTime()
+    if (pausedAt) {
+      // Currently resting - calculate to pause time
+      const pauseTime = new Date(pausedAt).getTime()
+      onlineDurationMs = pauseTime - startTime
+    } else {
+      // Currently online - calculate to now (real-time)
+      onlineDurationMs = now.getTime() - startTime
+    }
+  }
+
+  // Calculate real-time rest duration if resting
+  let restDurationMs = 0
+  if (isResting && pausedAt) {
+    const pauseTime = new Date(pausedAt).getTime()
+    restDurationMs = now.getTime() - pauseTime
+  }
+
+  // Format durations with precision to minutes
+  const formatDuration = (milliseconds: number) => {
+    if (milliseconds <= 0) return '0 phút'
+
+    const totalMinutes = Math.floor(milliseconds / (1000 * 60))
+    const days = Math.floor(totalMinutes / (24 * 60))
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
+    const minutes = totalMinutes % 60
+
+    const parts = []
+    if (days > 0) parts.push(`${days} ngày`)
+    if (hours > 0) parts.push(`${hours} giờ`)
+    if (minutes > 0 || parts.length === 0) parts.push(`${minutes} phút`)
+
+    return parts.join(' ')
+  }
+
+  // Format remaining time with precision to minutes
+  const formatRemainingTime = (hours: number) => {
+    if (hours <= 0) return '0 phút'
+
+    const totalMinutes = Math.ceil(hours * 60) // Round up to show full minutes needed
+    const displayHours = Math.floor(totalMinutes / 60)
+    const displayMinutes = totalMinutes % 60
+
+    if (displayHours > 0 && displayMinutes > 0) {
+      return `${displayHours} giờ ${displayMinutes} phút`
+    } else if (displayHours > 0) {
+      return `${displayHours} giờ`
+    } else {
+      return `${displayMinutes} phút`
+    }
+  }
+
+  // Set warning color and text based on database warning level
+  let warningColor: 'default' | 'warning' | 'error' = 'default'
+  let warningText = ''
+
+  if (warningLevel === 2) {
+    warningColor = 'error'
+    warningText = '⛔️ Khóa'
+  } else if (warningLevel === 1) {
+    warningColor = 'warning'
+    warningText = '⚠️ Cảnh báo'
+  }
+
+  // Calculate rest information using database values
+  let restMessage = ''
+  if (isResting && pausedAt) {
+    // Xác định yêu cầu reset based on online duration
+    const cycleDurationHours = onlineDurationMs / (1000 * 60 * 60)
+    const requiredRest = cycleDurationHours <= 4 * 24 ? 6 : 12 // hours
+    const restHoursInt = Math.floor(restDurationMs / (1000 * 60 * 60))
+
+    if (restHoursInt >= requiredRest) {
+      restMessage = '✅ Đủ điều kiện reset'
+    } else {
+      const remainingHours = requiredRest - restHoursInt
+      restMessage = `Cần nghỉ thêm ${formatRemainingTime(remainingHours)} để reset`
+    }
+  }
+
+  // Calculate reset requirement for blocked orders
+  let resetRequirement = ''
+  if (isBlocked) {
+    const cycleDurationHours = onlineDurationMs / (1000 * 60 * 60)
+    const requiredRest = cycleDurationHours > 4 * 24 ? 12 : 6 // hours
+    resetRequirement = `Cần nghỉ liên tục ${formatRemainingTime(requiredRest)} để mở khóa`
+  }
+
+  return {
+    onlineDuration: formatDuration(onlineDurationMs),
+    warningLevel,
+    warningColor,
+    warningText,
+    isResting,
+    restDuration: isResting ? formatDuration(restDurationMs) : '',
+    restMessage,
+    isBlocked,
+    resetRequirement,
+  }
+})
+
+// Pilot cycle information computed for modal (dùng cho từng đơn hàng riêng lẻ) - using database values
+const pilotCycleModalInfo = computed(() => {
+  // Chỉ tính cho pilot orders đang hoạt động
+  if (
+    !customerPlayModal.serviceType ||
+    customerPlayModal.serviceType !== 'Pilot' ||
+    !customerPlayModal.status ||
+    ['completed', 'cancelled', 'delivered', 'pending_completion'].includes(customerPlayModal.status)
+  ) {
+    return {
+      onlineDuration: '—',
+      warningLevel: 0,
+      warningColor: 'default' as const,
+      warningText: '',
+      isResting: false,
+      restDuration: '',
+      restMessage: '',
+      isBlocked: false,
+      resetRequirement: '',
+    }
+  }
+
+  // Use database values for consistency across all UI components
+  // Fallback to calculation if database values are not available yet
+  const hasDatabasePilotData = customerPlayModal.pilot_warning_level !== undefined
+  const warningLevel = hasDatabasePilotData ? customerPlayModal.pilot_warning_level! : 0
+  const isBlocked = hasDatabasePilotData ? customerPlayModal.pilot_is_blocked! : false
+  const isResting = !!customerPlayModal.pausedAt
+  const cycleStartAt = hasDatabasePilotData
+    ? customerPlayModal.pilot_cycle_start_at
+    : customerPlayModal.createdAt
+  const pausedAt = customerPlayModal.pausedAt
+
+  // Calculate real-time online duration using database timestamps
+  const now = new Date()
+  let onlineDurationMs = 0
+
+  if (cycleStartAt) {
+    const startTime = new Date(cycleStartAt).getTime()
+    if (pausedAt) {
+      // Currently resting - calculate to pause time
+      const pauseTime = new Date(pausedAt).getTime()
+      onlineDurationMs = pauseTime - startTime
+    } else {
+      // Currently online - calculate to now (real-time)
+      onlineDurationMs = now.getTime() - startTime
+    }
+  }
+
+  // Calculate real-time rest duration if resting
+  let restDurationMs = 0
+  if (isResting && pausedAt) {
+    const pauseTime = new Date(pausedAt).getTime()
+    restDurationMs = now.getTime() - pauseTime
+  }
+
+  // Format durations with precision to minutes
+  const formatDuration = (milliseconds: number) => {
+    if (milliseconds <= 0) return '0 phút'
+
+    const totalMinutes = Math.floor(milliseconds / (1000 * 60))
+    const days = Math.floor(totalMinutes / (24 * 60))
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
+    const minutes = totalMinutes % 60
+
+    const parts = []
+    if (days > 0) parts.push(`${days} ngày`)
+    if (hours > 0) parts.push(`${hours} giờ`)
+    if (minutes > 0 || parts.length === 0) parts.push(`${minutes} phút`)
+
+    return parts.join(' ')
+  }
+
+  // Format remaining time with precision to minutes
+  const formatRemainingTime = (hours: number) => {
+    if (hours <= 0) return '0 phút'
+
+    const totalMinutes = Math.ceil(hours * 60) // Round up to show full minutes needed
+    const displayHours = Math.floor(totalMinutes / 60)
+    const displayMinutes = totalMinutes % 60
+
+    if (displayHours > 0 && displayMinutes > 0) {
+      return `${displayHours} giờ ${displayMinutes} phút`
+    } else if (displayHours > 0) {
+      return `${displayHours} giờ`
+    } else {
+      return `${displayMinutes} phút`
+    }
+  }
+
+  // Set warning color and text based on database warning level
+  let warningColor: 'default' | 'warning' | 'error' = 'default'
+  let warningText = ''
+
+  if (warningLevel === 2) {
+    warningColor = 'error'
+    warningText = '⛔️ Khóa'
+  } else if (warningLevel === 1) {
+    warningColor = 'warning'
+    warningText = '⚠️ Cảnh báo'
+  }
+
+  // Calculate rest information using database values
+  let restMessage = ''
+  if (isResting && pausedAt) {
+    // Xác định yêu cầu reset based on online duration
+    const cycleDurationHours = onlineDurationMs / (1000 * 60 * 60)
+    const requiredRest = cycleDurationHours <= 4 * 24 ? 6 : 12 // hours
+    const restHoursInt = Math.floor(restDurationMs / (1000 * 60 * 60))
+
+    if (restHoursInt >= requiredRest) {
+      restMessage = '✅ Đủ điều kiện reset'
+    } else {
+      const remainingHours = requiredRest - restHoursInt
+      restMessage = `Cần nghỉ thêm ${formatRemainingTime(remainingHours)} để reset`
+    }
+  }
+
+  // Calculate reset requirement for blocked orders
+  let resetRequirement = ''
+  if (isBlocked) {
+    const cycleDurationHours = onlineDurationMs / (1000 * 60 * 60)
+    const requiredRest = cycleDurationHours > 4 * 24 ? 12 : 6 // hours
+    resetRequirement = `Cần nghỉ liên tục ${formatRemainingTime(requiredRest)} để mở khóa`
+  }
+
+  return {
+    onlineDuration: formatDuration(onlineDurationMs),
+    warningLevel,
+    warningColor,
+    warningText,
+    isResting,
+    restDuration: isResting ? formatDuration(restDurationMs) : '',
+    restMessage,
+    isBlocked,
+    resetRequirement,
+  }
 })
 
 //Lọc dịch vụ - Load từ database thay vì từ rows hiện tại
@@ -1634,6 +2158,8 @@ function formatDateTime(dateString: string | null | undefined): string {
   return new Date(dateString).toLocaleString('vi-VN')
 }
 
+// Row class name function for highlighting warnings - REMOVED
+
 // =================================================================
 // DATA TABLE & RENDERERS
 // =================================================================
@@ -1668,6 +2194,8 @@ function statusView(s: string | null | undefined) {
       return { label: 'Đang làm', type: 'warning' as const }
     case 'pending_pilot':
       return { label: 'Chờ làm', type: 'info' as const }
+    case 'customer_playing':
+      return { label: 'Khách chơi', type: 'warning' as const }
     case 'paused_selfplay':
       return { label: 'Tạm dừng', type: 'info' as const }
     case 'pending_completion':
@@ -1695,6 +2223,8 @@ function formatDeadline(
   if (!endTs) return { text: '—', color: 'default' as const }
 
   const isSelfplay = serviceType === 'Selfplay'
+
+  // Logic cho Selfplay - giữ nguyên như cũ
   if (
     isSelfplay &&
     (status === 'new' || status === 'paused_selfplay' || status === 'pending_completion')
@@ -1726,6 +2256,20 @@ function formatDeadline(
         return { text: `Chờ duyệt (còn ${timeString})`, color: 'warning' as const }
       }
       return { text: `Chờ (còn ${timeString})`, color: 'default' as const }
+    }
+  }
+
+  // Logic cho Pilot orders - xử lý customer_playing
+  if (!isSelfplay && status === 'customer_playing') {
+    const referenceTs = pausedAt ? toTs(pausedAt) : nowMs
+
+    // Show remaining time from when customer started playing
+    const remainingMs = endTs - (referenceTs || 0)
+
+    if (remainingMs > 0) {
+      return { text: `Khách chơi (deadline tạm dừng)`, color: 'warning' as const }
+    } else {
+      return { text: 'Khách chơi (deadline đã qua)', color: 'error' as const }
     }
   }
 
@@ -1815,11 +2359,14 @@ const columns: DataTableColumns<OrderRow> = [
     render: (row: OrderRow) => {
       const displayType = (row.service_type || '').replace(/^Service[\s-]+/i, '')
       const typeIsPilot = displayType.toLowerCase() === 'pilot'
-      return h(
+
+      const serviceTypeTag = h(
         NTag,
         { size: 'small', bordered: false, type: typeIsPilot ? 'warning' : 'primary' },
         { default: () => displayType || 'N/A' }
       )
+
+      return serviceTypeTag
     },
   },
   {
@@ -1827,7 +2374,48 @@ const columns: DataTableColumns<OrderRow> = [
     key: 'customer_name',
     width: 150,
     ellipsis: true,
-    render: (row: OrderRow) => renderTrunc(row.customer_name, 30),
+    render: (row: OrderRow) => {
+      // Only apply warning colors for pilot orders with actual warnings
+      let warningStyle = {}
+
+      // DEBUG: Log pilot orders data to find real warnings
+      if (row.service_type === 'Pilot') {
+        console.log('Pilot order data:', {
+          id: row.id,
+          customer_name: row.customer_name,
+          status: row.status,
+          created_at: row.created_at,
+          pilot_warning_level: row.pilot_warning_level,
+          pilot_is_blocked: row.pilot_is_blocked,
+        })
+      }
+
+      if (
+        row.service_type === 'Pilot' &&
+        !['completed', 'cancelled', 'delivered', 'pending_completion'].includes(row.status)
+      ) {
+        // Only apply if there are actual warnings from database
+        if (row.pilot_is_blocked) {
+          warningStyle = {
+            backgroundColor: '#fecaca', // red-100
+            padding: '2px 6px',
+            borderRadius: '4px',
+            border: '1px solid #ef4444',
+          }
+          console.log('WARNING: Blocked pilot found -', row.customer_name)
+        } else if (row.pilot_warning_level === 1) {
+          warningStyle = {
+            backgroundColor: '#fef3c7', // amber-100
+            padding: '2px 6px',
+            borderRadius: '4px',
+            border: '1px solid #f59e0b',
+          }
+          console.log('WARNING: Warning pilot found -', row.customer_name)
+        }
+      }
+
+      return h('span', { style: warningStyle }, renderTrunc(row.customer_name, 30))
+    },
   },
   {
     title: 'Gói Dịch vụ',
@@ -2042,6 +2630,79 @@ const columns: DataTableColumns<OrderRow> = [
             default: () => 'Lịch sử',
           }
         ),
+
+        // Nút Chi tiết Pilot (biểu tượng PC) - chỉ hiển thị cho pilot orders chưa hoàn thành/huỷ
+        ...(row.service_type !== 'Selfplay' && !['completed', 'cancelled'].includes(row.status)
+          ? [
+              h(
+                NTooltip,
+                { trigger: 'hover' },
+                {
+                  trigger: () =>
+                    h(
+                      NButton,
+                      {
+                        text: true,
+                        class: 'mx-1',
+                        onClick: () => openPilotDetailModal(row),
+                        style: (() => {
+                          // Apply warning colors only for pilot orders with actual warnings
+                          if (
+                            row.service_type === 'Pilot' &&
+                            !['completed', 'cancelled', 'delivered', 'pending_completion'].includes(
+                              row.status
+                            )
+                          ) {
+                            if (row.pilot_is_blocked) {
+                              return {
+                                backgroundColor: '#fecaca',
+                                border: '1px solid #ef4444',
+                                borderRadius: '4px',
+                                padding: '2px',
+                              }
+                            } else if (row.pilot_warning_level === 1) {
+                              return {
+                                backgroundColor: '#fef3c7',
+                                border: '1px solid #f59e0b',
+                                borderRadius: '4px',
+                                padding: '2px',
+                              }
+                            }
+                          }
+                          return {}
+                        })(),
+                      },
+                      {
+                        default: () =>
+                          h(NIcon, {
+                            component: PcIcon,
+                            color: (() => {
+                              // Change icon color based on actual warning level
+                              if (
+                                row.service_type === 'Pilot' &&
+                                ![
+                                  'completed',
+                                  'cancelled',
+                                  'delivered',
+                                  'pending_completion',
+                                ].includes(row.status)
+                              ) {
+                                if (row.pilot_is_blocked) {
+                                  return '#dc2626' // red-600
+                                } else if (row.pilot_warning_level === 1) {
+                                  return '#d97706' // amber-600
+                                }
+                              }
+                              return row.status === 'customer_playing' ? '#16a34a' : '#333'
+                            })(),
+                          }),
+                      }
+                    ),
+                  default: () => 'Chi tiết Pilot',
+                }
+              ),
+            ]
+          : []),
       ]
 
       const isFinalized = row.status === 'completed' || row.status === 'cancelled'
@@ -2305,6 +2966,59 @@ async function handleDeliveryStatusChange(checked: boolean) {
     deliveryModal.isDelivered = !checked
   } finally {
     deliveryModal.loading = false
+  }
+}
+
+async function handleCustomerPlayToggle(checked: boolean) {
+  if (!customerPlayModal.orderId) return
+
+  customerPlayModal.loading = true
+  try {
+    const { data, error } = await supabase.rpc('toggle_customer_playing', {
+      p_order_id: customerPlayModal.orderId,
+      p_enable_customer_playing: checked,
+      p_current_user_id: auth.user?.id,
+    })
+
+    if (error) throw error
+
+    if (data && data.length > 0) {
+      const result = data[0]
+      if (result.success) {
+        message.success(result.message)
+
+        // Cập nhật lại dòng tương ứng trong bảng để UI thay đổi ngay lập tức
+        const idx = rows.value.findIndex((r) => r.order_id === customerPlayModal.orderId)
+        if (idx > -1) {
+          rows.value[idx].status = result.new_status
+          rows.value[idx].paused_at =
+            result.new_status === 'customer_playing' ? new Date().toISOString() : null
+          if (result.new_deadline) {
+            rows.value[idx].deadline = result.new_deadline
+          }
+        }
+
+        // Cập nhật state trong modal
+        customerPlayModal.isCustomerPlaying = result.new_status === 'customer_playing'
+        customerPlayModal.pausedAt =
+          result.new_status === 'customer_playing' ? new Date().toISOString() : null
+        if (result.new_deadline) {
+          customerPlayModal.deadline = result.new_deadline
+        }
+      } else {
+        message.error(result.message)
+        // Trả lại trạng thái cũ của switch nếu có lỗi
+        customerPlayModal.isCustomerPlaying = !checked
+      }
+    }
+  } catch (e: unknown) {
+    const error = e as Error
+    console.error('Error toggling customer playing:', error)
+    message.error(error.message || 'Cập nhật thất bại.')
+    // Trả lại trạng thái cũ của switch nếu có lỗi
+    customerPlayModal.isCustomerPlaying = !checked
+  } finally {
+    customerPlayModal.loading = false
   }
 }
 
@@ -2724,6 +3438,25 @@ async function openHistoryModal(row: OrderRow) {
   } finally {
     historyModal.loading = false
   }
+}
+
+function openPilotDetailModal(row: OrderRow) {
+  customerPlayModal.open = true
+  customerPlayModal.loading = false
+  customerPlayModal.orderId = row.order_id
+  customerPlayModal.customerName = row.customer_name
+  customerPlayModal.serviceType = row.service_type
+  customerPlayModal.isCustomerPlaying = row.status === 'customer_playing'
+  customerPlayModal.pausedAt = row.paused_at
+  customerPlayModal.deadline = row.deadline
+
+  // Lưu thông tin cho pilot cycle calculations
+  customerPlayModal.createdAt = row.created_at
+  customerPlayModal.status = row.status
+  customerPlayModal.pilot_warning_level = row.pilot_warning_level
+  customerPlayModal.pilot_is_blocked = row.pilot_is_blocked
+  customerPlayModal.pilot_cycle_start_at = row.pilot_cycle_start_at
+  customerPlayModal.pilot_online_hours = row.pilot_online_hours
 }
 
 function isLevelingItemDisabled(currentItem: SvcItem): boolean {
@@ -3561,6 +4294,7 @@ onBeforeUnmount(() => {
 .datatable--tight :deep(.n-data-table-td) {
   padding: 8px 10px;
 }
+
 .wide-dropdown :deep(.n-select-menu) {
   min-width: 150px !important;
 }
@@ -3747,5 +4481,9 @@ onBeforeUnmount(() => {
   cursor: default !important;
   /* Đảm bảo màu chữ không bị mờ đi khi disable */
   color: inherit !important;
+}
+
+.space-y-4 > * + * {
+  margin-top: 1rem;
 }
 </style>

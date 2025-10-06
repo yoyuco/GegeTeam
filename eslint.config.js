@@ -6,6 +6,7 @@ import vueParser from 'vue-eslint-parser'
 import prettier from 'eslint-plugin-prettier'
 import prettierConfig from 'eslint-config-prettier'
 import globals from 'globals'
+import vitest from '@vitest/eslint-plugin'
 
 export default [
   // Ignore patterns
@@ -94,6 +95,32 @@ export default [
       'prettier/prettier': 'error',
       'no-console': 'off',
       'no-debugger': 'off',
+    },
+  },
+
+  // Test files
+  {
+    files: ['**/__tests__/**/*', '**/*.{test,spec}.{js,ts,jsx,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...vitest.environments.env.globals,
+      },
+    },
+    plugins: {
+      '@typescript-eslint': ts,
+      vitest,
+    },
+    rules: {
+      ...ts.configs.recommended.rules,
+      'vitest/expect-expect': 'error',
+      'vitest/consistent-test-it': ['error', { fn: 'it' }],
+      'vitest/no-identical-title': 'error',
+      'vitest/prefer-to-have-length': 'warn',
+      'vitest/require-top-level-describe': 'warn',
+      'vitest/max-nested-describe': ['error', { max: 3 }],
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-console': 'off',
     },
   },
 

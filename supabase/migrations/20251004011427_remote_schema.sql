@@ -485,8 +485,8 @@ BEGIN
     LEFT JOIN public.product_variants pv ON ol.variant_id = pv.id
     WHERE ol.id = v_order_line_id;
 
-    -- ✅ FIX: Dùng tên đúng 'Service-Selfplay' và luôn set paused_at khi cancel
-    IF v_service_type = 'Service-Selfplay' THEN
+    -- ✅ FIX: Dùng tên đúng 'Service - Selfplay' và luôn set paused_at khi cancel
+    IF v_service_type = 'Service - Selfplay' THEN
         -- Hoàn lại deadline nếu đã cộng khi start
         IF v_session.unpaused_duration IS NOT NULL THEN
             UPDATE public.order_lines
@@ -509,9 +509,9 @@ BEGIN
     WHERE order_line_id = v_order_line_id AND ended_at IS NOT NULL;
 
     IF completed_sessions_count > 0 THEN
-        IF v_service_type = 'Service-Pilot' THEN
+        IF v_service_type = 'Service - Pilot' THEN
             UPDATE public.orders SET status = 'pending_pilot' WHERE id = v_order_id;
-        ELSIF v_service_type = 'Service-Selfplay' THEN
+        ELSIF v_service_type = 'Service - Selfplay' THEN
             UPDATE public.orders SET status = 'paused_selfplay' WHERE id = v_order_id;
         END IF;
     ELSE
@@ -796,10 +796,10 @@ BEGIN
     
     -- So sánh với tên variant đã được chuẩn hóa
     IF v_current_order_status <> 'pending_completion' THEN
-        IF v_service_type = 'Service-Pilot' THEN 
+        IF v_service_type = 'Service - Pilot' THEN
             UPDATE public.orders SET status = 'pending_pilot' WHERE id = v_order_id;
-        ELSIF v_service_type = 'Service-Selfplay' THEN 
-            UPDATE public.orders SET status = 'paused_selfplay' WHERE id = v_order_id; 
+        ELSIF v_service_type = 'Service - Selfplay' THEN
+            UPDATE public.orders SET status = 'paused_selfplay' WHERE id = v_order_id;
             UPDATE public.order_lines SET paused_at = NOW() WHERE id = v_order_line_id;
         END IF;
     END IF;
@@ -1578,7 +1578,7 @@ BEGIN
     
     -- <<< SỬA ĐỔI LOGIC QUAN TRỌNG NẰM Ở ĐÂY >>>
     -- Xử lý logic tạm dừng cho cả trạng thái 'new' và 'paused_selfplay' của đơn Selfplay
-    IF v_service_type = 'Service-Selfplay' THEN
+    IF v_service_type = 'Service - Selfplay' THEN
         IF v_current_status = 'paused_selfplay' AND v_paused_at IS NOT NULL THEN
             v_paused_duration := NOW() - v_paused_at;
         ELSIF v_current_status = 'new' THEN
@@ -1684,7 +1684,7 @@ BEGIN
         SELECT count(*) INTO completed_items FROM public.order_service_items WHERE order_line_id = v_order_line_id AND done_qty >= COALESCE(plan_qty, 0);
         IF total_items > 0 AND total_items = completed_items THEN
             -- Chỉ dừng deadline cho Selfplay khi pending_completion
-            IF v_current_order_status = 'in_progress' AND v_service_type = 'Service-Selfplay' THEN
+            IF v_current_order_status = 'in_progress' AND v_service_type = 'Service - Selfplay' THEN
                 UPDATE public.order_lines SET paused_at = NOW() WHERE id = v_order_line_id;
             END IF;
             UPDATE public.orders SET status = 'pending_completion' WHERE id = v_order_id;
