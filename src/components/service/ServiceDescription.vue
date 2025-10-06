@@ -14,7 +14,7 @@
         <strong :class="{ 'line-through': kind.isCompleted }">- {{ kind.name }}:</strong>
         <ul v-if="kind.items.length > 0" class="list-none p-0 m-0 pl-4">
           <li v-for="item in kind.items" :key="item.id">
-            + <ServiceItemLabel :item="item" :show-completed="true" />
+            + <ServiceItemLabel :item="item" :show-completed="true" :show-progress="true" />
           </li>
         </ul>
       </li>
