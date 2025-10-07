@@ -42,6 +42,16 @@ const routes = [
     component: () => import('@/pages/SystemOps.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/poe-ops',
+    component: () => import('@/pages/PoeOps.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/poe-sell',
+    component: () => import('@/pages/PoeSell.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

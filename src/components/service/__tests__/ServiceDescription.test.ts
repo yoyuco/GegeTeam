@@ -31,7 +31,7 @@ describe('ServiceDescription', () => {
         collapsed: false,
       },
       global: {
-        provides: {
+        provide: {
           attributeMap: mockAttributeMap,
         },
         stubs: {
@@ -65,7 +65,7 @@ describe('ServiceDescription', () => {
         collapsed: true,
       },
       global: {
-        provides: {
+        provide: {
           attributeMap: mockAttributeMap,
         },
       },
@@ -82,7 +82,7 @@ describe('ServiceDescription', () => {
         collapsed: false,
       },
       global: {
-        provides: {
+        provide: {
           attributeMap: mockAttributeMap,
         },
       },
@@ -120,7 +120,7 @@ describe('ServiceDescription', () => {
         collapsed: false,
       },
       global: {
-        provides: {
+        provide: {
           attributeMap: mockAttributeMap,
         },
         stubs: {

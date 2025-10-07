@@ -243,6 +243,7 @@
           <template
             v-if="
               detail.service_type === 'Pilot' &&
+              detail.status &&
               !['completed', 'cancelled', 'delivered', 'pending_completion'].includes(detail.status)
             "
           >
@@ -1734,6 +1735,7 @@ const pilotCycleInfo = computed(() => {
   // Chỉ tính cho pilot orders đang hoạt động
   if (
     detail.service_type !== 'Pilot' ||
+    !detail.status ||
     ['completed', 'cancelled', 'delivered', 'pending_completion'].includes(detail.status)
   ) {
     return {
