@@ -13,6 +13,7 @@ Hướng dẫn đồng bộ database schema giữa Staging và Production.
 ## 🔗 Bước 1: Link CLI với Projects
 
 ### Link với Staging (Development)
+
 ```bash
 # Link CLI với staging project
 supabase link --project-ref fvgjmfytzdnrdlluktdx
@@ -22,6 +23,7 @@ cp .env.local .env.staging
 ```
 
 ### Link với Production
+
 ```bash
 # Tạo file .env.production
 cat > .env.production << EOF
@@ -36,6 +38,7 @@ EOF
 ## 📤 Bước 2: Tạo Migration từ Staging
 
 ### Option 1: Tạo migration từ local changes
+
 ```bash
 # Pull schema từ staging về local
 supabase db pull --linked
@@ -45,6 +48,7 @@ git diff supabase/migrations/
 ```
 
 ### Option 2: Tạo migration thủ công
+
 ```bash
 # Tạo migration file mới
 supabase migration new <migration-name>
@@ -58,6 +62,7 @@ code supabase/migrations/<timestamp>_<migration-name>.sql
 ## 🚀 Bước 3: Deploy lên Production
 
 ### Cách 1: Qua Supabase CLI (Khuyên dùng)
+
 ```bash
 # Switch link sang production
 supabase link --project-ref susuoambmzdmcygovkea
@@ -70,6 +75,7 @@ supabase db diff --linked
 ```
 
 ### Cách 2: Qua Supabase Dashboard
+
 1. Mở Dashboard Production: https://supabase.com/dashboard/project/susuoambmzdmcygovkea
 2. Vào **SQL Editor**
 3. Copy nội dung migration file và execute
@@ -114,6 +120,7 @@ supabase db diff --linked
 - [ ] Test ở non-peak hours (nếu có thể)
 
 ### Backup Production trước khi migrate:
+
 ```bash
 # Download backup qua CLI
 supabase db dump --linked > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -124,6 +131,7 @@ supabase db dump --linked > backup_$(date +%Y%m%d_%H%M%S).sql
 ## 📝 Các lệnh quan trọng
 
 ### Switch giữa projects
+
 ```bash
 # Link staging
 supabase link --project-ref fvgjmfytzdnrdlluktdx
@@ -136,16 +144,19 @@ supabase projects list
 ```
 
 ### Pull schema từ remote
+
 ```bash
 supabase db pull --linked
 ```
 
 ### Push migrations lên remote
+
 ```bash
 supabase db push --linked
 ```
 
 ### Kiểm tra diff
+
 ```bash
 # So sánh local vs remote
 supabase db diff --linked
@@ -155,6 +166,7 @@ supabase db diff <file1.sql> <file2.sql>
 ```
 
 ### Reset local database (NGUY HIỂM!)
+
 ```bash
 supabase db reset
 ```
@@ -164,12 +176,14 @@ supabase db reset
 ## 🔥 Rollback nếu có lỗi
 
 ### Option 1: Restore từ backup
+
 ```bash
 # Từ Supabase Dashboard
 Database > Backups > Restore
 ```
 
 ### Option 2: Tạo migration rollback
+
 ```sql
 -- Ví dụ: Nếu migration add column, rollback sẽ drop column
 ALTER TABLE orders DROP COLUMN IF EXISTS new_column;
@@ -220,18 +234,21 @@ supabase db push --preview-branch feature/new-ui
 ## 🔑 Environment Variables
 
 ### Staging (.env.local)
+
 ```
 VITE_SUPABASE_URL=https://fvgjmfytzdnrdlluktdx.supabase.co
 VITE_SUPABASE_ANON_KEY=<staging-anon-key>
 ```
 
 ### Production (.env.production)
+
 ```
 VITE_SUPABASE_URL=https://susuoambmzdmcygovkea.supabase.co
 VITE_SUPABASE_ANON_KEY=<production-anon-key>
 ```
 
 ### Build commands:
+
 ```bash
 # Build for staging
 pnpm build --mode staging

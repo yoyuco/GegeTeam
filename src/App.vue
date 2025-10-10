@@ -66,11 +66,11 @@
                 >
                   <n-icon><AnalyticsIcon /></n-icon><span>Thao tác hệ thống</span>
                 </RouterLink>
-                <RouterLink to="/poe-ops" class="menu-item">
-                  <n-icon><AnalyticsIcon /></n-icon><span>POE Operations</span>
+                <RouterLink to="/currency/ops" class="menu-item">
+                  <n-icon><AnalyticsIcon /></n-icon><span>Currency Operations</span>
                 </RouterLink>
-                <RouterLink to="/poe-sell" class="menu-item">
-                  <n-icon><CashIcon /></n-icon><span>POE Bán hàng</span>
+                <RouterLink to="/currency/sell" class="menu-item">
+                  <n-icon><CashIcon /></n-icon><span>Currency Bán hàng</span>
                 </RouterLink>
               </nav>
 

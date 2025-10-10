@@ -42,16 +42,6 @@ const routes = [
     component: () => import('@/pages/SystemOps.vue'),
     meta: { requiresAuth: true },
   },
-  {
-    path: '/poe-ops',
-    component: () => import('@/pages/PoeOps.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/poe-sell',
-    component: () => import('@/pages/PoeSell.vue'),
-    meta: { requiresAuth: true },
-  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
@@ -79,6 +69,21 @@ router.beforeEach((to) => {
   }
 
   // Mọi trường hợp khác, cho phép điều hướng
+})
+
+// Add currency routes
+router.addRoute({
+  path: '/currency/sell',
+  name: 'currency-sell',
+  component: () => import('@/pages/CurrencySell.vue'),
+  meta: { requiresAuth: true },
+})
+
+router.addRoute({
+  path: '/currency/ops',
+  name: 'currency-ops',
+  component: () => import('@/pages/CurrencyOps.vue'),
+  meta: { requiresAuth: true },
 })
 
 export default router

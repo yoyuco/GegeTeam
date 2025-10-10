@@ -1163,34 +1163,7 @@
               ⏰ Khách đang chơi từ:
               {{ new Date(customerPlayModal.pausedAt).toLocaleString('vi-VN') }}
             </p>
-            <p v-else-if="!customerPlayModal.isCustomerPlaying" class="text-gray-600">
-              Khách không được chơi trong quá trình pilot
-            </p>
           </div>
-
-          <!-- Warning Message -->
-          <n-alert
-            v-if="customerPlayModal.isCustomerPlaying"
-            type="warning"
-            title="Lưu ý quan trọng"
-            :show-icon="true"
-            class="mt-3"
-          >
-            <template #icon>
-              <n-icon>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
-                  />
-                </svg>
-              </n-icon>
-            </template>
-            <div class="text-sm">
-              <p>• Khi khách chơi, deadline sẽ được tạm dừng</p>
-              <p>• Thời gian khách chơi sẽ không tính vào thời gian làm việc</p>
-              <p>• Khi tắt chế độ khách chơi, deadline sẽ được cộng bù thời gian</p>
-            </div>
-          </n-alert>
         </div>
 
         <!-- Pilot Cycle Information - chỉ hiển thị cho pilot orders đang hoạt động -->

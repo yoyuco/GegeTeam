@@ -50,25 +50,32 @@ BEGIN
         -- Initialize pilot_cycle_start_at for existing pilot orders
         -- For completed orders: use NULL (no cycle needed)
         -- For active orders: use a more recent start point to avoid immediate warnings
-        UPDATE order_lines ol
-        SET pilot_cycle_start_at = CASE
-            -- Completed/cancelled orders: no cycle needed
-            WHEN o.status IN ('completed', 'cancelled', 'delivered', 'pending_completion') THEN NULL
-            -- For active pilot orders, start from a reasonable recent time
-            -- to avoid immediate warnings for existing orders
-            WHEN pv.display_name = 'Service - Pilot' THEN
+        UPDATE order_lines
+        SET pilot_cycle_start_at = o_cases.pilot_cycle_start_at
+        FROM (
+            SELECT
+                ol.id,
                 CASE
-                    -- If recently created (last 3 days), use created_at
-                    WHEN o.created_at >= NOW() - INTERVAL '3 days' THEN o.created_at
-                    -- If older, start from 3 days ago to give grace period
-                    ELSE NOW() - INTERVAL '3 days'
-                END
-            -- Non-pilot orders: use created_at
-            ELSE o.created_at
-        END
-        FROM orders o
-        JOIN product_variants pv ON ol.variant_id = pv.id
-        WHERE ol.pilot_cycle_start_at IS NULL;
+                    -- Completed/cancelled orders: no cycle needed
+                    WHEN o.status IN ('completed', 'cancelled', 'delivered', 'pending_completion') THEN NULL
+                    -- For active pilot orders, start from a reasonable recent time
+                    -- to avoid immediate warnings for existing orders
+                    WHEN pv.display_name = 'Service - Pilot' THEN
+                        CASE
+                            -- If recently created (last 3 days), use created_at
+                            WHEN o.created_at >= NOW() - INTERVAL '3 days' THEN o.created_at
+                            -- If older, start from 3 days ago to give grace period
+                            ELSE NOW() - INTERVAL '3 days'
+                        END
+                    -- Non-pilot orders: use created_at
+                    ELSE o.created_at
+                END as pilot_cycle_start_at
+            FROM order_lines ol
+            JOIN orders o ON ol.order_id = o.id
+            JOIN product_variants pv ON ol.variant_id = pv.id
+            WHERE ol.pilot_cycle_start_at IS NULL
+        ) AS o_cases
+        WHERE order_lines.id = o_cases.id;
     END IF;
 END $$;
 

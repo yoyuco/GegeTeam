@@ -31,6 +31,7 @@ Các migrations này đã được archive và thay thế bằng baseline migrat
 ## Migration quan trọng nhất:
 
 **20251003170000_fix_deadline_pause_logic.sql** - Chứa logic deadline pause cho Selfplay:
+
 - `complete_order_line_v1`: SET paused_at khi in_progress
 - `cancel_order_line_v1`: SET paused_at khi in_progress
 - `tr_check_all_items_completed_v1`: SET paused_at cho Selfplay only khi pending_completion

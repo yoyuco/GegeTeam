@@ -1,0 +1,142 @@
+[
+  {
+    "id": "39ce6b93-f45b-467e-8316-e922ebc41911",
+    "name": "Facbook to G2G to Payoneer to Bank",
+    "description": "Mua từ VND, Bán qua G2G, rút về Payoneer, rút về VND",
+    "chain_steps": [
+      {
+        "step": 1,
+        "fee_type": "BUY_FEE",
+        "fee_fixed": 0,
+        "description": "Mua VN",
+        "fee_percent": 0,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "VND"
+      },
+      {
+        "step": 2,
+        "fee_type": "SALE_FEE",
+        "fee_fixed": 0,
+        "description": "G2G platform fee 5%",
+        "fee_percent": 5,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      },
+      {
+        "step": 3,
+        "fee_type": "WITHDRAWAL_FEE",
+        "fee_fixed": 0,
+        "description": "G2G to Payoneer fee 1%",
+        "fee_percent": 1,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      },
+      {
+        "step": 4,
+        "fee_type": "CONVERSION_FEE",
+        "fee_fixed": 0,
+        "description": "Payoneer to VND 2.5%",
+        "fee_percent": 2.5,
+        "to_currency": "VND",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      }
+    ],
+    "is_active": true,
+    "created_at": "2025-10-08T12:22:04.231802+00:00",
+    "updated_at": "2025-10-10T02:14:15.745031+00:00"
+  },
+  {
+    "id": "41860638-471b-46ba-b0eb-5f49c925761c",
+    "name": "PayPal to Bank",
+    "description": "Nhận qua PayPal, chuyển về bank Việt Nam",
+    "chain_steps": [
+      {
+        "step": 1,
+        "fee_type": "WITHDRAWAL_FEE",
+        "fee_fixed": 0.3,
+        "description": "PayPal fee 2.9% + $0.30",
+        "fee_percent": 2.9,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      },
+      {
+        "step": 2,
+        "fee_type": "CONVERSION_FEE",
+        "fee_fixed": 0,
+        "description": "PayPal to VND conversion fee 2.5%",
+        "fee_percent": 2.5,
+        "to_currency": "VND",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      }
+    ],
+    "is_active": true,
+    "created_at": "2025-10-08T12:22:04.231802+00:00",
+    "updated_at": "2025-10-08T12:22:04.231802+00:00"
+  },
+  {
+    "id": "eb8ec2c7-919a-4be5-b1b9-097ea1e8ad81",
+    "name": "Direct Customer to Bank",
+    "description": "Bán trực tiếp cho khách, nhận về ngân hàng Việt Nam",
+    "chain_steps": [
+      {
+        "step": 1,
+        "fee_type": "CONVERSION_FEE",
+        "fee_fixed": 0,
+        "description": "Không phí, nhận thẳng VND",
+        "fee_percent": 0,
+        "to_currency": "VND",
+        "fee_currency": "VND",
+        "from_currency": "VND"
+      }
+    ],
+    "is_active": true,
+    "created_at": "2025-10-08T12:22:04.231802+00:00",
+    "updated_at": "2025-10-08T12:22:04.231802+00:00"
+  },
+  {
+    "id": "f8d5f5b7-0fff-4fc3-8740-18a19b5ad6b5",
+    "name": "Facebook to G2G to Payoneer",
+    "description": "Mua từ Facebook, bán qua G2G, rút về Payoneer",
+    "chain_steps": [
+      {
+        "step": 1,
+        "fee_type": "SALE_FEE",
+        "fee_fixed": 0,
+        "description": "G2G platform fee 5%",
+        "fee_percent": 5,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "VND"
+      },
+      {
+        "step": 2,
+        "fee_type": "WITHDRAWAL_FEE",
+        "fee_fixed": 0,
+        "description": "G2G to Payoneer fee 1%",
+        "fee_percent": 1,
+        "to_currency": "USD",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      },
+      {
+        "step": 3,
+        "fee_type": "CONVERSION_FEE",
+        "fee_fixed": 0,
+        "description": "Payoneer to VND (2.5%)",
+        "fee_percent": 2.5,
+        "to_currency": "VND",
+        "fee_currency": "USD",
+        "from_currency": "USD"
+      }
+    ],
+    "is_active": true,
+    "created_at": "2025-10-08T12:22:04.231802+00:00",
+    "updated_at": "2025-10-10T02:09:19.467096+00:00"
+  }
+]
