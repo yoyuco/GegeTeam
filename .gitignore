@@ -52,3 +52,15 @@ data_insert.sql.claude/settings.local.json
 
 # Claude Code temp files
 .claude/
+
+# Error Management System logs and temp files
+.error-management/logs/
+.error-management/reports/
+.error-management/temp/
+eslint-errors*.json
+typescript-errors*.json
+combined-errors.log
+
+# MCP configuration and temp files
+.serena/
+WebGegeTeamtoolsmcp-vue-tools/
