@@ -115,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { NSelect, NInput } from 'naive-ui'
 import type { Channel } from '@/types/composables'
 
@@ -143,6 +143,8 @@ const props = withDefaults(defineProps<Props>(), {
 // Emits
 const emit = defineEmits<{
   'update:modelValue': [value: Props['modelValue']]
+  'customer-changed': [customer: { name: string } | null]
+  'game-tag-changed': [gameTag: string]
 }>()
 
 // Use props instead of useCurrency to ensure reactivity
@@ -195,4 +197,19 @@ const gameCustomerInfoPlaceholder = computed(() => {
       return 'Tên nhân vật hoặc ID game'
   }
 })
+
+// Watch for changes and emit events
+watch(
+  () => formData.value.customerName,
+  (newName: string) => {
+    emit('customer-changed', newName ? { name: newName } : null)
+  }
+)
+
+watch(
+  () => formData.value.gameTag,
+  (newGameTag: string) => {
+    emit('game-tag-changed', newGameTag || '')
+  }
+)
 </script>
