@@ -69,8 +69,8 @@
                 <RouterLink to="/currency/ops" class="menu-item">
                   <n-icon><AnalyticsIcon /></n-icon><span>Currency Operations</span>
                 </RouterLink>
-                <RouterLink to="/currency/sell" class="menu-item">
-                  <n-icon><CashIcon /></n-icon><span>Currency Bán hàng</span>
+                <RouterLink to="/currency/create-orders" class="menu-item">
+                  <n-icon><CashIcon /></n-icon><span>Currency Mua Bán</span>
                 </RouterLink>
               </nav>
 
