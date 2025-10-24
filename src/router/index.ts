@@ -42,6 +42,18 @@ const routes = [
     component: () => import('@/pages/SystemOps.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/currency/create-orders',
+    name: 'currency-create-orders',
+    component: () => import('@/pages/CurrencyCreateOrders.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/currency/ops',
+    name: 'currency-ops',
+    component: () => import('@/pages/CurrencyOps.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
@@ -69,21 +81,6 @@ router.beforeEach((to) => {
   }
 
   // Mọi trường hợp khác, cho phép điều hướng
-})
-
-// Add currency routes
-router.addRoute({
-  path: '/currency/create-orders',
-  name: 'currency-create-orders',
-  component: () => import('@/pages/CurrencyCreateOrders.vue'),
-  meta: { requiresAuth: true },
-})
-
-router.addRoute({
-  path: '/currency/ops',
-  name: 'currency-ops',
-  component: () => import('@/pages/CurrencyOps.vue'),
-  meta: { requiresAuth: true },
 })
 
 export default router
