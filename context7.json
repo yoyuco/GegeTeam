@@ -1,0 +1,98 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "GegeTeam - Currency Management System",
+  "description": "Comprehensive currency trading and order management system with real-time inventory tracking, multi-game support (Path of Exile 1&2, Diablo 4), and supplier management",
+  "folders": [
+    "src",
+    "supabase/migrations",
+    "src/components",
+    "src/composables",
+    "src/lib",
+    "src/types",
+    "src/pages",
+    "src/utils",
+    "currency-plan"
+  ],
+  "excludeFolders": [
+    "node_modules",
+    "dist",
+    ".git",
+    ".vscode",
+    ".claude",
+    "results",
+    "WebGegeTeamtoolsmcp-vue-tools"
+  ],
+  "excludeFiles": ["*.min.js", "*.map", ".DS_Store", "coverage/**", "temp-*", "*.log"],
+  "rules": [
+    "Focus on Vue.js 3 + TypeScript architecture",
+    "Currency system uses Supabase as backend",
+    "Real-time inventory management with triggers",
+    "Multi-game currency support (POE1, POE2, D4)",
+    "Order workflow: sell orders, purchase orders, fulfillment",
+    "Channel-based trading with fee management",
+    "Authentication and authorization using Supabase Auth",
+    "File uploads use Supabase Storage work-proofs bucket",
+    "Database migrations follow naming convention with timestamps",
+    "Components use Naive UI for consistent design",
+    "Business logic in composables following Vue 3 patterns",
+    "Game/League context management system",
+    "Order status tracking and notifications"
+  ],
+  "keywords": [
+    "vue3",
+    "typescript",
+    "supabase",
+    "currency",
+    "trading",
+    "inventory",
+    "orders",
+    "path of exile",
+    "diablo 4",
+    "realtime",
+    "naive ui",
+    "composables",
+    "database",
+    "authentication",
+    "file upload"
+  ],
+  "techStack": {
+    "frontend": "Vue 3 + TypeScript + Vite",
+    "backend": "Supabase (PostgreSQL + Auth + Storage)",
+    "ui": "Naive UI",
+    "state": "Vue Composables + Pinia (if used)",
+    "realtime": "Supabase Realtime"
+  },
+  "architectureNotes": {
+    "mainFeatures": [
+      "Currency order management (sell/purchase)",
+      "Real-time inventory tracking",
+      "Multi-game support",
+      "Channel-based trading",
+      "Supplier management",
+      "File upload system for proof images"
+    ],
+    "dataFlow": [
+      "User creates order → calls create_currency_*_order RPC function",
+      "RPC function validates inventory availability → reserves stock → creates order record",
+      "Database triggers automatically update currency_inventory on transaction insert/update",
+      "Inventory is tracked per game/league/currency/account/channel with reserved/available quantities",
+      "File uploads to Supabase Storage work-proofs bucket with public URLs stored in database",
+      "Game accounts are linked to suppliers and used for order fulfillment"
+    ],
+    "keyTables": [
+      "currency_orders",
+      "currency_inventory",
+      "attributes",
+      "channels",
+      "parties",
+      "currency_transactions"
+    ]
+  },
+  "importantPatterns": {
+    "database": "Uses RPC functions for complex operations, RLS for security",
+    "components": "Composition API with <script setup> syntax",
+    "state": "Reactive refs and computed properties",
+    "api": "Supabase client with TypeScript support",
+    "styling": "Tailwind CSS with custom component styles"
+  }
+}

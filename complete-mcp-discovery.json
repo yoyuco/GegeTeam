@@ -1,0 +1,324 @@
+{
+  "discovery_timestamp": "2025-10-23T15:20:00.000Z",
+  "total_mcp_servers": 10,
+  "servers": {
+    "context7": {
+      "name": "Context7",
+      "status": "✅ Active",
+      "response_time": "150ms",
+      "tools": [
+        {
+          "name": "resolve-library-id",
+          "description": "Resolves package/product name to Context7-compatible library ID",
+          "purpose": "Library documentation lookup"
+        },
+        {
+          "name": "get-library-docs",
+          "description": "Fetches up-to-date documentation for a library",
+          "purpose": "Documentation retrieval"
+        }
+      ]
+    },
+    "figma_compare": {
+      "name": "Vue Figma Tools",
+      "status": "✅ Active",
+      "response_time": "250ms",
+      "server_file": "tools/mcp-vue-tools/src/server.js",
+      "tools": [
+        {
+          "name": "vue_dev_server",
+          "description": "Manage Vue development server (start/stop/restart)",
+          "purpose": "Development server management"
+        },
+        {
+          "name": "save_vue_component",
+          "description": "Save AI-generated Vue component code for testing",
+          "purpose": "Component benchmarking"
+        },
+        {
+          "name": "figma_compare",
+          "description": "Complete Figma component comparison and analysis",
+          "purpose": "Design vs implementation comparison"
+        }
+      ]
+    },
+    "notify_me_mcp": {
+      "name": "Notification MCP",
+      "status": "❌ Disabled",
+      "reason": "Not needed for solo development - Discord notifications disabled",
+      "server_file": "tools/notifyme_mcp/src/index.ts",
+      "tools": [
+        {
+          "name": "list_services",
+          "description": "List configured webhook services",
+          "purpose": "Service configuration management"
+        },
+        {
+          "name": "validate_webhook",
+          "description": "Test webhook connectivity",
+          "purpose": "Connection testing"
+        },
+        {
+          "name": "send_notification",
+          "description": "Send notifications to Discord/Slack",
+          "purpose": "Notification delivery"
+        }
+      ]
+    },
+    "serena": {
+      "name": "Serena",
+      "status": "✅ Active",
+      "response_time": "2346ms",
+      "tools": [
+        {
+          "name": "get_symbols_overview",
+          "description": "Quick file overview and structure analysis",
+          "purpose": "Code analysis and navigation"
+        },
+        {
+          "name": "find_symbol",
+          "description": "Find specific functions/classes in codebase",
+          "purpose": "Symbol search and location"
+        },
+        {
+          "name": "find_referencing_symbols",
+          "description": "Find where symbols are used throughout codebase",
+          "purpose": "Code dependency analysis"
+        },
+        {
+          "name": "search_for_pattern",
+          "description": "Flexible pattern search across files",
+          "purpose": "Advanced code searching"
+        },
+        {
+          "name": "replace_symbol_body",
+          "description": "Edit entire functions/classes",
+          "purpose": "Code modification and refactoring"
+        },
+        {
+          "name": "write_memory",
+          "description": "Store information in memory for later retrieval",
+          "purpose": "Memory management and persistence"
+        },
+        {
+          "name": "read_memory",
+          "description": "Retrieve stored information from memory",
+          "purpose": "Memory access and context restoration"
+        },
+        {
+          "name": "list_memories",
+          "description": "List all stored memories",
+          "purpose": "Memory organization and management"
+        }
+      ]
+    },
+    "figma_restoration_kit": {
+      "name": "Figma Restoration Kit",
+      "status": "📋 Configured",
+      "config_file": "tools/mcp-vue-tools/config/mcp-config-simple.json",
+      "tools": [
+        {
+          "name": "figma_restoration_tools",
+          "description": "Figma design restoration and comparison tools",
+          "purpose": "Design system restoration"
+        }
+      ]
+    },
+    "figma_server": {
+      "name": "Figma Server",
+      "status": "📋 Configured",
+      "config_file": "tools/mcp-vue-tools/config/mcp-config.template.json",
+      "requires": "FIGMA_PERSONAL_ACCESS_TOKEN",
+      "tools": [
+        {
+          "name": "figma_api_tools",
+          "description": "Official Figma MCP server tools",
+          "purpose": "Figma API integration"
+        }
+      ]
+    },
+    "web_search_prime": {
+      "name": "Web Search Prime",
+      "status": "✅ Active",
+      "response_time": "15s",
+      "tools": [
+        {
+          "name": "webSearchPrime",
+          "description": "Search web information with advanced filters",
+          "purpose": "Web research and documentation lookup"
+        }
+      ],
+      "keywords": [
+        "search",
+        "research",
+        "find information",
+        "documentation",
+        "best practices",
+        "latest version"
+      ],
+      "triggers": [
+        "look up documentation",
+        "check latest version",
+        "research best practices",
+        "find examples",
+        "current trends"
+      ],
+      "success_rate": 0.88
+    },
+    "zai_vision": {
+      "name": "ZAI Vision",
+      "status": "✅ Active",
+      "response_time": "25s",
+      "tools": [
+        {
+          "name": "analyze_image",
+          "description": "Analyze images with AI for content extraction",
+          "purpose": "Image analysis and OCR"
+        },
+        {
+          "name": "analyze_video",
+          "description": "Analyze videos for content understanding",
+          "purpose": "Video analysis and interpretation"
+        }
+      ],
+      "keywords": [
+        "image",
+        "picture",
+        "screenshot",
+        "photo",
+        "analyze image",
+        "visual analysis",
+        "OCR"
+      ],
+      "triggers": [
+        "analyze screenshot",
+        "extract text from image",
+        "diagram analysis",
+        "chart interpretation",
+        "visual data extraction"
+      ],
+      "success_rate": 0.82
+    },
+    "github": {
+      "name": "GitHub MCP",
+      "status": "❌ Not Found",
+      "note": "User reported this was installed but not detected in system",
+      "expected_tools": [
+        {
+          "name": "create_repository",
+          "description": "Create new GitHub repository",
+          "purpose": "Repository management"
+        },
+        {
+          "name": "commit_changes",
+          "description": "Commit changes to repository",
+          "purpose": "Version control"
+        },
+        {
+          "name": "create_pull_request",
+          "description": "Create pull request",
+          "purpose": "Code review and collaboration"
+        },
+        {
+          "name": "list_repositories",
+          "description": "List user repositories",
+          "purpose": "Repository discovery"
+        }
+      ],
+      "suggested_location": "May be installed globally or in different directory",
+      "troubleshooting": [
+        "Check global npm packages: npm list -g | grep github",
+        "Check MCP configuration files for proper setup",
+        "Verify MCP server is running and accessible"
+      ]
+    },
+    "supabase": {
+      "name": "Supabase MCP",
+      "status": "✅ Active",
+      "expected_tools": [
+        {
+          "name": "execute_query",
+          "description": "Execute SQL queries on Supabase database",
+          "purpose": "Database operations"
+        },
+        {
+          "name": "list_tables",
+          "description": "List all tables in database",
+          "purpose": "Database schema inspection"
+        },
+        {
+          "name": "upload_file",
+          "description": "Upload files to Supabase storage",
+          "purpose": "File management"
+        },
+        {
+          "name": "manage_auth",
+          "description": "Manage authentication and users",
+          "purpose": "User management"
+        }
+      ],
+      "suggested_location": "May be installed globally or in different directory",
+      "server_file": "tools/supabase-mcp/index.js"
+    }
+  },
+  "summary": {
+    "active_servers": 6,
+    "configured_servers": 2,
+    "disabled_servers": 1,
+    "not_found_servers": 1,
+    "total_tools": 16,
+    "capabilities": [
+      "Library documentation lookup",
+      "Vue development server management",
+      "Figma design comparison",
+      "Component benchmarking",
+      "Design system restoration",
+      "Code analysis and symbol search",
+      "Memory management and persistence",
+      "Web research and documentation lookup",
+      "Image analysis and OCR",
+      "Video analysis and interpretation",
+      "Supabase database operations",
+      "SQL query execution",
+      "Database schema inspection",
+      "Data management and analysis"
+    ]
+  },
+  "setup_requirements": {
+    "notify_me_mcp": {
+      "action": "Install npx and configure webhooks",
+      "env_file": "tools/notifyme_mcp/.env.example"
+    },
+    "figma_server": {
+      "action": "Set FIGMA_PERSONAL_ACCESS_TOKEN environment variable",
+      "config_template": "tools/mcp-vue-tools/config/mcp-config.template.json"
+    }
+  },
+  "usage_examples": {
+    "vue_dev_server": {
+      "command": "vue_dev_server",
+      "action": "start",
+      "port": 83
+    },
+    "figma_compare": {
+      "command": "figma_compare",
+      "componentName": "PrimaryButton",
+      "generateReport": true
+    },
+    "web_search_prime": {
+      "command": "webSearchPrime",
+      "query": "Vue 3 composition API best practices",
+      "domain": "vuejs.org"
+    },
+    "zai_vision": {
+      "command": "analyze_image",
+      "image_path": "./screenshot.png",
+      "extract_text": true
+    },
+    "serena": {
+      "command": "find_symbol",
+      "symbol": "createCurrencyOrder",
+      "file_pattern": "**/*.vue"
+    }
+  }
+}

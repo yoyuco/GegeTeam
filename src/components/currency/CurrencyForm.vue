@@ -2,65 +2,10 @@
 <!-- Dynamic Currency Form Component with Buy/Sell Tabs -->
 <template>
   <div class="bg-white rounded-xl shadow-sm border border-gray-200">
-    <!-- Tab Headers -->
-    <div class="flex border-b border-gray-200">
-      <button
-        :class="[
-          'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
-          activeTab === 'buy'
-            ? 'tab-active text-green-600 border-b-2 border-green-600'
-            : 'tab-inactive text-gray-500 hover:text-gray-700',
-        ]"
-        @click="activeTab = 'buy'"
-      >
-        <svg class="w-4 h-4 tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.446 1.707H17a2 2 0 002-2v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2a2 2 0 002 2z"
-          />
-        </svg>
-        Mua vào
-      </button>
-      <button
-        :class="[
-          'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
-          activeTab === 'sell'
-            ? 'tab-active text-blue-600 border-b-2 border-blue-600'
-            : 'tab-inactive text-gray-500 hover:text-gray-700',
-        ]"
-        @click="activeTab = 'sell'"
-      >
-        <svg class="w-4 h-4 tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.446 1.707H17a2 2 0 002-2v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2a2 2 0 002 2z"
-          />
-        </svg>
-        Bán ra
-      </button>
-    </div>
-
     <!-- Tab Content -->
     <div class="p-6">
       <!-- Buy Tab -->
-      <div v-if="activeTab === 'buy'" class="space-y-6">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-800">Thông tin mua vào</h3>
-        </div>
+      <div v-if="transactionType === 'purchase'" class="space-y-6">
 
         <!-- Currency Selection -->
         <div>
@@ -81,11 +26,12 @@
           <n-select
             v-model:value="buyFormData.currencyId"
             :options="currencyOptions"
-            placeholder="Chọn loại currency"
+            :placeholder="loading ? 'Đang tải...' : 'Chọn loại currency'"
             filterable
             :loading="loading"
             size="large"
             class="w-full"
+            clearable
           />
         </div>
 
@@ -114,54 +60,56 @@
           />
         </div>
 
-        <!-- Total Price VND -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
-              <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+        <!-- Total Prices -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Total Price USD -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
+                <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
             </div>
-            <label class="text-sm font-medium text-gray-700">Tổng giá (VND)</label>
-            <span class="text-red-500">*</span>
+            <n-input-number
+              v-model:value="buyFormData.totalPriceUsd"
+              :min="0"
+              placeholder="Nhập tổng tiền USD"
+              size="large"
+              class="w-full"
+            />
           </div>
-          <n-input-number
-            v-model:value="buyFormData.totalPriceVnd"
-            :min="0"
-            placeholder="Nhập tổng giá mua vào"
-            size="large"
-            class="w-full"
-          />
-        </div>
 
-        <!-- Unit Price (calculated) -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
-              <svg class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+          <!-- Total Price VND -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
+                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <label class="text-sm font-medium text-gray-700">Tổng tiền (VND)</label>
+              <span class="text-red-500">*</span>
             </div>
-            <label class="text-sm font-medium text-gray-700">Đơn giá (VND)</label>
-            <span class="text-gray-400 text-xs">(Tự động tính)</span>
+            <n-input-number
+              v-model:value="buyFormData.totalPriceVnd"
+              :min="0"
+              placeholder="Nhập tổng tiền VND"
+              size="large"
+              class="w-full"
+            />
           </div>
-          <n-input-number
-            :value="calculatedBuyUnitPrice"
-            :disabled="true"
-            placeholder="Đơn giá sẽ được tính tự động"
-            size="large"
-            class="w-full"
-          />
         </div>
 
         <!-- Notes -->
@@ -182,8 +130,6 @@
           <n-input
             v-model:value="buyFormData.notes"
             placeholder="Ghi chú thêm về giao dịch mua vào"
-            type="textarea"
-            :rows="3"
             size="large"
             class="w-full"
           />
@@ -191,20 +137,7 @@
       </div>
 
       <!-- Sell Tab -->
-      <div v-if="activeTab === 'sell'" class="space-y-6">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-800">Thông tin bán ra</h3>
-        </div>
+      <div v-if="transactionType === 'sale'" class="space-y-6">
 
         <!-- Currency Selection -->
         <div>
@@ -225,11 +158,12 @@
           <n-select
             v-model:value="sellFormData.currencyId"
             :options="currencyOptions"
-            placeholder="Chọn loại currency"
+            :placeholder="loading ? 'Đang tải...' : 'Chọn loại currency'"
             filterable
             :loading="loading"
             size="large"
             class="w-full"
+            clearable
           />
         </div>
 
@@ -258,54 +192,56 @@
           />
         </div>
 
-        <!-- Unit Price VND -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
-              <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+        <!-- Total Prices -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Total Price USD -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
+                <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
             </div>
-            <label class="text-sm font-medium text-gray-700">Đơn giá (VND)</label>
-            <span class="text-red-500">*</span>
+            <n-input-number
+              v-model:value="sellFormData.totalPriceUsd"
+              :min="0"
+              placeholder="Nhập tổng tiền USD"
+              size="large"
+              class="w-full"
+            />
           </div>
-          <n-input-number
-            v-model:value="sellFormData.unitPriceVnd"
-            :min="0"
-            placeholder="Nhập đơn giá bán ra"
-            size="large"
-            class="w-full"
-          />
-        </div>
 
-        <!-- Total Price (calculated) -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
-              <svg class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+          <!-- Total Price VND -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
+                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <label class="text-sm font-medium text-gray-700">Tổng tiền (VND)</label>
+              <span class="text-red-500">*</span>
             </div>
-            <label class="text-sm font-medium text-gray-700">Tổng giá</label>
-            <span class="text-gray-400 text-xs">(Tự động tính)</span>
+            <n-input-number
+              v-model:value="sellFormData.totalPriceVnd"
+              :min="0"
+              placeholder="Nhập tổng tiền VND"
+              size="large"
+              class="w-full"
+            />
           </div>
-          <n-input-number
-            :value="calculatedSellTotalPrice"
-            :disabled="true"
-            placeholder="Tổng giá sẽ được tính tự động"
-            size="large"
-            class="w-full"
-          />
         </div>
 
         <!-- Notes -->
@@ -326,8 +262,6 @@
           <n-input
             v-model:value="sellFormData.notes"
             placeholder="Ghi chú thêm về giao dịch bán ra"
-            type="textarea"
-            :rows="3"
             size="large"
             class="w-full"
           />
@@ -343,16 +277,18 @@ import { NSelect, NInputNumber, NInput } from 'naive-ui'
 
 // Props
 interface Props {
-  buyModelValue: {
+  buyModelValue?: {
     currencyId: string | null
     quantity: number | null
     totalPriceVnd: number | null
+    totalPriceUsd: number | null
     notes: string
   }
-  sellModelValue: {
+  sellModelValue?: {
     currencyId: string | null
     quantity: number | null
-    unitPriceVnd: number | null
+    totalPriceVnd: number | null
+    totalPriceUsd: number | null
     notes: string
   }
   currencies: any[]
@@ -382,12 +318,24 @@ const activeTab = ref<'buy' | 'sell'>(props.activeTab)
 
 // Form data
 const buyFormData = computed({
-  get: () => props.buyModelValue,
+  get: () => props.buyModelValue || {
+    currencyId: null,
+    quantity: null,
+    totalPriceVnd: null,
+    totalPriceUsd: null,
+    notes: ''
+  },
   set: (value) => emit('update:buyModelValue', value),
 })
 
 const sellFormData = computed({
-  get: () => props.sellModelValue,
+  get: () => props.sellModelValue || {
+    currencyId: null,
+    quantity: null,
+    totalPriceVnd: null,
+    totalPriceUsd: null,
+    notes: ''
+  },
   set: (value) => emit('update:sellModelValue', value),
 })
 
@@ -395,7 +343,23 @@ const sellFormData = computed({
 const loading = computed(() => props.loading)
 
 const currencyOptions = computed(() => {
-  // Currencies are already filtered and formatted in calling component
+  // When loading or currencies empty, return array with loading placeholder
+  if (props.loading || !props.currencies || props.currencies.length === 0) {
+    // Return empty array to prevent UUID display
+    return []
+  }
+  // Check if current currency ID is still valid in the options
+  const buyId = buyFormData.value.currencyId
+  const sellId = sellFormData.value.currencyId
+
+  // If we have a selected ID that's not in the options, return empty to prevent invalid display
+  if (buyId && !props.currencies.some(c => c.value === buyId)) {
+    return []
+  }
+  if (sellId && !props.currencies.some(c => c.value === sellId)) {
+    return []
+  }
+
   return props.currencies
 })
 
@@ -406,9 +370,9 @@ const calculatedBuyUnitPrice = computed(() => {
   return 0
 })
 
-const calculatedSellTotalPrice = computed(() => {
-  if (sellFormData.value.quantity && sellFormData.value.unitPriceVnd) {
-    return sellFormData.value.quantity * sellFormData.value.unitPriceVnd
+const calculatedSellUnitPrice = computed(() => {
+  if (sellFormData.value.quantity && sellFormData.value.totalPriceVnd) {
+    return Math.round(sellFormData.value.totalPriceVnd / sellFormData.value.quantity)
   }
   return 0
 })
@@ -417,6 +381,39 @@ const calculatedSellTotalPrice = computed(() => {
 watch(activeTab, (newTab) => {
   emit('update:activeTab', newTab)
 })
+
+// Watch for loading state and currency availability to handle auto-selection
+watch(
+  () => [props.loading, props.currencies],
+  ([isLoading, currencies]) => {
+    if (!isLoading && currencies && currencies.length > 0) {
+      // Loading completed and currencies are available
+
+      // Auto-select first currency for buy form if not selected
+      if (!buyFormData.value.currencyId) {
+        buyFormData.value.currencyId = currencies[0].value
+      }
+
+      // Auto-select first currency for sell form if not selected
+      if (!sellFormData.value.currencyId) {
+        sellFormData.value.currencyId = currencies[0].value
+      }
+    } else if (isLoading) {
+      // When loading starts, reset invalid currency IDs
+      const currentBuyCurrencyId = buyFormData.value.currencyId
+      const currentSellCurrencyId = sellFormData.value.currencyId
+
+      // Only reset if the current ID won't be in the new options
+      if (currentBuyCurrencyId && currencies && !currencies.some(c => c.value === currentBuyCurrencyId)) {
+        buyFormData.value.currencyId = null
+      }
+      if (currentSellCurrencyId && currencies && !currencies.some(c => c.value === currentSellCurrencyId)) {
+        sellFormData.value.currencyId = null
+      }
+    }
+  },
+  { immediate: true }
+)
 
 // Watch for buy form changes and emit events
 watch(
@@ -435,8 +432,21 @@ watch(
 
 watch(
   () => buyFormData.value.totalPriceVnd,
-  (newPrice: number | null) => {
-    emit('price-changed', { vnd: newPrice || undefined })
+  (newPriceVnd: number | null) => {
+    emit('price-changed', {
+      vnd: newPriceVnd || undefined,
+      usd: buyFormData.value.totalPriceUsd || undefined
+    })
+  }
+)
+
+watch(
+  () => buyFormData.value.totalPriceUsd,
+  (newPriceUsd: number | null) => {
+    emit('price-changed', {
+      vnd: buyFormData.value.totalPriceVnd || undefined,
+      usd: newPriceUsd || undefined
+    })
   }
 )
 
@@ -456,26 +466,41 @@ watch(
 )
 
 watch(
-  () => sellFormData.value.unitPriceVnd,
-  (newPrice: number | null) => {
-    emit('price-changed', { vnd: newPrice || undefined })
+  () => sellFormData.value.totalPriceVnd,
+  (newPriceVnd: number | null) => {
+    emit('price-changed', {
+      vnd: newPriceVnd || undefined,
+      usd: sellFormData.value.totalPriceUsd || undefined
+    })
+  }
+)
+
+watch(
+  () => sellFormData.value.totalPriceUsd,
+  (newPriceUsd: number | null) => {
+    emit('price-changed', {
+      vnd: sellFormData.value.totalPriceVnd || undefined,
+      usd: newPriceUsd || undefined
+    })
   }
 )
 
 // Methods for parent component
 const resetForm = () => {
-  if (activeTab.value === 'buy') {
+  if (props.transactionType === 'purchase') {
     emit('update:buyModelValue', {
       currencyId: null,
       quantity: null,
       totalPriceVnd: null,
+      totalPriceUsd: null,
       notes: '',
     })
   } else {
     emit('update:sellModelValue', {
       currencyId: null,
       quantity: null,
-      unitPriceVnd: null,
+      totalPriceVnd: null,
+      totalPriceUsd: null,
       notes: '',
     })
   }
@@ -501,8 +526,8 @@ const validateForm = () => {
     if (!sellFormData.value.quantity || sellFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    if (!sellFormData.value.unitPriceVnd || sellFormData.value.unitPriceVnd <= 0) {
-      errors.push('Đơn giá phải lớn hơn 0')
+    if (!sellFormData.value.totalPriceVnd || sellFormData.value.totalPriceVnd <= 0) {
+      errors.push('Tổng giá phải lớn hơn 0')
     }
   }
 

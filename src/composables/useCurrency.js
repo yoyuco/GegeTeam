@@ -28,8 +28,28 @@ export function useCurrency() {
   })
 
   const salesChannels = computed(() => {
-    return channels.value.filter((channel) => channel.channel_type === 'SALES')
+    // Channels for selling: SALES || BOTH (using direction field), exclude DEFAULT
+    return (channels.value || []).filter((channel) =>
+      (channel.direction === 'SALES' || channel.direction === 'BOTH') &&
+      channel.code !== 'DEFAULT'
+    )
   })
+
+  const purchaseChannels = computed(() => {
+    // Channels for purchasing: PURCHASE || BOTH (using direction field), exclude DEFAULT
+    return (channels.value || []).filter((channel) =>
+      (channel.direction === 'PURCHASE' || channel.direction === 'BOTH') &&
+      channel.code !== 'DEFAULT'
+    )
+  })
+
+  const allCurrencies = computed(() => {
+    return currencies.value
+  })
+
+  const loadAllCurrencies = async () => {
+    return await loadAvailableCurrencies()
+  }
 
   // Get currency by code
   const getCurrencyByCode = (code) => {
@@ -63,7 +83,29 @@ export function useCurrency() {
     error.value = null
 
     try {
-      currencies.value = await loadCurrencies()
+      // Use correct currency type mapping (same as in CurrencyCreateOrders.vue)
+      let currencyType = null
+      if (currentGame.value === 'POE_2') {
+        currencyType = 'CURRENCY_POE2'
+      } else if (currentGame.value === 'POE_1') {
+        currencyType = 'CURRENCY_POE1'
+      } else if (currentGame.value === 'DIABLO_4') {
+        currencyType = 'CURRENCY_D4'
+      }
+
+      console.log('🔍 Loading currencies for game:', currentGame.value, 'with type:', currencyType)
+
+      const { data, error: fetchError } = await supabase
+        .from('attributes')
+        .select('*')
+        .eq('type', currencyType)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+
+      if (fetchError) throw fetchError
+
+      currencies.value = data || []
+      console.log('✅ Currencies loaded into useCurrency composable:', currencies.value.length, 'items')
     } catch (err) {
       console.error('Error loading currencies:', err)
       error.value = err.message
@@ -98,18 +140,14 @@ export function useCurrency() {
     try {
       const { data, error: fetchError } = await supabase
         .from('channels')
-        .select(
-          `
-          *,
-          trading_fee_chain:trading_fee_chains(id, name, description, is_active)
-        `
-        )
+        .select('*')
         .eq('is_active', true)
         .order('code')
 
       if (fetchError) throw fetchError
 
       channels.value = data || []
+      console.log('✅ Channels loaded successfully:', data?.length || 0)
     } catch (err) {
       console.error('Error loading channels:', err)
       error.value = err.message
@@ -497,6 +535,8 @@ export function useCurrency() {
     activeCurrencies,
     currenciesByCode,
     salesChannels,
+    purchaseChannels,
+    allCurrencies,
     getChannelsWithFeeChains,
 
     // Methods
@@ -504,6 +544,7 @@ export function useCurrency() {
     getExchangeRate,
     convertCurrency,
     loadAvailableCurrencies,
+    loadAllCurrencies,
     loadExchangeRates,
     loadChannels,
     getChannelById,

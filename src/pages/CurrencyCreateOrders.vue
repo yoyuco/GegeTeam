@@ -143,9 +143,10 @@
                   <h2 class="text-lg font-semibold text-gray-800">Thông tin khách hàng</h2>
                 </div>
                 <CustomerForm
-                  v-model="customerFormData"
+                  :customer-model-value="customerFormData"
                   :channels="salesChannels"
-                  :initial-channel-id="customerFormData.channelId"
+                  :game-code="currentGame?.value"
+                  @update:customerModelValue="(value) => { customerFormData = value || { channelId: null, customerName: '', gameTag: '', deliveryInfo: '' } }"
                   @customer-changed="onCustomerChanged"
                   @game-tag-changed="onGameTagChanged"
                 />
@@ -176,14 +177,13 @@
                   ref="currencyFormRef"
                   :key="`${currentGame?.value}-${currentLeague?.value}`"
                   transaction-type="sale"
-                  :game-code="currentGame?.value"
-                  :league-id="currentLeague?.value"
                   :currencies="filteredCurrencies"
                   :loading="currenciesLoading"
-                  :show-account-field="false"
-                  :initial-currency-id="saleData.currencyId"
+                  :active-tab="'sell'"
+                  :sell-model-value="saleData"
+                  @update:sell-model-value="(value) => { if (value) Object.assign(saleData, value) }"
                   @currency-changed="onCurrencyChanged"
-                  @quantity-changed="onQuantityChanged"
+                  @quantity-changed="(quantity: number | null) => onQuantityChanged(quantity || 0)"
                   @price-changed="onPriceChanged"
                 />
               </div>
@@ -299,12 +299,13 @@
                   <h2 class="text-lg font-semibold text-gray-800">Thông tin Nhà cung cấp</h2>
                 </div>
                 <CustomerForm
-                  v-model="supplierFormData"
+                  :supplier-model-value="supplierFormData"
                   :channels="purchaseChannels"
                   :form-mode="'supplier'"
-                  :initial-channel-id="supplierFormData.channelId"
-                  @customer-changed="onSupplierChanged"
-                  @game-tag-changed="onSupplierGameTagChanged"
+                  :game-code="currentGame?.value"
+                  @update:supplierModelValue="(value) => { supplierFormData = value || { channelId: null, customerName: '', gameTag: '', deliveryInfo: '' } }"
+                  @supplier-changed="onSupplierChanged"
+                  @supplier-game-tag-changed="onSupplierGameTagChanged"
                 />
               </div>
             </div>
@@ -333,14 +334,13 @@
                   ref="purchaseCurrencyFormRef"
                   :key="`${currentGame?.value}-${currentLeague?.value}`"
                   transaction-type="purchase"
-                  :game-code="currentGame?.value"
-                  :league-id="currentLeague?.value"
                   :currencies="filteredCurrencies"
                   :loading="currenciesLoading"
-                  :show-account-field="false"
-                  :initial-currency-id="purchaseData.currencyId"
+                  :active-tab="'buy'"
+                  :buy-model-value="purchaseData"
+                  @update:buy-model-value="(value) => { if (value) Object.assign(purchaseData, value) }"
                   @currency-changed="onPurchaseCurrencyChanged"
-                  @quantity-changed="onPurchaseQuantityChanged"
+                  @quantity-changed="(quantity: number | null) => onPurchaseQuantityChanged(quantity || 0)"
                   @price-changed="onPurchasePriceChanged"
                 />
               </div>
@@ -448,13 +448,95 @@ import GameLeagueSelector from '@/components/currency/GameLeagueSelector.vue'
 import CurrencyInventoryPanel from '@/components/currency/CurrencyInventoryPanel.vue'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { useCurrency } from '@/composables/useCurrency.js'
-import { useInventory } from '@/composables/useInventory.js'
+// import { useInventory } from '@/composables/useInventory.js' // Temporarily disabled due to schema errors
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/utils/supabase.js'
-import type { Currency, Channel } from '@/types/composables.d'
+import { debugChannels } from '@/utils/channelDebug.js'
+
+// Debug currencies function
+const debugCurrencies = async () => {
+  console.log('🔍 Debugging currencies from database...')
+  try {
+    const { data, error } = await supabase
+      .from('attributes')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+
+    if (error) {
+      console.error('❌ Error fetching currencies:', error)
+      return
+    }
+
+    console.log('📊 Total currencies from database:', data?.length || 0)
+    console.log('🔍 Raw currency data:', data)
+
+    // Check currency types
+    const currencyTypes = [...new Set(data?.map(c => c.type))]
+    console.log('📋 Available currency types:', currencyTypes)
+
+    // Check if we have any currencies for current game
+    const gameInfo = currentGame.value === 'POE_2' ? { currencyPrefix: 'CURRENCY_POE2' } :
+                     currentGame.value === 'POE_1' ? { currencyPrefix: 'CURRENCY_POE1' } :
+                     currentGame.value === 'DIABLO_4' ? { currencyPrefix: 'CURRENCY_D4' } : null
+
+    if (gameInfo) {
+      const gameCurrencies = data?.filter(c => c.type === gameInfo.currencyPrefix) || []
+      console.log(`🎮 ${gameInfo.currencyPrefix} currencies found:`, gameCurrencies.length)
+      console.log('🎮 Game currencies:', gameCurrencies)
+    }
+
+  } catch (err) {
+    console.error('❌ Error debugging currencies:', err)
+  }
+}
+
+// Manual currency loading function (similar to channel loading)
+const loadCurrenciesForCurrentGame = async () => {
+  if (!currentGame.value) {
+    console.log('❌ No current game, cannot load currencies')
+    return
+  }
+
+  console.log('🔄 Loading currencies for game:', currentGame.value)
+  try {
+    const gameInfo = currentGame.value === 'POE_2' ? { currencyPrefix: 'CURRENCY_POE2' } :
+                     currentGame.value === 'POE_1' ? { currencyPrefix: 'CURRENCY_POE1' } :
+                     currentGame.value === 'DIABLO_4' ? { currencyPrefix: 'CURRENCY_D4' } : null
+
+    if (!gameInfo) {
+      console.log('❌ Unknown game, cannot load currencies')
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('attributes')
+      .select('*')
+      .eq('type', gameInfo.currencyPrefix)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+
+    if (error) {
+      console.error('❌ Error loading currencies:', error)
+      throw error
+    }
+
+    console.log('✅ Currencies loaded successfully:', data?.length || 0)
+    console.log('🔍 Loaded currency data:', data)
+
+    // The currencies are already loaded into useCurrency.allCurrencies via initializeCurrency
+    // We need to ensure they're properly loaded
+    console.log('🔍 Currency data loaded into composable:', data?.length || 0, 'items')
+
+  } catch (err) {
+    console.error('❌ Error in manual currency loading:', err)
+    throw err
+  }
+}
+import type { Currency } from '@/types/composables.d'
 
 // Game context
-const { currentGame, currentLeague, contextString, initializeFromStorage } = useGameContext()
+const { currentGame, currentLeague, contextString, initializeFromStorage, loadCurrencies: loadCurrenciesFromGameContext } = useGameContext()
 
 // Currency composable - now unified with all functionality
 const {
@@ -463,11 +545,12 @@ const {
   purchaseChannels,
   allCurrencies,
   loadAllCurrencies,
+  initialize: initializeCurrency,
   loading: currenciesLoading,
 } = useCurrency()
 
-// Inventory composable
-const { loadInventory, inventoryByCurrency } = useInventory()
+// Inventory composable (temporarily disabled due to schema errors)
+// const { loadInventory, inventoryByCurrency } = useInventory()
 
 // Filtered currencies based on current game - now using the unified composable
 const filteredCurrencies = computed(() => {
@@ -477,15 +560,15 @@ const filteredCurrencies = computed(() => {
   }
 
   const filtered = allCurrencies.value.filter((currency: Currency) => {
-    // Filter by current game code - use exact matching
+    // Filter by current game code - use exact matching based on currency.type
     if (currentGame.value === 'POE_2') {
-      return currency.gameVersion === 'POE2' // Only POE_2 currencies
+      return currency.type === 'CURRENCY_POE2' // Only POE_2 currencies
     }
     if (currentGame.value === 'POE_1') {
-      return currency.gameVersion === 'POE1'
+      return currency.type === 'CURRENCY_POE1'
     }
     if (currentGame.value === 'DIABLO_4') {
-      return currency.gameVersion === 'D4'
+      return currency.type === 'CURRENCY_D4'
     }
     return true
   })
@@ -519,8 +602,9 @@ const customerFormData = ref({
 const saleData = reactive({
   currencyId: null as string | null,
   quantity: null as number | null,
-  pricePerUnit: null as number | null,
-  totalPrice: null as number | null,
+  totalPriceVnd: null as number | null,
+  totalPriceUsd: null as number | null,
+  notes: '',
 })
 
 // Purchase data
@@ -534,11 +618,9 @@ const supplierFormData = ref({
 const purchaseData = reactive({
   currencyId: null as string | null,
   quantity: null as number | null,
-  pricePerUnit: null as number | null,
-  totalPrice: null as number | null,
-  totalPriceVND: null as number | null, // ← Total cost amount - goes to cost_amount field
-  totalPriceUSD: null as number | null, // ← Option cho USD (nếu cần trong tương lai)
-  notes: null as string | null,
+  totalPriceVnd: null as number | null, // ← Total cost amount - goes to cost_amount field
+  totalPriceUsd: null as number | null, // ← Option cho USD (nếu cần trong tương lai)
+  notes: '',
 })
 
 // Supplier information for purchase orders
@@ -554,13 +636,13 @@ const purchaseCurrencyFormRef = ref()
 
 // Computed properties for purchase form
 const purchaseTotalValue = computed(() => {
-  return purchaseData.totalPriceVND || 0
+  return purchaseData.totalPriceVnd || 0
 })
 
 // Calculate unit price from total price and quantity
 const purchaseUnitPrice = computed(() => {
-  if (!purchaseData.quantity || !purchaseData.totalPriceVND) return 0
-  return purchaseData.totalPriceVND / purchaseData.quantity
+  if (!purchaseData.quantity || !purchaseData.totalPriceVnd) return 0
+  return purchaseData.totalPriceVnd / purchaseData.quantity
 })
 
 const purchaseFormValid = computed(() => {
@@ -569,8 +651,8 @@ const purchaseFormValid = computed(() => {
     purchaseData.currencyId &&
     purchaseData.quantity &&
     purchaseData.quantity > 0 &&
-    purchaseData.totalPriceVND &&
-    purchaseData.totalPriceVND > 0
+    purchaseData.totalPriceVnd &&
+    purchaseData.totalPriceVnd > 0
   )
 })
 
@@ -581,7 +663,7 @@ const formattedPurchaseTotal = computed(() => {
 
 // Detect which currency is being used for cost
 const purchaseCostCurrency = computed(() => {
-  if (purchaseData.totalPriceUSD && purchaseData.totalPriceUSD > 0) {
+  if (purchaseData.totalPriceUsd && purchaseData.totalPriceUsd > 0) {
     return 'USD'
   }
   return 'VND' // Default to VND
@@ -589,10 +671,10 @@ const purchaseCostCurrency = computed(() => {
 
 // Get cost amount based on selected currency
 const purchaseCostAmount = computed(() => {
-  if (purchaseCostCurrency.value === 'USD' && purchaseData.totalPriceUSD) {
-    return purchaseData.totalPriceUSD
+  if (purchaseCostCurrency.value === 'USD' && purchaseData.totalPriceUsd) {
+    return purchaseData.totalPriceUsd
   }
-  return purchaseData.totalPriceVND || 0 // Default to VND
+  return purchaseData.totalPriceVnd || 0 // Default to VND
 })
 
 // Purchase evidence data
@@ -632,38 +714,45 @@ watch(activeTab, (newTab) => {
   // Only handle when data is available and not loading
   if (isDataLoading.value) return
 
-  if (newTab === 'purchase' && purchaseChannels.value.length > 0) {
-    // Batch update to minimize reactivity triggers
-    const updates: {
-      channelId?: string
-      currencyId?: string
-    } = {}
+  if (newTab === 'sell' && salesChannels.value.length > 0) {
+    // Auto-select G2G channel when switching to sell tab
+    if (!customerFormData.value.channelId) {
+      const g2gChannel = salesChannels.value.find(
+        (channel: any) =>
+          channel.name?.toLowerCase().includes('g2g') ||
+          channel.displayName?.toLowerCase().includes('g2g') ||
+          channel.code?.toLowerCase().includes('g2g')
+      )
 
+      if (g2gChannel) {
+        customerFormData.value.channelId = g2gChannel.id
+        console.log('🎯 Auto-selected G2G channel for sell tab:', g2gChannel.name)
+      }
+    }
+
+    // Auto-select first currency if not already selected
+    if (!saleData.currencyId && filteredCurrencies.value.length > 0) {
+      saleData.currencyId = filteredCurrencies.value[0].value
+    }
+  } else if (newTab === 'purchase' && purchaseChannels.value.length > 0) {
     // Auto-select Facebook channel when switching to purchase tab
     if (!supplierFormData.value.channelId) {
       const facebookChannel = purchaseChannels.value.find(
-        (channel: Channel) =>
+        (channel: any) =>
           channel.name?.toLowerCase().includes('facebook') ||
           channel.displayName?.toLowerCase().includes('facebook') ||
           channel.code?.toLowerCase().includes('facebook')
       )
 
       if (facebookChannel) {
-        updates.channelId = facebookChannel.id
+        supplierFormData.value.channelId = facebookChannel.id
+        console.log('🎯 Auto-selected Facebook channel for purchase tab:', facebookChannel.name)
       }
     }
 
     // Auto-select first currency if not already selected
     if (!purchaseData.currencyId && filteredCurrencies.value.length > 0) {
-      updates.currencyId = filteredCurrencies.value[0].value
-    }
-
-    // Apply all updates at once
-    if (updates.channelId) {
-      supplierFormData.value.channelId = updates.channelId
-    }
-    if (updates.currencyId) {
-      purchaseData.currencyId = updates.currencyId
+      purchaseData.currencyId = filteredCurrencies.value[0].value
     }
   }
 })
@@ -675,7 +764,59 @@ const loadData = async () => {
     areCurrenciesLoading.value = true // Start currency loading
     console.log('🔄 Loading all data...')
 
-    await Promise.all([loadChannels(), loadInventory(), loadAllCurrencies()])
+    // First ensure game context is initialized
+    console.log('🔄 Initializing game context...')
+    await initializeFromStorage()
+
+    // Wait for game context to be available
+    let retries = 0
+    while ((!currentGame.value || !currentLeague.value) && retries < 10) {
+      console.log('⏳ Waiting for game context... (attempt', retries + 1, ')')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      retries++
+    }
+
+    if (!currentGame.value || !currentLeague.value) {
+      console.error('❌ Game context not available after retries')
+      throw new Error('Game context not available')
+    }
+
+    console.log('✅ Game context initialized:', currentGame.value, currentLeague.value)
+
+    // Now initialize currency composable properly (same pattern as GameLeagueSelector)
+    console.log('🔄 Initializing currency system...')
+    await initializeCurrency()
+
+    // Manual currency loading to ensure currencies are loaded
+    console.log('🔄 Manual currency loading for current game...')
+    await loadCurrenciesForCurrentGame()
+
+    // Give a moment for reactive updates to propagate
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // Ensure currencies are loaded before proceeding
+    console.log('🔍 Checking currencies after manual load...')
+    console.log('All currencies from composable after manual load:', allCurrencies.value)
+    console.log('Currencies loading status after manual load:', currenciesLoading.value)
+
+    // Debug channels directly from database (updates disabled due to schema errors)
+    await debugChannels()
+
+    // Debug currencies directly from database
+    await debugCurrencies()
+
+    // Debug: Check actual data structure
+    console.log('🔍 Debugging data structure...')
+    console.log('All sales channels:', salesChannels.value)
+    console.log('All purchase channels:', purchaseChannels.value)
+    console.log('Sales channels count:', salesChannels.value.length)
+    console.log('Purchase channels count:', purchaseChannels.value.length)
+    console.log('All currencies from composable:', allCurrencies.value)
+    console.log('Currencies loading status:', currenciesLoading.value)
+    console.log('Filtered currencies:', filteredCurrencies.value)
+
+    // Load remaining data (temporarily disabled inventory loading due to schema errors)
+    // await Promise.all([loadInventory()])
 
     // Use nextTick to ensure DOM updates happen smoothly
     await nextTick()
@@ -691,7 +832,7 @@ const loadData = async () => {
     // Log auto-selection results after setting
     if (supplierFormData.value.channelId) {
       const selectedChannel = purchaseChannels.value.find(
-        (c: Channel) => c.id === supplierFormData.value.channelId
+        (c: any) => c.id === supplierFormData.value.channelId
       )
       console.log('🎯 Auto-selected purchase channel:', selectedChannel?.name)
     }
@@ -746,24 +887,24 @@ const setDefaultSelectionsAsync = async () => {
   // Sell channel updates
   if (salesChannels.value.length > 0 && !customerFormData.value.channelId) {
     const g2gChannel = salesChannels.value.find(
-      (channel: Channel) =>
+      (channel: any) =>
         channel.name?.toLowerCase().includes('g2g') ||
         channel.displayName?.toLowerCase().includes('g2g') ||
         channel.code?.toLowerCase().includes('g2g')
     )
-    updates.sellChannelId = g2gChannel?.id || (salesChannels.value[0] as Channel)?.id
+    updates.sellChannelId = g2gChannel?.id || (salesChannels.value[0] as any)?.id
   }
 
   // Purchase tab updates
   if (purchaseChannels.value.length > 0) {
     if (!supplierFormData.value.channelId) {
       const facebookChannel = purchaseChannels.value.find(
-        (channel: Channel) =>
+        (channel: any) =>
           channel.name?.toLowerCase().includes('facebook') ||
           channel.displayName?.toLowerCase().includes('facebook') ||
           channel.code?.toLowerCase().includes('facebook')
       )
-      updates.purchaseChannelId = facebookChannel?.id || (purchaseChannels.value[0] as Channel)?.id
+      updates.purchaseChannelId = facebookChannel?.id || (purchaseChannels.value[0] as any)?.id
     }
 
     if (!purchaseData.currencyId) {
@@ -804,7 +945,7 @@ const onQuantityChanged = (quantity: number) => {
 }
 
 const onPriceChanged = (price: { vnd?: number; usd?: number }) => {
-  saleData.pricePerUnit = price.vnd || null
+  saleData.totalPriceVnd = price.vnd || null
   calculateTotal()
 }
 
@@ -863,25 +1004,25 @@ const onPurchaseCurrencyChanged = (currencyId: string | null) => {
 
 const onPurchaseQuantityChanged = (quantity: number) => {
   purchaseData.quantity = quantity
-  calculatePurchaseTotal(purchaseData.quantity, purchaseData.totalPriceVND)
-  // Update pricePerUnit when quantity changes
-  if (purchaseData.totalPriceVND && quantity) {
-    purchaseData.pricePerUnit = purchaseData.totalPriceVND / quantity
+  calculatePurchaseTotal(purchaseData.quantity, purchaseData.totalPriceVnd)
+  // Update totalPriceVnd when quantity changes
+  if (purchaseData.totalPriceVnd && quantity) {
+    purchaseData.totalPriceVnd = purchaseData.totalPriceVnd / quantity
   } else {
-    purchaseData.pricePerUnit = null
+    purchaseData.totalPriceVnd = null
   }
 }
 
 const onPurchasePriceChanged = (price: { vnd?: number; usd?: number }) => {
-  purchaseData.totalPriceVND = price.vnd || null
-  purchaseData.totalPriceUSD = price.usd || null
-  // Update pricePerUnit for compatibility with existing components
+  purchaseData.totalPriceVnd = price.vnd || null
+  purchaseData.totalPriceUsd = price.usd || null
+  // Update totalPriceVnd for compatibility with existing components
   if (purchaseData.quantity && price.vnd) {
-    purchaseData.pricePerUnit = price.vnd / purchaseData.quantity
+    purchaseData.totalPriceVnd = price.vnd / purchaseData.quantity
   } else {
-    purchaseData.pricePerUnit = null
+    purchaseData.totalPriceVnd = null
   }
-  calculatePurchaseTotal(purchaseData.quantity, purchaseData.totalPriceVND)
+  calculatePurchaseTotal(purchaseData.quantity, purchaseData.totalPriceVnd)
 }
 
 // Clear cache when game/league changes
@@ -907,16 +1048,16 @@ const resetAllForms = () => {
   Object.assign(saleData, {
     currencyId: null,
     quantity: null,
-    pricePerUnit: null,
-    totalPrice: null,
+    totalPriceVnd: null,
+    totalPriceUsd: null,
   })
 
   // Reset purchase data
   Object.assign(purchaseData, {
     currencyId: null,
     quantity: null,
-    pricePerUnit: null,
-    totalPrice: null,
+    totalPriceVnd: null,
+    totalPriceUsd: null,
   })
 
   // Reset customer form data
@@ -956,10 +1097,10 @@ const resetAllForms = () => {
 
 // Calculate total price
 const calculateTotal = () => {
-  if (saleData.quantity && saleData.pricePerUnit) {
-    saleData.totalPrice = saleData.quantity * saleData.pricePerUnit
+  if (saleData.quantity && saleData.totalPriceVnd) {
+    saleData.totalPriceVnd = saleData.quantity * saleData.totalPriceVnd
   } else {
-    saleData.totalPrice = null
+    saleData.totalPriceVnd = null
   }
 }
 
@@ -1077,10 +1218,10 @@ const handleCurrencyFormReset = () => {
     // Reset purchase data
     purchaseData.currencyId = null
     purchaseData.quantity = null
-    purchaseData.pricePerUnit = null
-    purchaseData.totalPrice = null
-    purchaseData.totalPriceVND = null
-    purchaseData.totalPriceUSD = null
+    purchaseData.totalPriceVnd = null
+    purchaseData.totalPriceVnd = null
+    purchaseData.totalPriceVnd = null
+    purchaseData.totalPriceUsd = null
     purchaseData.notes = null
 
     // Reset supplier data
@@ -1093,8 +1234,8 @@ const handleCurrencyFormReset = () => {
     // Reset sale data (original logic)
     saleData.currencyId = null
     saleData.quantity = null
-    saleData.pricePerUnit = null
-    saleData.totalPrice = null
+    saleData.totalPriceVnd = null
+    saleData.totalPriceVnd = null
   }
 }
 
@@ -1339,14 +1480,14 @@ const debouncedValidation = () => {
 }
 
 // Utility functions for purchase form
-const calculatePurchaseTotal = (quantity: number | null, totalPrice: number | null) => {
+const calculatePurchaseTotal = (quantity: number | null, totalPriceVnd: number | null) => {
   // Since we're now using total price directly, just store it
-  purchaseData.totalPrice = totalPrice
-  // Update pricePerUnit for display purposes
-  if (quantity && totalPrice) {
-    purchaseData.pricePerUnit = totalPrice / quantity
+  purchaseData.totalPriceVnd = totalPriceVnd
+  // Update totalPriceVnd for display purposes
+  if (quantity && totalPriceVnd) {
+    purchaseData.totalPriceVnd = totalPriceVnd / quantity
   } else {
-    purchaseData.pricePerUnit = null
+    purchaseData.totalPriceVnd = null
   }
 
   // Trigger debounced validation after calculation
@@ -1365,10 +1506,10 @@ const validatePurchaseForm = () => {
   if (!purchaseData.quantity || purchaseData.quantity <= 0) {
     errors.push('Số lượng phải lớn hơn 0')
   }
-  if (!purchaseData.totalPriceVND || purchaseData.totalPriceVND <= 0) {
+  if (!purchaseData.totalPriceVnd || purchaseData.totalPriceVnd <= 0) {
     errors.push('Tổng giá trị phải lớn hơn 0')
   }
-  if (purchaseData.totalPriceVND && purchaseData.totalPriceVND > 100000000) {
+  if (purchaseData.totalPriceVnd && purchaseData.totalPriceVnd > 100000000) {
     errors.push('Tổng giá trị đơn hàng không được vượt quá 100 triệu VND')
   }
 
@@ -1531,7 +1672,7 @@ const _handlePurchaseSubmit = async () => {
     console.log('📊 Purchase form summary:', {
       currency: purchaseData.currencyId,
       quantity: purchaseData.quantity,
-      totalPrice: formattedPurchaseTotal.value,
+      totalPriceVnd: formattedPurchaseTotal.value,
       unitPrice: formatCurrency(purchaseUnitPrice.value),
       supplier: supplierData.supplierName,
     })
@@ -1561,7 +1702,7 @@ const _handlePurchaseSubmit = async () => {
       channel_id: supplierFormData.value.channelId,
       currency_code: purchaseData.currencyId,
       quantity: Number(purchaseData.quantity),
-      total_price_vnd: Number(purchaseData.totalPriceVND), // ← Sử dụng total price
+      total_price_vnd: Number(purchaseData.totalPriceVnd), // ← Sử dụng total price
       notes: purchaseData.notes || null,
       supplier_id: supplierPartyId, // ← Đúng field: supplier_party_id
       supplier_name: supplierData.supplierName || null,
@@ -1636,8 +1777,8 @@ const _handlePurchaseSubmit = async () => {
     if (activeTab.value === 'purchase') {
       // Reset purchase form
       purchaseData.quantity = null
-      purchaseData.totalPriceVND = null
-      purchaseData.totalPriceUSD = null
+      purchaseData.totalPriceVnd = null
+      purchaseData.totalPriceUsd = null
       purchaseData.notes = null
 
       // Reset supplier data

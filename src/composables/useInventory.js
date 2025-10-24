@@ -118,7 +118,6 @@ export function useInventory() {
         .select(
           `
           *,
-          currency:attributes(id, code, name, type),
           game_account:game_accounts(id, account_name, purpose, manager_profile_id)
         `
         )

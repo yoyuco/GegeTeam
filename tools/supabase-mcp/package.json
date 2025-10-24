@@ -1,0 +1,23 @@
+{
+  "name": "supabase-mcp",
+  "version": "1.0.0",
+  "description": "Supabase MCP Server for GegeTeam project",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.3",
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^17.2.1"
+  },
+  "keywords": [
+    "mcp",
+    "supabase",
+    "database"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -173,10 +173,25 @@ export function useGameContext() {
 
     try {
       const gameInfo = currentGameInfo.value
+      console.log('🔍 Debug gameInfo:', gameInfo)
+      console.log('🔍 Current game value:', currentGame.value)
+
+      // Use correct currency prefix mapping
+      let currencyType = null
+      if (currentGame.value === 'POE_2') {
+        currencyType = 'CURRENCY_POE2'
+      } else if (currentGame.value === 'POE_1') {
+        currencyType = 'CURRENCY_POE1'
+      } else if (currentGame.value === 'DIABLO_4') {
+        currencyType = 'CURRENCY_D4'
+      }
+
+      console.log('🔍 Using currency type:', currencyType)
+
       const { data, error: fetchError } = await supabase
         .from('attributes')
         .select('*')
-        .eq('type', gameInfo.currencyPrefix)
+        .eq('type', currencyType)
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
 
@@ -204,7 +219,6 @@ export function useGameContext() {
         .select(
           `
           *,
-          league:attributes(id, code, name),
           manager:profiles(id, display_name)
         `
         )

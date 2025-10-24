@@ -18,6 +18,18 @@ dist-ssr
 .idea
 .DS_Store
 *.suo
+
+# Scripts - Temporary files
+scripts/temp/*.js
+scripts/temp/*.*
+temp-scripts/
+debug-scripts/
+*.test.js
+*.debug.js
+
+# Scripts - Keep directories but ignore temporary content
+scripts/temp/*
+!scripts/temp/.gitkeep
 *.ntvs*
 *.njsproj
 *.sln

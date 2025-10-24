@@ -2,65 +2,10 @@
 <!-- Customer/Supplier Information Form Component with Tabs -->
 <template>
   <div class="bg-white rounded-xl shadow-sm border border-gray-200">
-    <!-- Tab Headers -->
-    <div class="flex border-b border-gray-200">
-      <button
-        :class="[
-          'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
-          activeTab === 'customer'
-            ? 'tab-active text-blue-600 border-b-2 border-blue-600'
-            : 'tab-inactive text-gray-500 hover:text-gray-700',
-        ]"
-        @click="activeTab = 'customer'"
-      >
-        <svg class="w-4 h-4 tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-          />
-        </svg>
-        Thông tin khách hàng
-      </button>
-      <button
-        :class="[
-          'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
-          activeTab === 'supplier'
-            ? 'tab-active text-green-600 border-b-2 border-green-600'
-            : 'tab-inactive text-gray-500 hover:text-gray-700',
-        ]"
-        @click="activeTab = 'supplier'"
-      >
-        <svg class="w-4 h-4 tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-          />
-        </svg>
-        Thông tin nhà cung cấp
-      </button>
-    </div>
-
-    <!-- Tab Content -->
+      <!-- Tab Content -->
     <div class="p-6">
       <!-- Customer Tab -->
-      <div v-if="activeTab === 'customer'" class="space-y-6">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-800">Thông tin khách hàng</h3>
-        </div>
+      <div v-if="formMode === 'customer' || (!formMode && activeTab === 'customer')" class="space-y-6">
 
         <!-- Channel Selection -->
         <div>
@@ -152,8 +97,6 @@
           <n-input
             v-model:value="customerFormData.deliveryInfo"
             placeholder="Email, Discord, hoặc thông tin liên hệ khác"
-            type="textarea"
-            :rows="3"
             size="large"
             class="w-full"
           />
@@ -161,20 +104,7 @@
       </div>
 
       <!-- Supplier Tab -->
-      <div v-if="activeTab === 'supplier'" class="space-y-6">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-800">Thông tin nhà cung cấp</h3>
-        </div>
+      <div v-if="formMode === 'supplier' || (!formMode && activeTab === 'supplier')" class="space-y-6">
 
         <!-- Channel Selection -->
         <div>
@@ -266,8 +196,6 @@
           <n-input
             v-model:value="supplierFormData.deliveryInfo"
             placeholder="Email, SĐT, Zalo, hoặc thông tin liên hệ khác"
-            type="textarea"
-            :rows="3"
             size="large"
             class="w-full"
           />
@@ -284,32 +212,41 @@ import type { Channel } from '@/types/composables'
 
 // Props
 interface Props {
-  customerModelValue: {
+  modelValue?: {
     channelId: string | null
     customerName: string
     gameTag: string
     deliveryInfo: string
   }
-  supplierModelValue: {
+  customerModelValue?: {
     channelId: string | null
     customerName: string
     gameTag: string
     deliveryInfo: string
   }
-  channels: () => Channel[]
+  supplierModelValue?: {
+    channelId: string | null
+    customerName: string
+    gameTag: string
+    deliveryInfo: string
+  }
+  channels?: Channel[]
   loading?: boolean
   gameCode?: string
   activeTab?: 'customer' | 'supplier'
+  formMode?: 'customer' | 'supplier'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   gameCode: '',
-  activeTab: 'customer'
+  activeTab: 'customer',
+  formMode: 'customer'
 })
 
 // Emits
 const emit = defineEmits<{
+  'update:modelValue': [value: Props['modelValue']]
   'update:customerModelValue': [value: Props['customerModelValue']]
   'update:supplierModelValue': [value: Props['supplierModelValue']]
   'update:activeTab': [value: 'customer' | 'supplier']
@@ -324,12 +261,39 @@ const activeTab = ref<'customer' | 'supplier'>(props.activeTab)
 
 // Form data
 const customerFormData = computed({
-  get: () => props.customerModelValue,
-  set: (value) => emit('update:customerModelValue', value),
+  get: () => {
+    // Use different props based on form mode
+    if (props.formMode === 'supplier') {
+      return props.supplierModelValue || props.modelValue || {
+        channelId: null,
+        customerName: '',
+        gameTag: '',
+        deliveryInfo: ''
+      }
+    }
+    return props.customerModelValue || props.modelValue || {
+      channelId: null,
+      customerName: '',
+      gameTag: '',
+      deliveryInfo: ''
+    }
+  },
+  set: (value) => {
+    if (props.formMode === 'supplier') {
+      emit('update:supplierModelValue', value)
+    } else {
+      emit('update:customerModelValue', value)
+    }
+  },
 })
 
 const supplierFormData = computed({
-  get: () => props.supplierModelValue,
+  get: () => props.supplierModelValue || props.modelValue || {
+    channelId: null,
+    customerName: '',
+    gameTag: '',
+    deliveryInfo: ''
+  },
   set: (value) => emit('update:supplierModelValue', value),
 })
 
@@ -337,8 +301,11 @@ const supplierFormData = computed({
 const loading = computed(() => props.loading)
 
 const customerChannelOptions = computed(() => {
-  return props.channels()
-    .filter((channel: Channel) => channel.channel_type === 'SALES')
+  return (props.channels || [])
+    .filter((channel: Channel) =>
+      (channel.direction === 'SALES' || channel.direction === 'BOTH') &&
+      channel.code !== 'DEFAULT'
+    )
     .map((channel: Channel) => ({
       label: channel.name,
       value: channel.id,
@@ -346,8 +313,11 @@ const customerChannelOptions = computed(() => {
 })
 
 const supplierChannelOptions = computed(() => {
-  return props.channels()
-    .filter((channel: Channel) => channel.channel_type === 'PURCHASE')
+  return (props.channels || [])
+    .filter((channel: Channel) =>
+      (channel.direction === 'PURCHASE' || channel.direction === 'BOTH') &&
+      channel.code !== 'DEFAULT'
+    )
     .map((channel: Channel) => ({
       label: channel.name,
       value: channel.id,
@@ -393,14 +363,14 @@ watch(activeTab, (newTab) => {
 
 // Watch for customer form changes and emit events
 watch(
-  () => customerFormData.value.customerName,
+  () => customerFormData.value?.customerName,
   (newName: string) => {
     emit('customer-changed', newName ? { name: newName } : null)
   }
 )
 
 watch(
-  () => customerFormData.value.gameTag,
+  () => customerFormData.value?.gameTag,
   (newGameTag: string) => {
     emit('game-tag-changed', newGameTag || '')
   }
@@ -408,14 +378,14 @@ watch(
 
 // Watch for supplier form changes and emit events
 watch(
-  () => supplierFormData.value.customerName,
+  () => supplierFormData.value?.customerName,
   (newName: string) => {
     emit('supplier-changed', newName ? { name: newName } : null)
   }
 )
 
 watch(
-  () => supplierFormData.value.gameTag,
+  () => supplierFormData.value?.gameTag,
   (newGameTag: string) => {
     emit('supplier-game-tag-changed', newGameTag || '')
   }

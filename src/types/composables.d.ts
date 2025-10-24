@@ -100,6 +100,9 @@ export interface UseCurrency {
   // Computed
   activeCurrencies: Ref<Currency[]>
   currenciesByCode: Ref<Record<string, Currency>>
+  salesChannels: Ref<Channel[]>
+  purchaseChannels: Ref<Channel[]>
+  allCurrencies: Ref<Currency[]>
   getChannelsWithFeeChains: Ref<Channel[]>
 
   // Methods
@@ -107,6 +110,7 @@ export interface UseCurrency {
   getExchangeRate: (fromCurrency: string, toCurrency: string) => number | null
   convertCurrency: (amount: number, fromCurrency: string, toCurrency: string) => number | null
   loadAvailableCurrencies: () => Promise<void>
+  loadAllCurrencies: () => Promise<void>
   loadExchangeRates: () => Promise<void>
   loadChannels: () => Promise<void>
   getChannelById: (channelId: string) => Channel | null
@@ -141,6 +145,7 @@ export interface Channel {
   id: string
   code: string
   name: string
+  displayName?: string
   channel_type: string
   description: string
   is_active: boolean
@@ -181,8 +186,6 @@ export interface InventorySummary {
   totalValueUsd: number
   lowStockCount: number
   emptyCount: number
-  totalValueVnd: number
-  totalValueUsd: number
   lastUpdated: Date | null
 }
 
