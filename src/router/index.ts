@@ -73,16 +73,9 @@ router.beforeEach((to) => {
 
 // Add currency routes
 router.addRoute({
-  path: '/currency/sell',
-  name: 'currency-sell',
-  component: () => import('@/pages/CurrencySell.vue'),
-  meta: { requiresAuth: true },
-})
-
-router.addRoute({
-  path: '/currency/ops',
-  name: 'currency-ops',
-  component: () => import('@/pages/CurrencyOps.vue'),
+  path: '/currency/create-orders',
+  name: 'currency-create-orders',
+  component: () => import('@/pages/CurrencyCreateOrders.vue'),
   meta: { requiresAuth: true },
 })
 

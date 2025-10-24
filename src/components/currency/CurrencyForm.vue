@@ -267,7 +267,7 @@ const currency = computed((): Currency | null => {
 })
 
 const currencyOptions = computed(() => {
-  // Currencies are already filtered and formatted in CurrencySell.vue
+  // Currencies are already filtered and formatted in calling component
   return currencies.value
 })
 
