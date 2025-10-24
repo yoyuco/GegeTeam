@@ -79,4 +79,11 @@ router.addRoute({
   meta: { requiresAuth: true },
 })
 
+router.addRoute({
+  path: '/currency/ops',
+  name: 'currency-ops',
+  component: () => import('@/pages/CurrencyOps.vue'),
+  meta: { requiresAuth: true },
+})
+
 export default router
