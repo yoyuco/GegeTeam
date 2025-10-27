@@ -21,6 +21,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">Kênh bán</label>
+            <span class="text-red-500">*</span>
           </div>
           <n-select
             v-model:value="customerFormData.channelId"
@@ -47,6 +48,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">Tên khách hàng</label>
+            <span class="text-red-500">*</span>
           </div>
           <n-auto-complete
             v-model:value="customerFormData.customerName"
@@ -89,6 +91,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">{{ gameCustomerInfoLabel }}</label>
+            <span class="text-red-500">*</span>
           </div>
           <n-input
             v-model:value="customerFormData.gameTag"
@@ -139,6 +142,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">Kênh mua</label>
+              <span class="text-red-500">*</span>
           </div>
           <n-select
             v-model:value="supplierFormData.channelId"
@@ -165,6 +169,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">Tên nhà cung cấp</label>
+            <span class="text-red-500">*</span>
           </div>
           <n-auto-complete
             v-model:value="supplierFormData.customerName"
@@ -202,6 +207,7 @@
               </svg>
             </div>
             <label class="text-sm font-medium text-gray-700">Tên nhân vật / ID</label>
+            <span class="text-red-500">*</span>
           </div>
           <n-input
             v-model:value="supplierFormData.gameTag"

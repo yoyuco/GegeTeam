@@ -376,7 +376,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                   Ảnh đàm phán
-                  <span class="text-xs text-red-500 font-medium">(Bắt buộc)</span>
+                  <span class="text-red-500 font-medium">*</span>
                 </label>
                 <SimpleProofUpload
                   ref="purchaseNegotiationProofRef"
@@ -394,7 +394,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   Ảnh thanh toán
-                  <span class="text-xs text-red-500 font-medium">(Bắt buộc)</span>
+                  <span class="text-red-500 font-medium">*</span>
                 </label>
                 <SimpleProofUpload
                   ref="purchasePaymentProofRef"
@@ -516,7 +516,7 @@ const loadCurrenciesForCurrentGame = async () => {
     }
 
     // Now load the actual currency attributes
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('attributes')
       .select('*')
       .in('id', currencyIds)
@@ -640,18 +640,18 @@ const currentOrderId = ref<string | null>(null)
 
 const sellUploadPath = computed(() => {
   const orderId = currentOrderId.value || `temp-${Date.now()}`
-  return `currency/${orderId}/sell/other`
+  return `currency/sell/${orderId}/other`
 })
 
 // Paths for purchase proof types
 const purchaseNegotiationUploadPath = computed(() => {
   const orderId = currentOrderId.value || `temp-${Date.now()}`
-  return `currency/${orderId}/purchase/negotiation`
+  return `currency/purchase/${orderId}/negotiation`
 })
 
 const purchasePaymentUploadPath = computed(() => {
   const orderId = currentOrderId.value || `temp-${Date.now()}`
-  return `currency/${orderId}/purchase/payment`
+  return `currency/purchase/${orderId}/payment`
 })
 
 const purchaseFormValid = computed(() => {
@@ -661,6 +661,8 @@ const purchaseFormValid = computed(() => {
   // For purchase orders, both negotiation AND payment proofs are required
   const hasProofFiles = (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) &&
                        (purchasePaymentFiles.value && purchasePaymentFiles.value.length > 0)
+  // Currency validation: must have exactly ONE of VND or USD, not both
+  const hasValidCurrency = (hasVndPrice && !hasUsdPrice) || (!hasVndPrice && hasUsdPrice)
 
   // Debug logging to see what's failing
   console.log('🔍 Purchase Form Validation Debug:')
@@ -671,6 +673,7 @@ const purchaseFormValid = computed(() => {
   console.log('  - quantity:', purchaseData.quantity, '-> hasValidQuantity:', hasValidQuantity)
   console.log('  - totalPriceVnd:', purchaseData.totalPriceVnd, '-> hasVndPrice:', hasVndPrice)
   console.log('  - totalPriceUsd:', purchaseData.totalPriceUsd, '-> hasUsdPrice:', hasUsdPrice)
+  console.log('  - hasValidCurrency:', hasValidCurrency, '(must have exactly one: VND XOR USD)')
   console.log('  - hasProofFiles:', hasProofFiles)
   console.log('  - purchaseNegotiationFiles.value:', purchaseNegotiationFiles.value)
   console.log('  - purchaseNegotiationFiles.length:', purchaseNegotiationFiles.value?.length || 0)
@@ -682,7 +685,7 @@ const purchaseFormValid = computed(() => {
     supplierFormData.value.gameTag &&
     purchaseData.currencyId &&
     hasValidQuantity &&
-    (hasVndPrice || hasUsdPrice) &&
+    hasValidCurrency &&
     hasProofFiles
   ))
 
@@ -692,7 +695,7 @@ const purchaseFormValid = computed(() => {
     supplierFormData.value.gameTag &&
     purchaseData.currencyId &&
     hasValidQuantity &&
-    (hasVndPrice || hasUsdPrice) &&
+    hasValidCurrency &&
     hasProofFiles
   )
 })
@@ -1130,6 +1133,17 @@ const handleCurrencyFormSubmit = async () => {
       // Validate currency selection
       if (!purchaseData.currencyId) {
         message.error('Vui lòng chọn loại currency')
+        return
+      }
+      // Validate currency amount: must have exactly ONE of VND or USD
+      const hasVndPrice = (purchaseData.totalPriceVnd || 0) > 0
+      const hasUsdPrice = (purchaseData.totalPriceUsd || 0) > 0
+      if (!hasVndPrice && !hasUsdPrice) {
+        message.error('Vui lòng nhập tổng tiền (VND hoặc USD)')
+        return
+      }
+      if (hasVndPrice && hasUsdPrice) {
+        message.error('Chỉ được nhập một loại tiền tệ: VND hoặc USD, không được nhập cả hai')
         return
       }
       // Validate server selection - required for all games

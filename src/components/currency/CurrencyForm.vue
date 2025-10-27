@@ -76,6 +76,7 @@
                 </svg>
               </div>
               <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
+              <span class="text-red-500">*</span>
             </div>
             <n-input-number
               v-model:value="buyFormData.totalPriceUsd"
@@ -212,6 +213,7 @@
                 </svg>
               </div>
               <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
+              <span class="text-red-500">*</span>
             </div>
             <n-input-number
               v-model:value="sellFormData.totalPriceUsd"
@@ -371,21 +373,6 @@ const currencyOptions = computed(() => {
   return props.currencies
 })
 
-const calculatedBuyUnitPrice = computed(() => {
-  if (buyFormData.value.quantity && buyFormData.value.totalPriceVnd && buyFormData.value.quantity > 0) {
-    const result = buyFormData.value.totalPriceVnd / buyFormData.value.quantity
-    return Math.round(isFinite(result) ? result : 0)
-  }
-  return 0
-})
-
-const calculatedSellUnitPrice = computed(() => {
-  if (sellFormData.value.quantity && sellFormData.value.totalPriceVnd && sellFormData.value.quantity > 0) {
-    const result = sellFormData.value.totalPriceVnd / sellFormData.value.quantity
-    return Math.round(isFinite(result) ? result : 0)
-  }
-  return 0
-})
 
 // Computed properties for mutual exclusivity
 const isBuyVndFilled = computed(() => {
