@@ -1335,6 +1335,11 @@ const saveSale = async () => {
     })
     // Reset file lists after successful submission
     sellProofFiles.value = []
+
+    // Reset upload component to clear UI
+    if (sellProofUploadRef.value) {
+      sellProofUploadRef.value.resetFiles()
+    }
   } catch {
     message.error('Không thể tạo đơn bán')
   } finally {
@@ -1690,6 +1695,15 @@ const _handlePurchaseSubmit = async () => {
     // Reset all purchase file lists after successful submission
     purchaseNegotiationFiles.value = []
     purchasePaymentFiles.value = []
+
+    // Reset upload components to clear UI
+    if (purchaseNegotiationProofRef.value) {
+      purchaseNegotiationProofRef.value.resetFiles()
+    }
+    if (purchasePaymentProofRef.value) {
+      purchasePaymentProofRef.value.resetFiles()
+    }
+
     // Reset current order ID
     currentOrderId.value = null
     // Refresh data to show new order (force refresh cache)

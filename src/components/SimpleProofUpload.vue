@@ -159,7 +159,7 @@ const uploadFileList = computed({
 
 // Helper function to generate unique ID
 const generateId = () => {
-  return `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 }
 
 // Watch for external changes
@@ -451,8 +451,15 @@ const uploadFiles = async () => {
 }
 
 // Expose method to parent
+// Reset files method
+const resetFiles = () => {
+  fileList.value = []
+  emit('upload-complete', [])
+}
+
 defineExpose({
-  uploadFiles
+  uploadFiles,
+  resetFiles
 })
 </script>
 
