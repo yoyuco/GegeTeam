@@ -655,8 +655,8 @@ const purchasePaymentUploadPath = computed(() => {
 })
 
 const purchaseFormValid = computed(() => {
-  const hasVndPrice = (purchaseData.totalPriceVnd || 0) > 0
-  const hasUsdPrice = (purchaseData.totalPriceUsd || 0) > 0
+  const hasVndPrice = purchaseData.totalPriceVnd !== null && purchaseData.totalPriceVnd >= 0
+  const hasUsdPrice = purchaseData.totalPriceUsd !== null && purchaseData.totalPriceUsd >= 0
   const hasValidQuantity = (purchaseData.quantity || 0) > 0
   // For purchase orders, both negotiation AND payment proofs are required
   const hasProofFiles = (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) &&
@@ -664,31 +664,7 @@ const purchaseFormValid = computed(() => {
   // Currency validation: must have exactly ONE of VND or USD, not both
   const hasValidCurrency = (hasVndPrice && !hasUsdPrice) || (!hasVndPrice && hasUsdPrice)
 
-  // Debug logging to see what's failing
-  console.log('🔍 Purchase Form Validation Debug:')
-  console.log('  - channelId:', supplierFormData.value.channelId, '->', !!supplierFormData.value.channelId)
-  console.log('  - customerName:', supplierFormData.value.customerName, '->', !!supplierFormData.value.customerName)
-  console.log('  - gameTag:', supplierFormData.value.gameTag, '->', !!supplierFormData.value.gameTag)
-  console.log('  - currencyId:', purchaseData.currencyId, '->', !!purchaseData.currencyId)
-  console.log('  - quantity:', purchaseData.quantity, '-> hasValidQuantity:', hasValidQuantity)
-  console.log('  - totalPriceVnd:', purchaseData.totalPriceVnd, '-> hasVndPrice:', hasVndPrice)
-  console.log('  - totalPriceUsd:', purchaseData.totalPriceUsd, '-> hasUsdPrice:', hasUsdPrice)
-  console.log('  - hasValidCurrency:', hasValidCurrency, '(must have exactly one: VND XOR USD)')
-  console.log('  - hasProofFiles:', hasProofFiles)
-  console.log('  - purchaseNegotiationFiles.value:', purchaseNegotiationFiles.value)
-  console.log('  - purchaseNegotiationFiles.length:', purchaseNegotiationFiles.value?.length || 0)
-  console.log('  - purchasePaymentFiles.value:', purchasePaymentFiles.value)
-  console.log('  - purchasePaymentFiles.length:', purchasePaymentFiles.value?.length || 0)
-  console.log('  - Final result:', (
-    supplierFormData.value.channelId &&
-    supplierFormData.value.customerName &&
-    supplierFormData.value.gameTag &&
-    purchaseData.currencyId &&
-    hasValidQuantity &&
-    hasValidCurrency &&
-    hasProofFiles
-  ))
-
+  
   return (
     supplierFormData.value.channelId &&
     supplierFormData.value.customerName &&
@@ -1136,8 +1112,8 @@ const handleCurrencyFormSubmit = async () => {
         return
       }
       // Validate currency amount: must have exactly ONE of VND or USD
-      const hasVndPrice = (purchaseData.totalPriceVnd || 0) > 0
-      const hasUsdPrice = (purchaseData.totalPriceUsd || 0) > 0
+      const hasVndPrice = purchaseData.totalPriceVnd !== null && purchaseData.totalPriceVnd >= 0
+      const hasUsdPrice = purchaseData.totalPriceUsd !== null && purchaseData.totalPriceUsd >= 0
       if (!hasVndPrice && !hasUsdPrice) {
         message.error('Vui lòng nhập tổng tiền (VND hoặc USD)')
         return

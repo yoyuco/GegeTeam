@@ -377,21 +377,22 @@ const currencyOptions = computed(() => {
 // Computed properties for mutual exclusivity
 const isBuyVndFilled = computed(() => {
   const vndValue = buyFormData.value.totalPriceVnd
-  return vndValue != null && vndValue > 0 && isFinite(vndValue)
+  return vndValue != null && vndValue >= 0 && isFinite(vndValue)
 })
 
 const isBuyUsdFilled = computed(() => {
-  return buyFormData.value.totalPriceUsd != null && buyFormData.value.totalPriceUsd > 0
+  const usdValue = buyFormData.value.totalPriceUsd
+  return usdValue != null && usdValue >= 0 && isFinite(usdValue)
 })
 
 const isSellVndFilled = computed(() => {
   const vndValue = sellFormData.value.totalPriceVnd
-  return vndValue != null && vndValue > 0 && isFinite(vndValue)
+  return vndValue != null && vndValue >= 0 && isFinite(vndValue)
 })
 
 const isSellUsdFilled = computed(() => {
   const usdValue = sellFormData.value.totalPriceUsd
-  return usdValue != null && usdValue > 0 && isFinite(usdValue)
+  return usdValue != null && usdValue >= 0 && isFinite(usdValue)
 })
 
 // Watch for tab changes
@@ -571,10 +572,10 @@ const validateForm = () => {
     if (!buyFormData.value.quantity || buyFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    const hasVndPrice = buyFormData.value.totalPriceVnd && buyFormData.value.totalPriceVnd > 0
-    const hasUsdPrice = buyFormData.value.totalPriceUsd && buyFormData.value.totalPriceUsd > 0
+    const hasVndPrice = buyFormData.value.totalPriceVnd !== null && buyFormData.value.totalPriceVnd >= 0
+    const hasUsdPrice = buyFormData.value.totalPriceUsd !== null && buyFormData.value.totalPriceUsd >= 0
     if (!hasVndPrice && !hasUsdPrice) {
-      errors.push('Tổng giá phải lớn hơn 0 (VND hoặc USD)')
+      errors.push('Tổng giá phải lớn hơn hoặc bằng 0 (VND hoặc USD)')
     }
   } else {
     if (!sellFormData.value.currencyId) {
@@ -583,10 +584,10 @@ const validateForm = () => {
     if (!sellFormData.value.quantity || sellFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    const hasSellVndPrice = sellFormData.value.totalPriceVnd && sellFormData.value.totalPriceVnd > 0
-    const hasSellUsdPrice = sellFormData.value.totalPriceUsd && sellFormData.value.totalPriceUsd > 0
+    const hasSellVndPrice = sellFormData.value.totalPriceVnd !== null && sellFormData.value.totalPriceVnd >= 0
+    const hasSellUsdPrice = sellFormData.value.totalPriceUsd !== null && sellFormData.value.totalPriceUsd >= 0
     if (!hasSellVndPrice && !hasSellUsdPrice) {
-      errors.push('Tổng giá phải lớn hơn 0 (VND hoặc USD)')
+      errors.push('Tổng giá phải lớn hơn hoặc bằng 0 (VND hoặc USD)')
     }
   }
 
@@ -595,10 +596,9 @@ const validateForm = () => {
 
 // Methods for mutual exclusivity
 const onBuyUsdChange = (value: number | null) => {
-  console.log('🔍 onBuyUsdChange called with:', value)
-  if (value && value > 0) {
-    // Clear VND field when USD is entered
-    console.log('🔍 Clearing VND field because USD > 0')
+  // Only clear VND if USD has a positive value (not 0)
+  if (value !== null && value > 0) {
+    // Clear VND field when USD is entered with positive value
     buyFormData.value.totalPriceVnd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
@@ -611,10 +611,9 @@ const onBuyUsdChange = (value: number | null) => {
 }
 
 const onBuyVndChange = (value: number | null) => {
-  console.log('🔍 onBuyVndChange called with:', value)
-  if (value && value > 0) {
-    // Clear USD field when VND is entered
-    console.log('🔍 Clearing USD field because VND > 0')
+  // Only clear USD if VND has a positive value (not 0)
+  if (value !== null && value > 0) {
+    // Clear USD field when VND is entered with positive value
     buyFormData.value.totalPriceUsd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
@@ -627,8 +626,9 @@ const onBuyVndChange = (value: number | null) => {
 }
 
 const onSellUsdChange = (value: number | null) => {
-  if (value && value > 0) {
-    // Clear VND field when USD is entered
+  // Only clear VND if USD has a positive value (not 0)
+  if (value !== null && value > 0) {
+    // Clear VND field when USD is entered with positive value
     sellFormData.value.totalPriceVnd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
@@ -641,8 +641,9 @@ const onSellUsdChange = (value: number | null) => {
 }
 
 const onSellVndChange = (value: number | null) => {
-  if (value && value > 0) {
-    // Clear USD field when VND is entered
+  // Only clear USD if VND has a positive value (not 0)
+  if (value !== null && value > 0) {
+    // Clear USD field when VND is entered with positive value
     sellFormData.value.totalPriceUsd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
