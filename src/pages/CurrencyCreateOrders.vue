@@ -471,7 +471,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 // import { useInventory } from '@/composables/useInventory.js' // Temporarily disabled due to schema errors
 import { supabase } from '@/lib/supabase'
 import type { Currency } from '@/types/composables.d'
-// import { uploadFile } from '@/utils/supabase.js' // No longer needed - handled by SimpleProofUpload
+import { uploadFile } from '@/utils/supabase.js'
 // Manual currency loading function using attribute_relationships
 const loadCurrenciesForCurrentGame = async () => {
   if (!currentGame.value) {
@@ -1045,21 +1045,18 @@ const getExchangeTypeExample = () => {
 const handleCurrencyFormSubmit = async () => {
   try {
     // Upload files first before submitting form
-    console.log('🔍 Uploading files before form submission...')
     if (activeTab.value === 'purchase') {
       const allUploadResults = []
 
       // Upload negotiation proofs (required)
       if (purchaseNegotiationProofRef.value) {
         const uploadResults = await purchaseNegotiationProofRef.value.uploadFiles()
-        console.log('🔍 Purchase negotiation upload results:', uploadResults)
         allUploadResults.push(...uploadResults)
       }
 
       // Upload payment proofs (optional)
       if (purchasePaymentProofRef.value) {
         const uploadResults = await purchasePaymentProofRef.value.uploadFiles()
-        console.log('🔍 Purchase payment upload results:', uploadResults)
         allUploadResults.push(...uploadResults)
       }
 
@@ -1361,18 +1358,58 @@ const handleSellProofUploadComplete = (uploadedFiles: Array<{ url: string; path:
 }
 
 const handlePurchaseNegotiationProofUploadComplete = (uploadedFiles: Array<{ url: string; path: string; filename: string }>) => {
-  console.log('🔍 handlePurchaseNegotiationProofUploadComplete called with:', uploadedFiles)
-  console.log('🔍 uploadedFiles.length:', uploadedFiles?.length || 0)
   purchaseNegotiationFiles.value = uploadedFiles
-  console.log('🔍 purchaseNegotiationFiles.value after update:', purchaseNegotiationFiles.value)
-  // Files are stored and will be included when order is created
 }
 
 const handlePurchasePaymentProofUploadComplete = (uploadedFiles: Array<{ url: string; path: string; filename: string }>) => {
-  console.log('🔍 handlePurchasePaymentProofUploadComplete called with:', uploadedFiles)
   purchasePaymentFiles.value = uploadedFiles
 }
 
+
+// Function to re-upload files to correct path with real order ID
+const reUploadFilesToCorrectPath = async (files: Array<{ url: string; path: string; filename: string }>, targetPath: string) => {
+  const uploadResults = []
+
+  for (const file of files) {
+    try {
+      // Download the file from temp location
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('work-proofs')
+        .download(file.path)
+
+      if (downloadError) {
+        console.error('Error downloading file for re-upload:', downloadError)
+        continue
+      }
+
+      // Upload to correct path
+      const finalPath = `${targetPath}/${file.filename}`
+      const uploadResult = await uploadFile(
+        fileData,
+        finalPath,
+        'work-proofs'
+      )
+
+      if (!uploadResult.success) {
+        console.error('Error re-uploading file:', uploadResult.error)
+        continue
+      }
+
+      // Update file record with new path and URL
+      file.path = finalPath
+      if (uploadResult.publicUrl) {
+        file.url = uploadResult.publicUrl
+      }
+      uploadResults.push(uploadResult)
+
+      // Successfully re-uploaded
+    } catch (error) {
+      console.error('Error in re-upload process:', error)
+    }
+  }
+
+  return uploadResults
+}
 
 // updateOrderWithProofs function removed - proofs are now handled during order creation
 // Upload images to Supabase Storage - Now handled by SimpleProofUpload component
@@ -1482,7 +1519,7 @@ const loadBuyOrders = async (forceRefresh = false) => {
       .select('*')
       .eq('game_code', currentGame.value)
       .eq('server_attribute_code', currentServer.value)
-      .eq('order_type', 'BUY')
+      .eq('order_type', 'PURCHASE')
       .order('created_at', { ascending: false })
       .limit(10)
     if (error) {
@@ -1543,23 +1580,35 @@ const _handlePurchaseSubmit = async () => {
     if (data && data.length > 0 && data[0].success) {
       // Set current order ID for proof uploads (for future reference)
       currentOrderId.value = data[0].order_number || data[0].id
-      console.log('🔍 Set currentOrderId to:', currentOrderId.value)
 
       message.success(`Tạo đơn mua thành công! Order #${data[0].order_number}`)
 
-      // Upload proof images if any (should be uploaded before order creation)
+      // Now re-upload files to correct folder with real order ID
       const orderId = data[0].order_number || data[0].id
-      console.log('🔍 Checking for proof files after order creation:', {
-        orderId,
-        purchaseNegotiationFiles: purchaseNegotiationFiles.value,
-        hasFiles: purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0,
-        filesCount: purchaseNegotiationFiles.value ? purchaseNegotiationFiles.value.length : 0
-      })
+      const finalUploadResults = []
+
+      if (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) {
+        // Re-upload negotiation proofs to correct folder
+        const negotiationUploadResults = await reUploadFilesToCorrectPath(
+          purchaseNegotiationFiles.value,
+          `currency/purchase/${orderId}/negotiation`
+        )
+        finalUploadResults.push(...negotiationUploadResults)
+      }
+
+      if (purchasePaymentFiles.value && purchasePaymentFiles.value.length > 0) {
+        // Re-upload payment proofs to correct folder
+        const paymentUploadResults = await reUploadFilesToCorrectPath(
+          purchasePaymentFiles.value,
+          `currency/purchase/${orderId}/payment`
+        )
+        finalUploadResults.push(...paymentUploadResults)
+      }
 
       // Combine all proof types for structured storage
       const allProofFiles = []
 
-      // Add negotiation proofs
+      // Add negotiation proofs with final paths
       if (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) {
         const negotiationProofs = purchaseNegotiationFiles.value.map(img => ({
           url: img.url,
@@ -1571,7 +1620,7 @@ const _handlePurchaseSubmit = async () => {
         allProofFiles.push(...negotiationProofs)
       }
 
-      // Add payment proofs
+      // Add payment proofs with final paths
       if (purchasePaymentFiles.value && purchasePaymentFiles.value.length > 0) {
         const paymentProofs = purchasePaymentFiles.value.map(img => ({
           url: img.url,
@@ -1583,7 +1632,6 @@ const _handlePurchaseSubmit = async () => {
         allProofFiles.push(...paymentProofs)
       }
 
-  
       if (allProofFiles.length > 0) {
         try {
           // Create structured proof data for purchase order creation
@@ -1596,12 +1644,6 @@ const _handlePurchaseSubmit = async () => {
           }
 
           // Update the currency order with structured proof data
-          console.log('🔍 Attempting to update currency order with proof data:', {
-            orderId,
-            proofData,
-            notes: purchaseData.notes || null,
-            purchaseNegotiationFiles: purchaseNegotiationFiles.value
-          })
 
           const { data: updateData, error: updateError } = await supabase
             .from('currency_orders')
@@ -1614,21 +1656,21 @@ const _handlePurchaseSubmit = async () => {
             .select()
 
           if (updateError) {
-            console.error('❌ Failed to update currency order with proofs:', updateError)
+            console.error('Failed to update currency order with proofs:', updateError)
             throw updateError
           }
 
-          console.log('✅ Purchase proof images saved to proofs column:', {
+          console.log('Purchase proof images saved to proofs column:', {
             updateData,
             proofData
           })
         } catch (uploadError) {
-          console.error('❌ Failed to upload purchase proof images:', uploadError)
+          console.error('Failed to upload purchase proof images:', uploadError)
           // Don't fail the entire order creation, just log the error
           message.warning('Đơn mua đã được tạo nhưng không thể lưu hình bằng chứng')
         }
       } else {
-        console.warn('⚠️ No proof files found - order created without proofs')
+        console.warn('No proof files found - order created without proofs')
         message.info('Đơn mua đã được tạo nhưng chưa có bằng chứng kèm theo')
       }
     } else {
@@ -1650,7 +1692,6 @@ const _handlePurchaseSubmit = async () => {
     purchasePaymentFiles.value = []
     // Reset current order ID
     currentOrderId.value = null
-    console.log('🔍 Reset currentOrderId after successful submission')
     // Refresh data to show new order (force refresh cache)
     await loadBuyOrders(true)
   } catch (error) {
