@@ -595,8 +595,10 @@ const validateForm = () => {
 
 // Methods for mutual exclusivity
 const onBuyUsdChange = (value: number | null) => {
+  console.log('🔍 onBuyUsdChange called with:', value)
   if (value && value > 0) {
     // Clear VND field when USD is entered
+    console.log('🔍 Clearing VND field because USD > 0')
     buyFormData.value.totalPriceVnd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
@@ -609,8 +611,10 @@ const onBuyUsdChange = (value: number | null) => {
 }
 
 const onBuyVndChange = (value: number | null) => {
+  console.log('🔍 onBuyVndChange called with:', value)
   if (value && value > 0) {
     // Clear USD field when VND is entered
+    console.log('🔍 Clearing USD field because VND > 0')
     buyFormData.value.totalPriceUsd = null
   }
   // Emit price change immediately to ensure parent gets the latest values
@@ -627,6 +631,13 @@ const onSellUsdChange = (value: number | null) => {
     // Clear VND field when USD is entered
     sellFormData.value.totalPriceVnd = null
   }
+  // Emit price change immediately to ensure parent gets the latest values
+  nextTick(() => {
+    emit('price-changed', {
+      vnd: sellFormData.value.totalPriceVnd || undefined,
+      usd: value || undefined
+    })
+  })
 }
 
 const onSellVndChange = (value: number | null) => {
@@ -634,6 +645,13 @@ const onSellVndChange = (value: number | null) => {
     // Clear USD field when VND is entered
     sellFormData.value.totalPriceUsd = null
   }
+  // Emit price change immediately to ensure parent gets the latest values
+  nextTick(() => {
+    emit('price-changed', {
+      vnd: value || undefined,
+      usd: sellFormData.value.totalPriceUsd || undefined
+    })
+  })
 }
 
 // Focus handlers removed - mutual exclusivity is handled by change handlers only
