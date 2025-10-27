@@ -46,7 +46,7 @@ import { useCurrency } from '@/composables/useCurrency.js'
 // mport type { Transaction } from '@/types/composables' / Imported via composables
 
 // Composables
-const { currentGame, currentLeague } = useGameContext()
+const { currentGame, currentServer } = useGameContext()
 const { getTransactions } = useCurrency()
 
 // Local state
@@ -228,7 +228,7 @@ const columns: DataTableColumns<{
 
 // Methods
 const loadTransactions = async () => {
-  if (!currentGame.value || !currentLeague.value) {
+  if (!currentGame.value || !currentServer.value) {
     transactions.value = []
     return
   }
@@ -252,7 +252,7 @@ const refreshTransactions = () => {
 }
 
 // Watch for context changes
-watch([currentGame, currentLeague], () => {
+watch([currentGame, currentServer], () => {
   loadTransactions()
 })
 

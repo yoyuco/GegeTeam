@@ -80,9 +80,11 @@
             <n-input-number
               v-model:value="buyFormData.totalPriceUsd"
               :min="0"
-              placeholder="Nhập tổng tiền USD"
+              :placeholder="isBuyVndFilled ? 'VND has value, USD will be cleared' : 'Nhập tổng tiền USD'"
               size="large"
               class="w-full"
+              :class="{ 'border-yellow-400 bg-yellow-50': isBuyVndFilled }"
+              @update:value="onBuyUsdChange"
             />
           </div>
 
@@ -105,9 +107,11 @@
             <n-input-number
               v-model:value="buyFormData.totalPriceVnd"
               :min="0"
-              placeholder="Nhập tổng tiền VND"
+              :placeholder="isBuyUsdFilled ? 'USD has value, VND will be cleared' : 'Nhập tổng tiền VND'"
               size="large"
               class="w-full"
+              :class="{ 'border-yellow-400 bg-yellow-50': isBuyUsdFilled }"
+              @update:value="onBuyVndChange"
             />
           </div>
         </div>
@@ -212,9 +216,11 @@
             <n-input-number
               v-model:value="sellFormData.totalPriceUsd"
               :min="0"
-              placeholder="Nhập tổng tiền USD"
+              :placeholder="isSellVndFilled ? 'VND has value, USD will be cleared' : 'Nhập tổng tiền USD'"
               size="large"
               class="w-full"
+              :class="{ 'border-yellow-400 bg-yellow-50': isSellVndFilled }"
+              @update:value="onSellUsdChange"
             />
           </div>
 
@@ -237,9 +243,11 @@
             <n-input-number
               v-model:value="sellFormData.totalPriceVnd"
               :min="0"
-              placeholder="Nhập tổng tiền VND"
+              :placeholder="isSellUsdFilled ? 'USD has value, VND will be cleared' : 'Nhập tổng tiền VND'"
               size="large"
               class="w-full"
+              :class="{ 'border-yellow-400 bg-yellow-50': isSellUsdFilled }"
+              @update:value="onSellVndChange"
             />
           </div>
         </div>
@@ -272,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue'
+import { computed, watch, ref, nextTick } from 'vue'
 import { NSelect, NInputNumber, NInput } from 'naive-ui'
 
 // Props
@@ -344,7 +352,7 @@ const loading = computed(() => props.loading)
 
 const currencyOptions = computed(() => {
   // When loading or currencies empty, return array with loading placeholder
-  if (props.loading || !props.currencies || props.currencies.length === 0) {
+  if (props.loading || !props.currencies || !Array.isArray(props.currencies) || props.currencies.length === 0) {
     // Return empty array to prevent UUID display
     return []
   }
@@ -353,10 +361,10 @@ const currencyOptions = computed(() => {
   const sellId = sellFormData.value.currencyId
 
   // If we have a selected ID that's not in the options, return empty to prevent invalid display
-  if (buyId && !props.currencies.some(c => c.value === buyId)) {
+  if (buyId && !props.currencies.some((c: any) => c.value === buyId)) {
     return []
   }
-  if (sellId && !props.currencies.some(c => c.value === sellId)) {
+  if (sellId && !props.currencies.some((c: any) => c.value === sellId)) {
     return []
   }
 
@@ -364,17 +372,39 @@ const currencyOptions = computed(() => {
 })
 
 const calculatedBuyUnitPrice = computed(() => {
-  if (buyFormData.value.quantity && buyFormData.value.totalPriceVnd) {
-    return Math.round(buyFormData.value.totalPriceVnd / buyFormData.value.quantity)
+  if (buyFormData.value.quantity && buyFormData.value.totalPriceVnd && buyFormData.value.quantity > 0) {
+    const result = buyFormData.value.totalPriceVnd / buyFormData.value.quantity
+    return Math.round(isFinite(result) ? result : 0)
   }
   return 0
 })
 
 const calculatedSellUnitPrice = computed(() => {
-  if (sellFormData.value.quantity && sellFormData.value.totalPriceVnd) {
-    return Math.round(sellFormData.value.totalPriceVnd / sellFormData.value.quantity)
+  if (sellFormData.value.quantity && sellFormData.value.totalPriceVnd && sellFormData.value.quantity > 0) {
+    const result = sellFormData.value.totalPriceVnd / sellFormData.value.quantity
+    return Math.round(isFinite(result) ? result : 0)
   }
   return 0
+})
+
+// Computed properties for mutual exclusivity
+const isBuyVndFilled = computed(() => {
+  const vndValue = buyFormData.value.totalPriceVnd
+  return vndValue != null && vndValue > 0 && isFinite(vndValue)
+})
+
+const isBuyUsdFilled = computed(() => {
+  return buyFormData.value.totalPriceUsd != null && buyFormData.value.totalPriceUsd > 0
+})
+
+const isSellVndFilled = computed(() => {
+  const vndValue = sellFormData.value.totalPriceVnd
+  return vndValue != null && vndValue > 0 && isFinite(vndValue)
+})
+
+const isSellUsdFilled = computed(() => {
+  const usdValue = sellFormData.value.totalPriceUsd
+  return usdValue != null && usdValue > 0 && isFinite(usdValue)
 })
 
 // Watch for tab changes
@@ -386,17 +416,17 @@ watch(activeTab, (newTab) => {
 watch(
   () => [props.loading, props.currencies],
   ([isLoading, currencies]) => {
-    if (!isLoading && currencies && currencies.length > 0) {
+    if (!isLoading && currencies && Array.isArray(currencies) && currencies.length > 0) {
       // Loading completed and currencies are available
 
       // Auto-select first currency for buy form if not selected
       if (!buyFormData.value.currencyId) {
-        buyFormData.value.currencyId = currencies[0].value
+        buyFormData.value.currencyId = (currencies as any[])[0].value
       }
 
       // Auto-select first currency for sell form if not selected
       if (!sellFormData.value.currencyId) {
-        sellFormData.value.currencyId = currencies[0].value
+        sellFormData.value.currencyId = (currencies as any[])[0].value
       }
     } else if (isLoading) {
       // When loading starts, reset invalid currency IDs
@@ -404,10 +434,10 @@ watch(
       const currentSellCurrencyId = sellFormData.value.currencyId
 
       // Only reset if the current ID won't be in the new options
-      if (currentBuyCurrencyId && currencies && !currencies.some(c => c.value === currentBuyCurrencyId)) {
+      if (currentBuyCurrencyId && currencies && Array.isArray(currencies) && !(currencies as any[]).some((c: any) => c.value === currentBuyCurrencyId)) {
         buyFormData.value.currencyId = null
       }
-      if (currentSellCurrencyId && currencies && !currencies.some(c => c.value === currentSellCurrencyId)) {
+      if (currentSellCurrencyId && currencies && Array.isArray(currencies) && !(currencies as any[]).some((c: any) => c.value === currentSellCurrencyId)) {
         sellFormData.value.currencyId = null
       }
     }
@@ -450,6 +480,42 @@ watch(
   }
 )
 
+// Watch for individual buy form changes and emit update:buyModelValue
+watch(
+  () => buyFormData.value.currencyId,
+  (newCurrencyId) => {
+    emit('update:buyModelValue', { ...buyFormData.value, currencyId: newCurrencyId })
+  }
+)
+
+watch(
+  () => buyFormData.value.quantity,
+  (newQuantity) => {
+    emit('update:buyModelValue', { ...buyFormData.value, quantity: newQuantity })
+  }
+)
+
+watch(
+  () => buyFormData.value.totalPriceVnd,
+  (newPriceVnd) => {
+    emit('update:buyModelValue', { ...buyFormData.value, totalPriceVnd: newPriceVnd })
+  }
+)
+
+watch(
+  () => buyFormData.value.totalPriceUsd,
+  (newPriceUsd) => {
+    emit('update:buyModelValue', { ...buyFormData.value, totalPriceUsd: newPriceUsd })
+  }
+)
+
+watch(
+  () => buyFormData.value.notes,
+  (newNotes) => {
+    emit('update:buyModelValue', { ...buyFormData.value, notes: newNotes })
+  }
+)
+
 // Watch for sell form changes and emit events
 watch(
   () => sellFormData.value.currencyId,
@@ -465,6 +531,7 @@ watch(
   }
 )
 
+// Watch for sell form changes and emit events (simple like buy tab)
 watch(
   () => sellFormData.value.totalPriceVnd,
   (newPriceVnd: number | null) => {
@@ -484,6 +551,7 @@ watch(
     })
   }
 )
+
 
 // Methods for parent component
 const resetForm = () => {
@@ -516,8 +584,10 @@ const validateForm = () => {
     if (!buyFormData.value.quantity || buyFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    if (!buyFormData.value.totalPriceVnd || buyFormData.value.totalPriceVnd <= 0) {
-      errors.push('Tổng giá phải lớn hơn 0')
+    const hasVndPrice = buyFormData.value.totalPriceVnd && buyFormData.value.totalPriceVnd > 0
+    const hasUsdPrice = buyFormData.value.totalPriceUsd && buyFormData.value.totalPriceUsd > 0
+    if (!hasVndPrice && !hasUsdPrice) {
+      errors.push('Tổng giá phải lớn hơn 0 (VND hoặc USD)')
     }
   } else {
     if (!sellFormData.value.currencyId) {
@@ -526,13 +596,60 @@ const validateForm = () => {
     if (!sellFormData.value.quantity || sellFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    if (!sellFormData.value.totalPriceVnd || sellFormData.value.totalPriceVnd <= 0) {
-      errors.push('Tổng giá phải lớn hơn 0')
+    const hasSellVndPrice = sellFormData.value.totalPriceVnd && sellFormData.value.totalPriceVnd > 0
+    const hasSellUsdPrice = sellFormData.value.totalPriceUsd && sellFormData.value.totalPriceUsd > 0
+    if (!hasSellVndPrice && !hasSellUsdPrice) {
+      errors.push('Tổng giá phải lớn hơn 0 (VND hoặc USD)')
     }
   }
 
   return errors
 }
+
+// Methods for mutual exclusivity
+const onBuyUsdChange = (value: number | null) => {
+  if (value && value > 0) {
+    // Clear VND field when USD is entered
+    buyFormData.value.totalPriceVnd = null
+  }
+  // Emit price change immediately to ensure parent gets the latest values
+  nextTick(() => {
+    emit('price-changed', {
+      vnd: buyFormData.value.totalPriceVnd || undefined,
+      usd: value || undefined
+    })
+  })
+}
+
+const onBuyVndChange = (value: number | null) => {
+  if (value && value > 0) {
+    // Clear USD field when VND is entered
+    buyFormData.value.totalPriceUsd = null
+  }
+  // Emit price change immediately to ensure parent gets the latest values
+  nextTick(() => {
+    emit('price-changed', {
+      vnd: value || undefined,
+      usd: buyFormData.value.totalPriceUsd || undefined
+    })
+  })
+}
+
+const onSellUsdChange = (value: number | null) => {
+  if (value && value > 0) {
+    // Clear VND field when USD is entered
+    sellFormData.value.totalPriceVnd = null
+  }
+}
+
+const onSellVndChange = (value: number | null) => {
+  if (value && value > 0) {
+    // Clear USD field when VND is entered
+    sellFormData.value.totalPriceUsd = null
+  }
+}
+
+// Focus handlers removed - mutual exclusivity is handled by change handlers only
 
 // Expose methods for parent component
 defineExpose({

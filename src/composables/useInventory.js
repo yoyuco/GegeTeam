@@ -5,7 +5,7 @@ import { usePermissions } from '@/composables/usePermissions.js'
 // import { useCurrency } from '@/composables/useCurrency.js' // Unused for now
 
 export function useInventory() {
-  const { currentGame, currentLeague, loadGameAccounts } = useGameContext()
+  const { currentGame, currentServer, loadGameAccounts } = useGameContext()
   const { canViewInventory, canManageGameAccounts } = usePermissions()
   // const { getCurrencyByCode, formatCurrencyAmount } = useCurrency() // Unused for now
 
@@ -20,34 +20,45 @@ export function useInventory() {
 
   // Computed properties
   const totalInventoryValue = computed(() => {
-    return inventory.value.reduce((total, item) => {
-      return total + item.quantity * item.avg_buy_price_vnd
-    }, 0)
+    try {
+      return (inventory.value || []).reduce((total, item) => {
+        if (item && item.quantity && item.avg_buy_price_vnd) {
+          return total + item.quantity * item.avg_buy_price_vnd
+        }
+        return total
+      }, 0)
+    } catch (error) {
+      console.error('Error in totalInventoryValue computed:', error)
+      return 0
+    }
   })
 
   const inventoryByCurrency = computed(() => {
-    const map = {}
-    inventory.value.forEach((item) => {
-      const currencyKey = item.currency_attribute_id
-      if (!map[currencyKey]) {
-        map[currencyKey] = {
-          currencyId: item.currency_attribute_id,
-          currency: item.currency,
-          totalQuantity: 0,
-          totalReserved: 0,
-          avgPriceVnd: 0,
-          avgPriceUsd: 0,
-          totalValueVnd: 0,
-          accounts: [],
-        }
-      }
+    try {
+      const map = {}
+      ;(inventory.value || []).forEach((item) => {
+        if (!item || !item.currency_attribute_id) return
 
-      const group = map[currencyKey]
-      group.totalQuantity += item.quantity
-      group.totalReserved += item.reserved_quantity
-      group.totalValueVnd += item.quantity * item.avg_buy_price_vnd
-      group.accounts.push(item)
-    })
+        const currencyKey = item.currency_attribute_id
+        if (!map[currencyKey]) {
+          map[currencyKey] = {
+            currencyId: item.currency_attribute_id,
+            currency: item.currency,
+            totalQuantity: 0,
+            totalReserved: 0,
+            avgPriceVnd: 0,
+            avgPriceUsd: 0,
+            totalValueVnd: 0,
+            accounts: [],
+          }
+        }
+
+        const group = map[currencyKey]
+        group.totalQuantity += item.quantity || 0
+        group.totalReserved += item.reserved_quantity || 0
+        group.totalValueVnd += (item.quantity || 0) * (item.avg_buy_price_vnd || 0)
+        group.accounts.push(item)
+      })
 
     // Calculate weighted average prices
     Object.values(map).forEach((group) => {
@@ -57,25 +68,44 @@ export function useInventory() {
     })
 
     return Object.values(map)
+    } catch (error) {
+      console.error('Error in inventoryByCurrency computed:', error)
+      return []
+    }
   })
 
   const availableInventory = computed(() => {
-    return inventoryByCurrency.value.filter((item) => item.totalQuantity > 0)
+    try {
+      return (inventoryByCurrency.value || []).filter((item) => item && item.totalQuantity > 0)
+    } catch (error) {
+      console.error('Error in availableInventory computed:', error)
+      return []
+    }
   })
 
   const lowStockItems = computed(() => {
-    return inventoryByCurrency.value.filter(
-      (item) => item.totalQuantity <= 10 && item.totalQuantity > 0
-    )
+    try {
+      return (inventoryByCurrency.value || []).filter(
+        (item) => item && item.totalQuantity <= 10 && item.totalQuantity > 0
+      )
+    } catch (error) {
+      console.error('Error in lowStockItems computed:', error)
+      return []
+    }
   })
 
   const emptyInventory = computed(() => {
-    return inventoryByCurrency.value.filter((item) => item.totalQuantity === 0)
+    try {
+      return (inventoryByCurrency.value || []).filter((item) => item && item.totalQuantity === 0)
+    } catch (error) {
+      console.error('Error in emptyInventory computed:', error)
+      return []
+    }
   })
 
   // Load game accounts
   const loadAccounts = async () => {
-    if (!currentGame.value || !currentLeague.value) {
+    if (!currentGame.value || !currentServer.value) {
       gameAccounts.value = []
       return
     }
@@ -93,9 +123,9 @@ export function useInventory() {
     console.log('Loading inventory...', {
       accountId,
       game: currentGame.value,
-      league: currentLeague.value,
+      server: currentServer.value,
     })
-    if (!currentGame.value || !currentLeague.value) {
+    if (!currentGame.value || !currentServer.value) {
       console.log('No game context, returning empty inventory')
       inventory.value = []
       return
@@ -197,7 +227,7 @@ export function useInventory() {
         .from('game_accounts')
         .insert({
           game_code: currentGame.value,
-          league_attribute_id: currentLeague.value,
+          server_attribute_code: currentServer.value,
           account_name: accountData.accountName,
           purpose: accountData.purpose || 'INVENTORY',
           manager_profile_id: accountData.managerId || null,
@@ -281,7 +311,7 @@ export function useInventory() {
       inventorySubscription.unsubscribe()
     }
 
-    if (!currentGame.value || !currentLeague.value) return
+    if (!currentGame.value || !currentServer.value) return
 
     // Subscribe to inventory changes
     inventorySubscription = supabase
@@ -342,9 +372,9 @@ export function useInventory() {
 
   // Watch for game changes
   watch(
-    [currentGame, currentLeague],
+    [currentGame, currentServer],
     () => {
-      if (currentGame.value && currentLeague.value) {
+      if (currentGame.value && currentServer.value) {
         cleanupSubscription()
         initialize()
       }

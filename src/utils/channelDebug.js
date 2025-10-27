@@ -79,14 +79,14 @@ const updateChannelTypes = async (channels) => {
       if (channel.code?.toLowerCase().includes('g2g') ||
           channel.code?.toLowerCase().includes('playerauctions') ||
           channel.code?.toLowerCase().includes('eldorado')) {
-        channelType = 'SALES'
+        channelType = 'SELL'
       } else if (channel.code?.toLowerCase().includes('facebook') ||
                  channel.code?.toLowerCase().includes('discord') ||
                  channel.code?.toLowerCase().includes('direct')) {
-        channelType = 'PURCHASE'
+        channelType = 'BUY'
       } else {
-        // Alternate between SALES and PURCHASE for unspecified channels
-        channelType = index % 2 === 0 ? 'SALES' : 'PURCHASE'
+        // Alternate between SELL and BUY for unspecified channels
+        channelType = index % 2 === 0 ? 'SELL' : 'BUY'
       }
 
       return {
@@ -114,11 +114,11 @@ const updateChannelTypes = async (channels) => {
     */
 
     // Log the updated channel types
-    const salesCount = channelsToUpdate.filter(c => c.direction === 'SALES').length
-    const purchaseCount = channelsToUpdate.filter(c => c.direction === 'PURCHASE').length
+    const salesCount = channelsToUpdate.filter(c => c.direction === 'SELL').length
+    const purchaseCount = channelsToUpdate.filter(c => c.direction === 'BUY').length
     const bothCount = channelsToUpdate.filter(c => c.direction === 'BOTH').length
 
-    console.log(`📊 Channel types updated: ${salesCount} SALES, ${purchaseCount} PURCHASE, ${bothCount} BOTH`)
+    console.log(`📊 Channel types updated: ${salesCount} SELL, ${purchaseCount} BUY, ${bothCount} BOTH`)
 
     return { success: true, data: channelsToUpdate, counts: { sales: salesCount, purchase: purchaseCount, both: bothCount } }
 

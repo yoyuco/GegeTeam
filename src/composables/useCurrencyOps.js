@@ -21,7 +21,7 @@ export function useCurrencyOps() {
   } = useInventory()
 
   const { currencies, loadAllCurrencies, salesChannels } = useCurrency()
-  const { currentGame, currentLeague } = useGameContext()
+  const { currentGame, currentServer } = useGameContext()
   const { user } = usePermissions()
 
   // Reactive state for operations
@@ -199,7 +199,7 @@ export function useCurrencyOps() {
         p_to_quantity: exchangeData.toQuantity,
         p_exchange_rate: exchangeData.exchangeRate,
         p_game_code: currentGame.value,
-        p_league_attribute_id: currentLeague.value,
+        p_server_attribute_code: currentServer.value,
         p_notes: exchangeData.notes,
       })
 
@@ -267,16 +267,18 @@ export function useCurrencyOps() {
 
   // League Transition Functions
   const getAvailableLeagues = (gameCode) => {
-    // Get available leagues for transition (exclude current league)
+    // Get available currencies for exchange (server-based system)
     return currencies.value.filter(
       (curr) =>
-        curr.type === `LEAGUE_${gameCode.replace('_', '')}` && curr.id !== currentLeague.value
+        curr && curr.type === `CURRENCY_${gameCode.replace('_', '')}`
     )
   }
 
+  // League transition functionality - DEPRECATED in server-based system
   const performLeagueTransition = async (transitionData) => {
-    return await transitionLeague(
-      transitionData.accountId,
+    console.warn('League transition is deprecated in server-based system')
+    throw new Error('League transitions are not supported in server-based architecture')
+    // return await transitionLeague(
       transitionData.fromLeagueId,
       transitionData.toLeagueId,
       transitionData.reason
@@ -449,7 +451,7 @@ export function useCurrencyOps() {
     currencies,
     salesChannels,
     currentGame,
-    currentLeague,
+    currentServer,
     user,
   }
 }

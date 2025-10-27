@@ -7,9 +7,11 @@
       multiple
       list-type="image-card"
       :default-upload="false"
-      :custom-request="handleCustomUpload"
+      :custom-request="() => {}"
       :on-remove="handleFileRemove"
-      :on-finish="handleUploadFinish"
+      :on-change="handleFileChange"
+      :show-file-list="true"
+      accept="image/*"
       class="w-full"
     />
 
@@ -98,7 +100,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  label: 'Upload bằng chứng',
+  label: '',
   maxFiles: 10,
   modelValue: () => [],
   uploadPath: 'exchange-proofs',
@@ -106,6 +108,13 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits(['update:modelValue', 'upload-complete'])
+
+// Debug: Log when component is mounted
+console.log('🔍 SimpleProofUpload: Component mounted with props:', {
+  uploadPath: props.uploadPath,
+  bucket: props.bucket,
+  maxFiles: props.maxFiles
+})
 
 const message = useMessage()
 
@@ -117,19 +126,41 @@ const uploadStatus = ref({
   message: '',
 })
 
-// Convert to NUpload format
-const uploadFileList = computed(() => {
-  return fileList.value.map(
-    (file) =>
-      ({
-        id: file.id,
-        name: file.name,
-        status: file.status as 'pending' | 'uploading' | 'finished' | 'error',
-        url: file.url,
-        file: file.file,
-      }) as UploadFileInfo
-  )
+// Convert to NUpload format with writable computed for v-model
+const uploadFileList = computed({
+  get() {
+    return fileList.value.map(
+      (file) =>
+        ({
+          id: file.id,
+          name: file.name,
+          status: file.status as 'pending' | 'uploading' | 'finished' | 'error',
+          url: file.url,
+          file: file.file,
+        }) as UploadFileInfo
+    )
+  },
+  set(newValue: UploadFileInfo[]) {
+    // Convert NUpload format back to FileInfo format
+    fileList.value = newValue.map(
+      (item) =>
+        ({
+          id: item.id || generateId(),
+          name: item.name,
+          status: item.status || 'pending',
+          url: item.url,
+          file: item.file,
+        }) as FileInfo
+    )
+    // Emit update to parent
+    emit('update:modelValue', [...fileList.value])
+  }
 })
+
+// Helper function to generate unique ID
+const generateId = () => {
+  return `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
 
 // Watch for external changes
 watch(
@@ -150,24 +181,16 @@ watch(
 )
 
 const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
-  const { file, onProgress, onError } = options
-  // Generate unique ID for this file
-  const fileId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  console.log('🔍 SimpleProofUpload: handleCustomUpload called with:', options.file?.name)
+  const { file, onProgress, onError, onFinish } = options
 
-  // Add to file list with pending status
-  const newFileInfo: FileInfo = {
-    id: fileId,
-    file: file.file as File,
-    name: file.name,
-    status: 'uploading',
-  }
+  // Use the file ID from n-upload to avoid "no corresponding id" error
+  const fileId = (file as any).id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 
-  // Update file list
-  const existingFileIndex = fileList.value.findIndex((f) => f.name === file.name)
+  // Update existing file status to uploading
+  const existingFileIndex = fileList.value.findIndex((f) => f.id === fileId || f.name === file.name)
   if (existingFileIndex >= 0) {
-    fileList.value[existingFileIndex] = newFileInfo
-  } else {
-    fileList.value.push(newFileInfo)
+    fileList.value[existingFileIndex].status = 'uploading'
   }
 
   try {
@@ -188,7 +211,7 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
 
     // Create unique filename with timestamp
     const timestamp = Date.now()
-    const randomString = Math.random().toString(36).slice(2, 8)
+    const randomString = Math.random().toString(36).substring(2, 8)
     const filename = `${timestamp}-${randomString}-${actualFile.name}`
     const filePath = `${props.uploadPath}/${filename}`
 
@@ -237,14 +260,21 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
 
       message.success(`${actualFile.name} upload thành công!`)
 
+      // Call onFinish to let n-upload know the file is processed
+      if (onFinish) {
+        onFinish()
+      }
+
       // Emit upload completion for parent components
-      emit('upload-complete', [
+      const uploadedData = [
         {
           url: uploadResult.publicUrl,
           name: actualFile.name,
           path: uploadResult.path,
         },
-      ])
+      ]
+      console.log('🔍 SimpleProofUpload: About to emit upload-complete with:', uploadedData)
+      emit('upload-complete', uploadedData)
 
       // Clear success status after 3 seconds
       setTimeout(() => {
@@ -259,7 +289,7 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
       throw new Error(uploadResult.error || 'Upload thất bại')
     }
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('🔍 SimpleProofUpload: Upload error:', error)
 
     // Update file status to error
     const errorFileInfo: FileInfo = {
@@ -301,6 +331,11 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
   }
 }
 
+const handleFileChange = (options: any) => {
+  console.log('🔍 SimpleProofUpload: handleFileChange called with:', options.file?.name)
+  // This might trigger the upload
+}
+
 const handleUploadFinish = () => {
   // This is called when n-upload considers the upload finished
   // We handle the actual upload in handleCustomUpload
@@ -335,6 +370,90 @@ const validateFile = (file: File): boolean => {
 
   return true
 }
+
+// Expose method to upload files on demand
+const uploadFiles = async () => {
+  console.log('🔍 SimpleProofUpload: Starting upload of', fileList.value.length, 'files')
+
+  if (fileList.value.length === 0) {
+    return []
+  }
+
+  const uploadResults = []
+
+  for (const fileInfo of fileList.value) {
+    if (fileInfo.status === 'finished') {
+      // Already uploaded
+      uploadResults.push({
+        url: fileInfo.url,
+        name: fileInfo.name,
+        path: fileInfo.path,
+      })
+      continue
+    }
+
+    if (fileInfo.file) {
+      try {
+        uploadStatus.value = {
+          uploading: true,
+          success: false,
+          error: false,
+          message: `Đang upload ${fileInfo.name}...`,
+        }
+
+        // Create unique filename
+        const timestamp = Date.now()
+        const randomString = Math.random().toString(36).substring(2, 8)
+        const filename = `${timestamp}-${randomString}-${fileInfo.file.name}`
+        const filePath = `${props.uploadPath}/${filename}`
+
+        // Upload to Supabase
+        const uploadResult = await uploadFile(fileInfo.file, filePath, props.bucket)
+
+        if (uploadResult.success) {
+          // Update file info
+          fileInfo.status = 'finished'
+          fileInfo.url = uploadResult.publicUrl
+          fileInfo.path = uploadResult.path
+
+          uploadResults.push({
+            url: uploadResult.publicUrl,
+            name: fileInfo.name,
+            path: uploadResult.path,
+          })
+
+          message.success(`${fileInfo.name} upload thành công!`)
+        } else {
+          throw new Error(uploadResult.error)
+        }
+      } catch (error) {
+        console.error('Upload error:', error)
+        fileInfo.status = 'error'
+        message.error(`Upload thất bại: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
+      }
+    }
+  }
+
+  uploadStatus.value = {
+    uploading: false,
+    success: uploadResults.length > 0,
+    error: uploadResults.length === 0,
+    message: uploadResults.length > 0 ?
+      `Đã upload thành công ${uploadResults.length} file` :
+      'Upload thất bại',
+  }
+
+  if (uploadResults.length > 0) {
+    emit('upload-complete', uploadResults)
+  }
+
+  return uploadResults
+}
+
+// Expose method to parent
+defineExpose({
+  uploadFiles
+})
 </script>
 
 <style scoped>

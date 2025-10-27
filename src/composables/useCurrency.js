@@ -4,7 +4,7 @@ import { useGameContext } from '@/composables/useGameContext.js'
 import { usePermissions } from '@/composables/usePermissions.js'
 
 export function useCurrency() {
-  const { currentGame, currentLeague, loadCurrencies } = useGameContext()
+  const { currentGame, currentServer, loadCurrencies } = useGameContext()
   const { canCreateTransactions } = usePermissions()
 
   // Reactive state
@@ -16,35 +16,67 @@ export function useCurrency() {
 
   // Computed properties
   const activeCurrencies = computed(() => {
-    return currencies.value.filter((currency) => currency.is_active !== false)
+    try {
+      return (currencies.value || [])
+        .filter((currency) => currency && currency.is_active !== false)
+    } catch (error) {
+      console.error('Error in activeCurrencies computed:', error)
+      return []
+    }
   })
 
   const currenciesByCode = computed(() => {
-    const map = {}
-    currencies.value.forEach((currency) => {
-      map[currency.code] = currency
-    })
-    return map
+    try {
+      const map = {}
+      ;(currencies.value || []).forEach((currency) => {
+        if (currency && currency.code) {
+          map[currency.code] = currency
+        }
+      })
+      return map
+    } catch (error) {
+      console.error('Error in currenciesByCode computed:', error)
+      return {}
+    }
   })
 
   const salesChannels = computed(() => {
-    // Channels for selling: SALES || BOTH (using direction field), exclude DEFAULT
-    return (channels.value || []).filter((channel) =>
-      (channel.direction === 'SALES' || channel.direction === 'BOTH') &&
-      channel.code !== 'DEFAULT'
-    )
+    // Channels for selling: SELL || BOTH (using direction field), exclude DEFAULT
+    try {
+      return (channels.value || [])
+        .filter((channel) => channel && channel.direction && channel.code)
+        .filter((channel) =>
+          (channel.direction === 'SELL' || channel.direction === 'BOTH') &&
+          channel.code !== 'DEFAULT'
+        )
+    } catch (error) {
+      console.error('Error in salesChannels computed:', error)
+      return []
+    }
   })
 
   const purchaseChannels = computed(() => {
-    // Channels for purchasing: PURCHASE || BOTH (using direction field), exclude DEFAULT
-    return (channels.value || []).filter((channel) =>
-      (channel.direction === 'PURCHASE' || channel.direction === 'BOTH') &&
-      channel.code !== 'DEFAULT'
-    )
+    // Channels for purchasing: BUY || BOTH (using direction field), exclude DEFAULT
+    try {
+      return (channels.value || [])
+        .filter((channel) => channel && channel.direction && channel.code)
+        .filter((channel) =>
+          (channel.direction === 'BUY' || channel.direction === 'BOTH') &&
+          channel.code !== 'DEFAULT'
+        )
+    } catch (error) {
+      console.error('Error in purchaseChannels computed:', error)
+      return []
+    }
   })
 
   const allCurrencies = computed(() => {
-    return currencies.value
+    try {
+      return currencies.value || []
+    } catch (error) {
+      console.error('Error in allCurrencies computed:', error)
+      return []
+    }
   })
 
   const loadAllCurrencies = async () => {
@@ -72,7 +104,7 @@ export function useCurrency() {
     return amount * rate
   }
 
-  // Load currencies for current game
+  // Load currencies for current game using attribute_relationships
   const loadAvailableCurrencies = async () => {
     if (!currentGame.value) {
       currencies.value = []
@@ -83,32 +115,93 @@ export function useCurrency() {
     error.value = null
 
     try {
-      // Use correct currency type mapping (same as in CurrencyCreateOrders.vue)
-      let currencyType = null
-      if (currentGame.value === 'POE_2') {
-        currencyType = 'CURRENCY_POE2'
-      } else if (currentGame.value === 'POE_1') {
-        currencyType = 'CURRENCY_POE1'
-      } else if (currentGame.value === 'DIABLO_4') {
-        currencyType = 'CURRENCY_D4'
-      }
-
-      console.log('🔍 Loading currencies for game:', currentGame.value, 'with type:', currencyType)
-
-      const { data, error: fetchError } = await supabase
+      // First get the game attribute ID
+      const { data: gameData, error: gameError } = await supabase
         .from('attributes')
-        .select('*')
-        .eq('type', currencyType)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
+        .select('id')
+        .eq('code', currentGame.value)
+        .eq('type', 'GAME')
+        .single()
+
+      if (gameError) throw gameError
+      if (!gameData) throw new Error(`Game ${currentGame.value} not found`)
+
+      // Then load GAME_CURRENCY type currencies linked to this game via attribute_relationships
+      // Use a different approach - query from attribute_relationships directly
+      const { data, error: fetchError } = await supabase
+        .from('attribute_relationships')
+        .select(`
+          child_attribute_id
+        `)
+        .eq('parent_attribute_id', gameData.id)
 
       if (fetchError) throw fetchError
 
-      currencies.value = data || []
-      console.log('✅ Currencies loaded into useCurrency composable:', currencies.value.length, 'items')
+      // Get the currency attribute IDs
+      const currencyIds = data?.map(rel => rel.child_attribute_id) || []
+
+      if (currencyIds.length === 0) {
+        currencies.value = []
+        return
+      }
+
+      // Now load the actual currency attributes
+      const { data: currencyData, error: currencyError } = await supabase
+        .from('attributes')
+        .select('*')
+        .in('id', currencyIds)
+        .eq('type', 'GAME_CURRENCY')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+
+      if (currencyError) throw currencyError
+
+      currencies.value = currencyData || []
     } catch (err) {
       console.error('Error loading currencies:', err)
       error.value = err.message
+
+      // Fallback to previous method if attribute_relationships query fails
+      try {
+        // Try GAME_CURRENCY approach with game code matching instead of attribute_relationships
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('attributes')
+          .select('*')
+          .eq('type', 'GAME_CURRENCY')
+          .eq('is_active', true)
+          .like('code', `%${currentGame.value.replace('_', '')}%`)
+          .order('sort_order', { ascending: true })
+
+        if (!fallbackError) {
+          currencies.value = fallbackData || []
+        } else {
+          // Final fallback - try old currency types
+          let currencyType = null
+          if (currentGame.value === 'POE_2') {
+            currencyType = 'CURRENCY_POE2'
+          } else if (currentGame.value === 'POE_1') {
+            currencyType = 'CURRENCY_POE1'
+          } else if (currentGame.value === 'DIABLO_4') {
+            currencyType = 'CURRENCY_D4'
+          }
+
+          if (currencyType) {
+            const { data: oldTypeData, error: oldTypeError } = await supabase
+              .from('attributes')
+              .select('*')
+              .eq('type', currencyType)
+              .eq('is_active', true)
+              .order('sort_order', { ascending: true })
+
+            if (!oldTypeError) {
+                            currencies.value = oldTypeData || []
+            }
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback currency loading also failed:', fallbackErr)
+        currencies.value = []
+      }
     } finally {
       loading.value = false
     }
@@ -136,8 +229,7 @@ export function useCurrency() {
 
   // Load channels (sources)
   const loadChannels = async () => {
-    console.log('Loading channels...')
-    try {
+        try {
       const { data, error: fetchError } = await supabase
         .from('channels')
         .select('*')
@@ -147,23 +239,33 @@ export function useCurrency() {
       if (fetchError) throw fetchError
 
       channels.value = data || []
-      console.log('✅ Channels loaded successfully:', data?.length || 0)
     } catch (err) {
       console.error('Error loading channels:', err)
       error.value = err.message
+      channels.value = [] // Ensure channels is always an array
     }
   }
 
   // Get channels with fee chains
   const getChannelsWithFeeChains = computed(() => {
-    return channels.value.filter(
-      (channel) => channel.trading_fee_chain && channel.trading_fee_chain.is_active !== false
-    )
+    try {
+      return (channels.value || []).filter(
+        (channel) => channel && channel.trading_fee_chain && channel.trading_fee_chain.is_active !== false
+      )
+    } catch (error) {
+      console.error('Error in getChannelsWithFeeChains computed:', error)
+      return []
+    }
   })
 
   // Get channel by ID
   const getChannelById = (channelId) => {
-    return channels.value.find((channel) => channel.id === channelId)
+    try {
+      return (channels.value || []).find((channel) => channel && channel.id === channelId)
+    } catch (error) {
+      console.error('Error in getChannelById:', error)
+      return null
+    }
   }
 
   // Create currency transaction
@@ -178,7 +280,7 @@ export function useCurrency() {
         .insert({
           game_account_id: transactionData.gameAccountId,
           game_code: currentGame.value,
-          league_attribute_id: currentLeague.value,
+          server_attribute_code: currentServer.value,
           transaction_type: transactionData.type,
           currency_attribute_id: transactionData.currencyId,
           quantity: transactionData.quantity,
@@ -204,9 +306,9 @@ export function useCurrency() {
     }
   }
 
-  // Get transactions for current game/league
+  // Get transactions for current game/server
   const getTransactions = async (filters = {}) => {
-    if (!currentGame.value || !currentLeague.value) return []
+    if (!currentGame.value || !currentServer.value) return []
 
     try {
       let query = supabase
@@ -220,7 +322,7 @@ export function useCurrency() {
         `
         )
         .eq('game_code', currentGame.value)
-        .eq('league_attribute_id', currentLeague.value)
+        .eq('server_attribute_code', currentServer.value)
         .order('created_at', { ascending: false })
 
       // Apply filters
@@ -261,11 +363,11 @@ export function useCurrency() {
   }
 
   // Get currency inventory summary (Dashboard)
-  const getInventorySummary = async (gameCode = null, leagueId = null) => {
+  const getInventorySummary = async (gameCode = null, serverCode = null) => {
     try {
       const { data, error: rpcError } = await supabase.rpc('get_currency_inventory_summary_v1', {
         p_game_code: gameCode,
-        p_league_attribute_id: leagueId,
+        p_server_attribute_code: serverCode,
       })
 
       if (rpcError) throw rpcError

@@ -73,7 +73,6 @@ export const uploadFile = async (file, path, bucket = 'uploads') => {
       publicUrl,
     }
   } catch (error) {
-    console.error('File upload failed:', error)
     return {
       success: false,
       error: error.message,
@@ -92,7 +91,6 @@ export const deleteFile = async (path, bucket = 'uploads') => {
 
     return { success: true }
   } catch (error) {
-    console.error('File deletion failed:', error)
     return {
       success: false,
       error: error.message,

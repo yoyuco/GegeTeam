@@ -48,11 +48,30 @@
             </div>
             <label class="text-sm font-medium text-gray-700">Tên khách hàng</label>
           </div>
-          <n-input
+          <n-auto-complete
             v-model:value="customerFormData.customerName"
-            placeholder="Nhập tên khách hàng"
+            :options="customerOptions.map(opt => ({ label: opt.label, value: opt.label }))"
+            :loading="customerLoading"
+            placeholder="Nhập hoặc chọn khách hàng"
             size="large"
             class="w-full"
+            clearable
+            @update:value="(value) => {
+              customerSearchText = value || ''
+              // Also update the customer data when selecting from dropdown
+              const selected = customerOptions.find(opt => opt.label === value)
+              if (selected) {
+                // Pre-fill contact info if available
+                if (selected.data.contact_info?.contact) {
+                  customerFormData.deliveryInfo = selected.data.contact_info.contact
+                }
+                // Pre-fill game tag from parties contact_info (not customer_accounts)
+                const gameTag = getCustomerGameTag(selected.data, props.gameCode)
+                if (gameTag) {
+                  customerFormData.gameTag = gameTag
+                }
+              }
+            }"
           />
         </div>
 
@@ -147,11 +166,25 @@
             </div>
             <label class="text-sm font-medium text-gray-700">Tên nhà cung cấp</label>
           </div>
-          <n-input
+          <n-auto-complete
             v-model:value="supplierFormData.customerName"
-            placeholder="Nhập tên nhà cung cấp"
+            :options="supplierOptions.map(opt => ({ label: opt.label, value: opt.label }))"
+            :loading="supplierLoading"
+            placeholder="Nhập hoặc chọn nhà cung cấp"
             size="large"
             class="w-full"
+            clearable
+            @update:value="(value) => {
+              supplierSearchText = value || ''
+              // Also update the supplier data when selecting from dropdown
+              const selected = supplierOptions.find(opt => opt.label === value)
+              if (selected) {
+                // Pre-fill contact info if available
+                if (selected.data.contact_info?.contact) {
+                  supplierFormData.deliveryInfo = selected.data.contact_info.contact
+                }
+              }
+            }"
           />
         </div>
 
@@ -207,8 +240,15 @@
 
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue'
-import { NSelect, NInput } from 'naive-ui'
+import { NSelect, NInput, NAutoComplete } from 'naive-ui'
 import type { Channel } from '@/types/composables'
+import {
+  loadSuppliersOrCustomersByChannel,
+  searchSuppliersOrCustomers,
+  createSupplierOrCustomer,
+  getCustomerGameTag,
+  type SupplierCustomerOption
+} from '@/composables/useSupplierCustomer'
 
 // Props
 interface Props {
@@ -259,6 +299,16 @@ const emit = defineEmits<{
 // Reactive state
 const activeTab = ref<'customer' | 'supplier'>(props.activeTab)
 
+// Supplier loading state
+const supplierOptions = ref<SupplierCustomerOption[]>([])
+const supplierLoading = ref(false)
+const supplierSearchText = ref('')
+
+// Customer loading state
+const customerOptions = ref<SupplierCustomerOption[]>([])
+const customerLoading = ref(false)
+const customerSearchText = ref('')
+
 // Form data
 const customerFormData = computed({
   get: () => {
@@ -303,7 +353,7 @@ const loading = computed(() => props.loading)
 const customerChannelOptions = computed(() => {
   return (props.channels || [])
     .filter((channel: Channel) =>
-      (channel.direction === 'SALES' || channel.direction === 'BOTH') &&
+      (channel.direction === 'SELL' || channel.direction === 'BOTH') &&
       channel.code !== 'DEFAULT'
     )
     .map((channel: Channel) => ({
@@ -315,7 +365,7 @@ const customerChannelOptions = computed(() => {
 const supplierChannelOptions = computed(() => {
   return (props.channels || [])
     .filter((channel: Channel) =>
-      (channel.direction === 'PURCHASE' || channel.direction === 'BOTH') &&
+      (channel.direction === 'BUY' || channel.direction === 'BOTH') &&
       channel.code !== 'DEFAULT'
     )
     .map((channel: Channel) => ({
@@ -391,11 +441,174 @@ watch(
   }
 )
 
+// Supplier loading functions
+const loadSuppliers = async (channelId: string) => {
+  if (!channelId) {
+    supplierOptions.value = []
+    return
+  }
+
+  supplierLoading.value = true
+  try {
+    const suppliers = await loadSuppliersOrCustomersByChannel(channelId, 'supplier')
+    supplierOptions.value = suppliers
+  } catch (error) {
+    console.error('Error loading suppliers:', error)
+    supplierOptions.value = []
+  } finally {
+    supplierLoading.value = false
+  }
+}
+
+const searchSuppliers = async (search: string) => {
+  const channelId = supplierFormData.value?.channelId
+  if (!channelId || !search) {
+    supplierOptions.value = []
+    return
+  }
+
+  supplierLoading.value = true
+  try {
+    const suppliers = await searchSuppliersOrCustomers(search, channelId, 'supplier', props.gameCode)
+    supplierOptions.value = suppliers
+  } catch (error) {
+    console.error('Error searching suppliers:', error)
+    supplierOptions.value = []
+  } finally {
+    supplierLoading.value = false
+  }
+}
+
+const createNewSupplier = async (name: string) => {
+  const channelId = supplierFormData.value?.channelId
+  if (!channelId || !name) return null
+
+  try {
+    const newSupplier = await createSupplierOrCustomer(
+      name,
+      'supplier',
+      channelId,
+      supplierFormData.value?.deliveryInfo,
+      undefined,
+      props.gameCode
+    )
+    return newSupplier
+  } catch (error) {
+    console.error('Error creating supplier:', error)
+    return null
+  }
+}
+
+// Customer loading functions
+const loadCustomers = async (channelId: string) => {
+  if (!channelId) {
+    customerOptions.value = []
+    return
+  }
+
+  customerLoading.value = true
+  try {
+    const customers = await loadSuppliersOrCustomersByChannel(channelId, 'customer', props.gameCode)
+    customerOptions.value = customers
+  } catch (error) {
+    console.error('Error loading customers:', error)
+    customerOptions.value = []
+  } finally {
+    customerLoading.value = false
+  }
+}
+
+const searchCustomers = async (search: string) => {
+  const channelId = customerFormData.value?.channelId
+  if (!channelId || !search) {
+    customerOptions.value = []
+    return
+  }
+
+  customerLoading.value = true
+  try {
+    const customers = await searchSuppliersOrCustomers(search, channelId, 'customer', props.gameCode)
+    customerOptions.value = customers
+  } catch (error) {
+    console.error('Error searching customers:', error)
+    customerOptions.value = []
+  } finally {
+    customerLoading.value = false
+  }
+}
+
+// Watch for channel changes in supplier mode
+watch(
+  () => supplierFormData.value?.channelId,
+  async (newChannelId: string | null) => {
+    if (newChannelId && (props.formMode === 'supplier' || activeTab.value === 'supplier')) {
+      await loadSuppliers(newChannelId)
+    }
+  },
+  { immediate: true }
+)
+
+// Watch for supplier search
+watch(
+  supplierSearchText,
+  (newSearch: string) => {
+    if (newSearch.length >= 2) {
+      searchSuppliers(newSearch)
+    } else if (newSearch.length === 0) {
+      // Reload all suppliers when search is cleared
+      const channelId = supplierFormData.value?.channelId
+      if (channelId) {
+        loadSuppliers(channelId)
+      }
+    }
+  }
+)
+
+// Watch for channel changes in customer mode
+watch(
+  () => customerFormData.value?.channelId,
+  async (newChannelId: string | null) => {
+    if (newChannelId && (props.formMode === 'customer' || activeTab.value === 'customer')) {
+      await loadCustomers(newChannelId)
+    }
+  },
+  { immediate: true }
+)
+
+// Watch for customer search
+watch(
+  customerSearchText,
+  (newSearch: string) => {
+    if (newSearch.length >= 2) {
+      searchCustomers(newSearch)
+    } else if (newSearch.length === 0) {
+      // Reload all customers when search is cleared
+      const channelId = customerFormData.value?.channelId
+      if (channelId) {
+        loadCustomers(channelId)
+      }
+    }
+  }
+)
+
+// Watch for game code changes to reload customers with correct game-specific data
+watch(
+  () => props.gameCode,
+  async (newGameCode: string) => {
+    if (newGameCode && customerFormData.value?.channelId && (props.formMode === 'customer' || activeTab.value === 'customer')) {
+      await loadCustomers(customerFormData.value.channelId)
+    }
+  }
+)
+
 // Expose methods for parent component
 defineExpose({
   customerFormData,
   supplierFormData,
   activeTab,
+  loadSuppliers,
+  loadCustomers,
+  createNewSupplier,
 })
 </script>
 

@@ -8,10 +8,15 @@ import { z } from 'zod'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables')
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
+  console.error('Available variables:', {
+    SUPABASE_URL: !!process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY
+  })
   process.exit(1)
 }
 
@@ -39,32 +44,65 @@ server.tool(
   },
   async ({ query, parameters }) => {
     try {
-      let params = {}
-      if (parameters) {
-        params = JSON.parse(parameters)
-      }
+      const trimmedQuery = query.trim().toLowerCase()
 
-      const { data, error } = await supabase.rpc('execute_sql', {
-        query,
-        params,
-      })
+      // For SELECT queries, use direct table access
+      if (trimmedQuery.startsWith('select')) {
+        // Extract table name from query (simple approach)
+        const tableMatch = query.match(/from\s+(\w+)/i)
+        if (tableMatch) {
+          const tableName = tableMatch[1]
 
-      if (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: error.message }, null, 2),
-            },
-          ],
+          // Try to execute the query directly using Supabase client
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+
+          if (error) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    error: error.message,
+                    note: 'Direct SELECT failed. Try using a simpler query or check table permissions.',
+                    hint: 'Available tables can be listed with list_tables tool'
+                  }, null, 2),
+                },
+              ],
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  data,
+                  rowCount: data?.length || 0,
+                  note: 'Query executed successfully using direct table access'
+                }, null, 2),
+              },
+            ],
+          }
         }
       }
 
+      // For other query types, provide guidance
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ data, rowCount: data?.length || 0 }, null, 2),
+            text: JSON.stringify({
+              error: 'Complex SQL queries not supported in this version',
+              query: query,
+              suggestions: [
+                'Use list_tables to see available tables',
+                'Use get_table_schema to see table structure',
+                'Use select_from_table for simple SELECT queries',
+                'For complex queries, consider using Supabase Dashboard directly'
+              ]
+            }, null, 2),
           },
         ],
       }

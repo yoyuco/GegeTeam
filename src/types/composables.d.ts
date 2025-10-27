@@ -9,45 +9,44 @@ export interface GameInfo {
   icon: string
   description: string
   currencyPrefix: string
-  leaguePrefix: string
 }
 
-export interface LeagueInfo {
+export interface ServerInfo {
   id: string
   code: string
   name: string
-  game_code: string
+  type: string
   is_active: boolean
 }
 
 export interface ContextInfo {
   game: GameInfo | null
-  league: LeagueInfo | null
+  server: ServerInfo | null
   availableGames: GameInfo[]
-  availableLeagues: LeagueInfo[]
+  availableServers: ServerInfo[]
   hasContext: boolean
 }
 
 export interface UseGameContext {
   // State
   currentGame: Ref<string | null>
-  currentLeague: Ref<string | null>
+  currentServer: Ref<string | null>
   games: Ref<GameInfo[]>
-  availableLeagues: Ref<LeagueInfo[]>
+  availableServers: Ref<ServerInfo[]>
   loading: Ref<boolean>
   error: Ref<string | null>
 
   // Computed
   currentGameInfo: Ref<GameInfo | null>
-  currentLeagueInfo: Ref<LeagueInfo | null>
+  currentServerInfo: Ref<ServerInfo | null>
   availableGames: Ref<GameInfo[]>
   contextInfo: Ref<ContextInfo>
   contextString: Ref<string>
 
   // Methods
   switchGame: (gameCode: string) => Promise<boolean>
-  switchLeague: (leagueId: string) => boolean
-  loadLeagues: (gameCode: string) => Promise<void>
+  switchServer: (serverCode: string) => boolean
+  loadServers: (gameCode: string) => Promise<void>
   loadCurrencies: () => Promise<LeagueInfo[]>
   loadGameAccounts: (purpose?: string) => Promise<GameAccount[]>
   getCurrencyType: (currencyCode: string) => string | null
@@ -148,7 +147,21 @@ export interface Channel {
   displayName?: string
   channel_type: string
   description: string
+  website_url?: string
   is_active: boolean
+  direction: 'BUY' | 'SELL' | 'BOTH'
+  created_at?: string
+  updated_at?: string
+  created_by?: string
+  updated_by?: string
+  purchase_fee_rate?: number
+  purchase_fee_fixed?: number
+  purchase_fee_currency?: string
+  sale_fee_rate?: number
+  sale_fee_fixed?: number
+  sale_fee_currency?: string
+  fee_updated_at?: string
+  fee_updated_by?: string
 }
 
 export interface InventoryItem {

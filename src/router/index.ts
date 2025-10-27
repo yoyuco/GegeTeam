@@ -54,7 +54,7 @@ const routes = [
     component: () => import('@/pages/CurrencyOps.vue'),
     meta: { requiresAuth: true },
   },
-  { path: '/:pathMatch(.*)*', redirect: '/' },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
