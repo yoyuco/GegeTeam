@@ -38,6 +38,19 @@
           </n-form-item>
           <n-form-item label="Thời gian kết thúc" path="end_time">
             <n-time-picker v-model:value="shiftModal.form.end_time" type="time" format="HH:mm" />
+            <template #feedback>
+              <n-text v-if="shiftModal.form.start_time && shiftModal.form.end_time" depth="3" style="font-size: 12px;">
+                <span v-if="isOvernightShift(
+                  new Date(shiftModal.form.start_time).toTimeString().substring(0, 8),
+                  new Date(shiftModal.form.end_time).toTimeString().substring(0, 8)
+                )">
+                  ⚠️ Ca làm việc qua đêm (ví dụ: 20:00 hôm nay - 08:00 ngày mai)
+                </span>
+                <span v-else>
+                  ℹ️ Ca làm việc trong ngày
+                </span>
+              </n-text>
+            </template>
           </n-form-item>
           <n-form-item label="Mô tả" path="description">
             <n-input
@@ -84,9 +97,16 @@ import {
   NTimePicker,
   NSwitch,
   NTag,
+  NText,
   createDiscreteApi,
 } from 'naive-ui'
 import { Add as AddIcon, CreateOutline as EditIcon, Trash as TrashIcon } from '@vicons/ionicons5'
+import {
+  isOvernightShift,
+  formatShiftTime,
+  calculateShiftDuration,
+  getShiftDurationDescription
+} from '@/utils/shiftUtils'
 
 const { message } = createDiscreteApi(['message'])
 
@@ -148,6 +168,8 @@ const shiftRules = {
   ],
 }
 
+// Shift utility functions are imported from @/utils/shiftUtils
+
 // DataTable columns
 const shiftColumns: DataTableColumns<WorkShift> = [
   {
@@ -159,8 +181,19 @@ const shiftColumns: DataTableColumns<WorkShift> = [
   {
     title: 'Thời gian',
     key: 'time_range',
-    render: (row) => `${row.start_time} - ${row.end_time}`,
-    width: 180,
+    render: (row) => formatShiftTime(row.start_time, row.end_time),
+    width: 200,
+  },
+  {
+    title: 'Thời lượng',
+    key: 'duration',
+    render: (row) => getShiftDurationDescription(row.start_time, row.end_time),
+    width: 120,
+    sorter: (row1, row2) => {
+      const dur1 = calculateShiftDuration(row1.start_time, row1.end_time)
+      const dur2 = calculateShiftDuration(row2.start_time, row2.end_time)
+      return dur1 - dur2
+    },
   },
   {
     title: 'Mô tả',
@@ -294,6 +327,7 @@ async function saveShift() {
     const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}:00`
 
     console.log('Converted times:', { startTime, endTime })
+    console.log('Is overnight shift:', isOvernightShift(startTime, endTime))
 
     if (shiftModal.editingShift) {
       // Update existing shift
