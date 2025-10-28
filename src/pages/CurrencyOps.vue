@@ -56,7 +56,7 @@
     </div>
 
     <!-- Inventory Summary -->
-    <div class="mb-6">
+    <div class="mb-6" v-if="activeTab === 'exchange'">
       <GameServerSelector
         ref="gameServerSelectorRef"
         :key="`game-server-${currentGame?.value}-${currentServer?.value}`"
@@ -64,6 +64,21 @@
         @server-changed="onServerChanged"
         @context-changed="onContextChanged"
       />
+    </div>
+
+    <!-- Note for delivery and history tabs -->
+    <div class="mb-6" v-else-if="activeTab === 'delivery' || activeTab === 'history'">
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p class="text-sm font-medium text-blue-800">Hiển thị tất cả đơn currency</p>
+            <p class="text-xs text-blue-600">Sử dụng bộ lọc bên dưới để tìm kiếm và lọc theo nhu cầu</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Main Tabs -->
@@ -444,38 +459,41 @@ const loadData = async () => {
     isDataLoading.value = true
     areCurrenciesLoading.value = true // Start currency loading
 
-    // First ensure game context is initialized
+    // Only load exchange-related data if we're on exchange tab
+    if (activeTab.value === 'exchange') {
+      // First ensure game context is initialized
+      await initializeFromStorage()
+      // Wait for game context to be available
+      let retries = 0
+      while ((!currentGame.value || !currentServer.value) && retries < 10) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        retries++
+      }
+      if (!currentGame.value || !currentServer.value) {
+        console.error('❌ Game context not available after retries')
+        throw new Error('Game context not available')
+      }
 
-    await initializeFromStorage()
-    // Wait for game context to be available
-    let retries = 0
-    while ((!currentGame.value || !currentServer.value) && retries < 10) {
+      // Now initialize currency composable properly (same pattern as GameLeagueSelector)
+      await initializeCurrency()
+      // Manual currency loading to ensure currencies are loaded
+      await loadCurrenciesForCurrentGame()
+      // Give a moment for reactive updates to propagate
+      await new Promise(resolve => setTimeout(resolve, 100))
 
-      await new Promise(resolve => setTimeout(resolve, 500))
-      retries++
+      // Load accounts for exchange functionality
+      await loadAccounts()
     }
-    if (!currentGame.value || !currentServer.value) {
-      console.error('❌ Game context not available after retries')
-      throw new Error('Game context not available')
+
+    // Load delivery orders from database (for delivery tab)
+    if (activeTab.value === 'delivery') {
+      await loadDeliveryOrders()
     }
 
-    // Now initialize currency composable properly (same pattern as GameLeagueSelector)
-
-    await initializeCurrency()
-    // Manual currency loading to ensure currencies are loaded
-
-    await loadCurrenciesForCurrentGame()
-    // Give a moment for reactive updates to propagate
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // Load accounts
-    await loadAccounts()
-
-    // Load delivery orders from database
-    await loadDeliveryOrders()
-
-    // Load transaction history
-    await loadTransactionHistory()
+    // Load transaction history (for history tab)
+    if (activeTab.value === 'history') {
+      await loadTransactionHistory()
+    }
   } catch {
     message.error('Không thể tải dữ liệu')
   } finally {
@@ -515,13 +533,8 @@ const handleExchangeReset = () => {
 
 // Load delivery orders from database
 // Note: This shows orders that have been automatically assigned by the system
-// to operation team members for processing
+// to operation team members for processing. Shows all orders regardless of game/server.
 const loadDeliveryOrders = async () => {
-  if (!currentGame.value || !currentServer.value) {
-    deliveryOrders.value = []
-    return
-  }
-
   loadingDelivery.value = true
   try {
     const { data, error } = await supabase
@@ -545,11 +558,9 @@ const loadDeliveryOrders = async () => {
           game_tag
         )
       `)
-      .eq('game_code', currentGame.value)
-      .eq('server_attribute_code', currentServer.value)
       .in('status', ['assigned', 'in_progress']) // Only show assigned and processing orders
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(100) // Increase limit since we're showing all games
 
     if (error) {
       console.error('Error loading delivery orders:', error)
@@ -671,13 +682,9 @@ const resetAllForms = () => {
 }
 
 // Load transaction history from database
-// Note: This shows only completed and cancelled orders for historical reference
+// Note: This shows only completed and cancelled orders for historical reference.
+// Shows all orders regardless of game/server.
 const loadTransactionHistory = async () => {
-  if (!currentGame.value || !currentServer.value) {
-    transactionHistory.value = []
-    return
-  }
-
   loadingHistory.value = true
   try {
     const { data, error } = await supabase
@@ -696,11 +703,9 @@ const loadTransactionHistory = async () => {
           name
         )
       `)
-      .eq('game_code', currentGame.value)
-      .eq('server_attribute_code', currentServer.value)
       .in('status', ['completed', 'cancelled']) // Only show completed and cancelled orders
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(100) // Increase limit since we're showing all games
 
     if (error) {
       console.error('Error loading transaction history:', error)
@@ -776,24 +781,31 @@ const loadMockData = () => {
   ]
 }
 
-// Watch for game/server changes to reload data
+// Watch for game/server changes to reload data (only affects exchange tab)
 watch([currentGame, currentServer], async () => {
-  // Only proceed if we have both game and server
-  if (!currentGame.value || !currentServer.value) return
+  // Only reload data if we're on exchange tab
+  if (activeTab.value === 'exchange') {
+    // Only proceed if we have both game and server
+    if (!currentGame.value || !currentServer.value) return
 
-  // Reset forms - this will set currencyId to null briefly
-  resetAllForms()
+    // Reset forms - this will set currencyId to null briefly
+    resetAllForms()
 
-  // Load new data including delivery orders and transaction history
-  await loadData()
+    // Load new data for exchange tab
+    await loadData()
+  }
 })
 
-// Watch for tab changes to load data when switching to delivery tab
+// Watch for tab changes to load appropriate data
 watch(activeTab, async (newTab) => {
-  if (newTab === 'delivery' && currentGame.value && currentServer.value) {
+  // Load data based on the new active tab
+  if (newTab === 'delivery') {
     await loadDeliveryOrders()
-  } else if (newTab === 'history' && currentGame.value && currentServer.value) {
+  } else if (newTab === 'history') {
     await loadTransactionHistory()
+  } else if (newTab === 'exchange') {
+    // For exchange tab, load the full data including game context
+    await loadData()
   }
 })
 
