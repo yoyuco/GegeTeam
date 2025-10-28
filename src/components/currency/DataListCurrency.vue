@@ -355,6 +355,154 @@ const typeOptions = computed(() => {
 
 // Table columns based on model type
 const tableColumns = computed(() => {
+  // For delivery tab, use the requested order
+  if (props.modelType === 'delivery') {
+    const deliveryColumns = [
+      {
+        title: 'Mã đơn',
+        key: 'order_number',
+        width: 120,
+        render: (row: any) => row.order_number || `#${row.id?.slice(0, 8)}...`
+      },
+      {
+        title: 'Loại',
+        key: 'order_type',
+        width: 100,
+        render: (row: any) => {
+          const orderType = row.order_type || row.type
+          const colors: { [key: string]: string } = {
+            PURCHASE: 'blue',
+            SELL: 'green',
+            purchase: 'blue',
+            sell: 'green',
+            exchange: 'purple',
+            deposit: 'orange',
+            withdraw: 'red'
+          }
+          const labels: { [key: string]: string } = {
+            PURCHASE: 'Mua',
+            SELL: 'Bán',
+            purchase: 'Mua',
+            sell: 'Bán',
+            exchange: 'Đổi',
+            deposit: 'Nạp',
+            withdraw: 'Rút'
+          }
+          const colorKey = (orderType as string) in colors ? orderType as string : 'gray'
+          return h('span', {
+            class: `px-2 py-1 text-xs rounded-full bg-${colors[colorKey]}-100 text-${colors[colorKey]}-800`
+          }, labels[orderType as string] || orderType)
+        }
+      },
+      {
+        title: 'Kênh',
+        key: 'channel',
+        width: 100,
+        render: (row: any) => row.channel?.name || row.channelName || '-'
+      },
+      {
+        title: 'Khách hàng/Supplier',
+        key: 'customer',
+        width: 150,
+        render: (row: any) => {
+          // For purchase orders, show supplier name, for sell orders show customer name
+          const customerName = row.customer_name || row.customerName || row.customer?.name || '-'
+          return customerName
+        }
+      },
+      {
+        title: 'Currency',
+        key: 'currency',
+        width: 120,
+        render: (row: any) => row.currency_attribute?.name || row.currencyName || row.currency?.name || '-'
+      },
+      {
+        title: 'Số lượng',
+        key: 'quantity',
+        width: 120,
+        render: (row: any) => {
+          const quantity = row.quantity || row.amount || 0
+          return `${quantity.toLocaleString()}`
+        }
+      },
+      {
+        title: 'Thông tin',
+        key: 'delivery_info',
+        width: 150,
+        render: (row: any) => {
+          const info = row.delivery_info || row.notes || '-'
+          return info.length > 20 ? `${info.substring(0, 20)}...` : info
+        }
+      },
+      {
+        title: 'Bằng chứng',
+        key: 'proof_urls',
+        width: 100,
+        render: (row: any) => {
+          const hasProof = row.proof_urls && row.proof_urls.length > 0
+          return h('div', { class: 'flex items-center gap-2' }, [
+            hasProof
+              ? h('span', { class: 'text-green-600' }, '✓ Có')
+              : h('span', { class: 'text-red-600' }, '✗ Chưa')
+          ])
+        }
+      },
+      {
+        title: 'Thao tác',
+        key: 'actions',
+        width: 160,
+        render: (row: any) => {
+          return h('div', { class: 'flex gap-1' }, [
+            h(NButton, {
+              size: 'small',
+              type: 'primary',
+              ghost: true,
+              onClick: () => onViewDetail(row)
+            }, () => 'Xem'),
+            h(NButton, {
+              size: 'small',
+              type: 'success',
+              ghost: true,
+              disabled: row.status === 'completed' || row.status === 'cancelled',
+              onClick: () => onUpdateStatus(row, 'completed')
+            }, () => 'Hoàn thành')
+          ])
+        }
+      },
+      {
+        title: 'Trạng thái',
+        key: 'status',
+        width: 120,
+        render: (row: any) => {
+          const statusColors: { [key: string]: string } = {
+            pending: 'yellow',
+            assigned: 'blue',
+            in_progress: 'purple',
+            completed: 'green',
+            cancelled: 'red',
+            delivering: 'blue',
+            delivered: 'green'
+          }
+          const statusLabels: { [key: string]: string } = {
+            pending: 'Chờ xử lý',
+            assigned: 'Đã phân công',
+            in_progress: 'Đang xử lý',
+            completed: 'Hoàn thành',
+            cancelled: 'Hủy bỏ',
+            delivering: 'Đang giao',
+            delivered: 'Đã giao'
+          }
+          const statusKey = (row.status as string) in statusColors ? row.status as string : 'gray'
+          return h('span', {
+            class: `px-2 py-1 text-xs rounded-full bg-${statusColors[statusKey]}-100 text-${statusColors[statusKey]}-800`
+          }, statusLabels[row.status as string] || row.status)
+        }
+      }
+    ]
+    return deliveryColumns
+  }
+
+  // For other tabs (history), keep the original structure
   const baseColumns = [
     {
       title: 'Mã đơn',
@@ -437,8 +585,8 @@ const tableColumns = computed(() => {
     }
   ]
 
-  // Add specific columns based on model type
-  if (props.modelType === 'delivery') {
+  // For history tab, add status and actions
+  if (props.modelType === 'history') {
     baseColumns.push(
       {
         title: 'Trạng thái',
@@ -446,76 +594,11 @@ const tableColumns = computed(() => {
         width: 120,
         render: (row: any) => {
           const statusColors: { [key: string]: string } = {
-            pending: 'yellow',
-            assigned: 'blue',
-            in_progress: 'purple',
             completed: 'green',
-            cancelled: 'red',
-            delivering: 'blue',
-            delivered: 'green'
+            cancelled: 'red'
           }
           const statusLabels: { [key: string]: string } = {
-            pending: 'Chờ xử lý',
-            assigned: 'Đã phân công',
-            in_progress: 'Đang xử lý',
             completed: 'Hoàn thành',
-            cancelled: 'Hủy bỏ',
-            delivering: 'Đang giao',
-            delivered: 'Đã giao'
-          }
-          const statusKey = (row.status as string) in statusColors ? row.status as string : 'gray'
-          return h('span', {
-            class: `px-2 py-1 text-xs rounded-full bg-${statusColors[statusKey]}-100 text-${statusColors[statusKey]}-800`
-          }, statusLabels[row.status as string] || row.status)
-        }
-      },
-      {
-        title: 'Thao tác',
-        key: 'actions',
-        width: 200,
-        render: (row: any) => {
-          return h('div', { class: 'flex gap-2' }, [
-            h(NButton, {
-              size: 'small',
-              type: 'primary',
-              ghost: true,
-              onClick: () => onViewDetail(row)
-            }, () => 'Xem'),
-            h(NButton, {
-              size: 'small',
-              type: 'success',
-              ghost: true,
-              disabled: row.status === 'delivered' || row.status === 'cancelled',
-              onClick: () => onUpdateStatus(row, 'delivered')
-            }, () => 'Xác nhận'),
-            h(NButton, {
-              size: 'small',
-              type: 'error',
-              ghost: true,
-              disabled: row.status === 'delivered' || row.status === 'cancelled',
-              onClick: () => onUpdateStatus(row, 'cancelled')
-            }, () => 'Hủy')
-          ])
-        }
-      }
-    )
-  } else {
-    baseColumns.push(
-      {
-        title: 'Trạng thái',
-        key: 'status',
-        width: 120,
-        render: (row: any) => {
-          const statusColors: { [key: string]: string } = {
-            completed: 'green',
-            failed: 'red',
-            pending: 'yellow',
-            cancelled: 'gray'
-          }
-          const statusLabels: { [key: string]: string } = {
-            completed: 'Thành công',
-            failed: 'Thất bại',
-            pending: 'Đang chờ',
             cancelled: 'Hủy bỏ'
           }
           const statusKey = (row.status as string) in statusColors ? row.status as string : 'gray'
@@ -525,15 +608,9 @@ const tableColumns = computed(() => {
         }
       },
       {
-        title: 'Ngày tạo',
-        key: 'createdAt',
-        width: 150,
-        render: (row: any) => new Date(row.createdAt).toLocaleDateString('vi-VN')
-      },
-      {
         title: 'Thao tác',
         key: 'actions',
-        width: 100,
+        width: 120,
         render: (row: any) => {
           return h(NButton, {
             size: 'small',
