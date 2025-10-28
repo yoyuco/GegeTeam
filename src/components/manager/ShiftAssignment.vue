@@ -308,7 +308,7 @@ const employeeModal = reactive({
   form: {
     employee_profile_id: '',
     shift_id: '',
-    assigned_date: Date.now(),
+    assigned_date: new Date().getTime(),
     is_active: true,
   },
 })
@@ -323,7 +323,7 @@ const accountAccessModal = reactive({
     game_account_id: '',
     channel_id: '',
     access_level: 'full',
-    assigned_date: Date.now(),
+    assigned_date: new Date().getTime(),
     notes: '',
     is_active: true,
   },
@@ -622,23 +622,25 @@ async function loadAccountAccess() {
 }
 
 function openEmployeeAssignmentModal() {
+  const today = new Date()
   employeeModal.form = {
     employee_profile_id: '',
     shift_id: '',
-    assigned_date: Date.now(),
+    assigned_date: today.getTime(),
     is_active: true,
   }
   employeeModal.open = true
 }
 
 function openAccountAccessModal() {
+  const today = new Date()
   accountAccessModal.form = {
     employee_profile_id: '',
     shift_id: '',
     game_account_id: '',
     channel_id: '',
     access_level: 'full',
-    assigned_date: Date.now(),
+    assigned_date: today.getTime(),
     notes: '',
     is_active: true,
   }
