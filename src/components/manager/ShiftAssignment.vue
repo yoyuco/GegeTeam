@@ -238,6 +238,11 @@ import {
   createDiscreteApi,
 } from 'naive-ui'
 import { Add as AddIcon, Trash as TrashIcon } from '@vicons/ionicons5'
+import {
+  getGMT7TodayTimestamp,
+  formatGMT7Date,
+  formatGMT7Vietnamese
+} from '@/utils/timezoneHelper'
 
 const { message } = createDiscreteApi(['message'])
 
@@ -308,7 +313,7 @@ const employeeModal = reactive({
   form: {
     employee_profile_id: '',
     shift_id: '',
-    assigned_date: new Date().getTime(),
+    assigned_date: getGMT7TodayTimestamp(),
     is_active: true,
   },
 })
@@ -323,7 +328,7 @@ const accountAccessModal = reactive({
     game_account_id: '',
     channel_id: '',
     access_level: 'full',
-    assigned_date: new Date().getTime(),
+    assigned_date: getGMT7TodayTimestamp(),
     notes: '',
     is_active: true,
   },
@@ -379,7 +384,7 @@ const employeeAssignmentColumns: DataTableColumns<EmployeeAssignment> = [
     title: 'Ngày phân công',
     key: 'assigned_date',
     width: 120,
-    render: (row) => new Date(row.assigned_date).toLocaleDateString('vi-VN'),
+    render: (row) => formatGMT7Vietnamese(row.assigned_date),
   },
   {
     title: 'Trạng thái',
@@ -444,7 +449,7 @@ const accountAccessColumns: DataTableColumns<AccountAccess> = [
     title: 'Ngày',
     key: 'assigned_date',
     width: 100,
-    render: (row) => new Date(row.assigned_date).toLocaleDateString('vi-VN'),
+    render: (row) => formatGMT7Vietnamese(row.assigned_date),
   },
   {
     title: 'Trạng thái',
@@ -622,25 +627,23 @@ async function loadAccountAccess() {
 }
 
 function openEmployeeAssignmentModal() {
-  const today = new Date()
   employeeModal.form = {
     employee_profile_id: '',
     shift_id: '',
-    assigned_date: today.getTime(),
+    assigned_date: getGMT7TodayTimestamp(),
     is_active: true,
   }
   employeeModal.open = true
 }
 
 function openAccountAccessModal() {
-  const today = new Date()
   accountAccessModal.form = {
     employee_profile_id: '',
     shift_id: '',
     game_account_id: '',
     channel_id: '',
     access_level: 'full',
-    assigned_date: today.getTime(),
+    assigned_date: getGMT7TodayTimestamp(),
     notes: '',
     is_active: true,
   }
@@ -657,7 +660,7 @@ async function saveEmployeeAssignment() {
   employeeModal.saving = true
   try {
     const formData = { ...employeeModal.form }
-    formData.assigned_date = new Date(formData.assigned_date).toISOString().split('T')[0]
+    formData.assigned_date = formatGMT7Date(formData.assigned_date)
 
     const { error } = await supabase.rpc('assign_employee_to_shift', {
       p_employee_profile_id: formData.employee_profile_id,
@@ -687,7 +690,7 @@ async function saveAccountAccess() {
   accountAccessModal.saving = true
   try {
     const formData = { ...accountAccessModal.form }
-    formData.assigned_date = new Date(formData.assigned_date).toISOString().split('T')[0]
+    formData.assigned_date = formatGMT7Date(formData.assigned_date)
 
     const { error } = await supabase.from('shift_account_access').insert({
       shift_id: formData.shift_id,
