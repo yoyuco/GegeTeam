@@ -156,12 +156,12 @@
       </div>
     </div>
 
-    <div v-else class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-      <!-- History Tab Stats: Show all statuses -->
+    <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <!-- History Tab Stats: Only show completed and cancelled -->
       <div class="bg-white p-4 rounded-lg border border-gray-200">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-600">Tổng</p>
+            <p class="text-sm text-gray-600">Tổng lịch sử</p>
             <p class="text-2xl font-bold text-gray-800">{{ stats.total }}</p>
           </div>
           <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -171,63 +171,6 @@
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white p-4 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600">Chờ phân công</p>
-            <p class="text-2xl font-bold text-yellow-600">{{ stats.pending }}</p>
-          </div>
-          <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white p-4 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600">Đã phân công</p>
-            <p class="text-2xl font-bold text-blue-600">{{ stats.assigned }}</p>
-          </div>
-          <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white p-4 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600">Đang xử lý</p>
-            <p class="text-2xl font-bold text-purple-600">{{ stats.inProgress }}</p>
-          </div>
-          <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
               />
             </svg>
           </div>
@@ -368,13 +311,10 @@ const stats = computed(() => {
     const inProgress = props.data.filter(item => item.status === 'in_progress').length
     return { total, assigned, inProgress }
   } else {
-    // For history tab: show all statuses
-    const pending = props.data.filter(item => item.status === 'pending').length
-    const assigned = props.data.filter(item => item.status === 'assigned').length
-    const inProgress = props.data.filter(item => item.status === 'in_progress').length
+    // For history tab: only show completed and cancelled
     const completed = props.data.filter(item => item.status === 'completed').length
     const cancelled = props.data.filter(item => item.status === 'cancelled').length
-    return { total, pending, assigned, inProgress, completed, cancelled }
+    return { total, completed, cancelled }
   }
 })
 
@@ -389,9 +329,7 @@ const statusOptions = computed(() => {
     ]
   } else {
     return [
-      { label: 'Thành công', value: 'completed' },
-      { label: 'Thất bại', value: 'failed' },
-      { label: 'Đang chờ', value: 'pending' },
+      { label: 'Hoàn thành', value: 'completed' },
       { label: 'Hủy bỏ', value: 'cancelled' }
     ]
   }

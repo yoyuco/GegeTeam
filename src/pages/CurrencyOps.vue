@@ -231,7 +231,7 @@
             <DataListCurrency
               model-type="history"
               title="Lịch sử giao dịch Currency"
-              description="Xem lại các đơn đã hoàn thành, bị hủy và đang chờ phân công"
+              description="Xem lại các đơn đã hoàn thành và bị hủy"
               :data="transactionHistory"
               :loading="loadingHistory"
               @search="handleHistorySearch"
@@ -671,7 +671,7 @@ const resetAllForms = () => {
 }
 
 // Load transaction history from database
-// Note: This shows completed, cancelled orders and pending orders waiting for auto-assignment
+// Note: This shows only completed and cancelled orders for historical reference
 const loadTransactionHistory = async () => {
   if (!currentGame.value || !currentServer.value) {
     transactionHistory.value = []
@@ -698,7 +698,7 @@ const loadTransactionHistory = async () => {
       `)
       .eq('game_code', currentGame.value)
       .eq('server_attribute_code', currentServer.value)
-      .in('status', ['completed', 'cancelled', 'pending']) // Show completed, cancelled and pending orders
+      .in('status', ['completed', 'cancelled']) // Only show completed and cancelled orders
       .order('created_at', { ascending: false })
       .limit(50)
 
