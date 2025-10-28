@@ -45,10 +45,11 @@ async function startApp() {
     // 4. Mount ứng dụng với ErrorBoundary
     app.mount('#app')
 
-    errorLogger.logInfo('Application started successfully', {
-      route: router.currentRoute.value.fullPath,
-      userAgent: navigator.userAgent,
-    })
+    // Commented out to reduce console noise in development
+    // errorLogger.logInfo('Application started successfully', {
+    //   route: router.currentRoute.value.fullPath,
+    //   userAgent: navigator.userAgent,
+    // })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     errorLogger.log(error instanceof Error ? error : new Error(errorMessage), {
