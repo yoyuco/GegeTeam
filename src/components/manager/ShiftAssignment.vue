@@ -351,7 +351,14 @@ const employeeAssignmentRules = {
     { required: true, message: 'Vui lòng chọn ca làm việc', trigger: 'change' },
   ],
   assigned_date: [
-    { required: true, message: 'Vui lòng chọn ngày phân công', trigger: 'change' },
+    {
+      required: true,
+      validator: (rule: any, value: number) => {
+        return value && value > 0 && !isNaN(value)
+      },
+      message: 'Vui lòng chọn ngày phân công',
+      trigger: ['change', 'blur']
+    },
   ],
 }
 
@@ -372,7 +379,14 @@ const accountAccessRules = {
     { required: true, message: 'Vui lòng chọn cấp độ truy cập', trigger: 'change' },
   ],
   assigned_date: [
-    { required: true, message: 'Vui lòng chọn ngày phân công', trigger: 'change' },
+    {
+      required: true,
+      validator: (rule: any, value: number) => {
+        return value && value > 0 && !isNaN(value)
+      },
+      message: 'Vui lòng chọn ngày phân công',
+      trigger: ['change', 'blur']
+    },
   ],
 }
 
