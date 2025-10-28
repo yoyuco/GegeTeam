@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = "https://nxlrnwijsxqalcxyavkj.supabase.co"
 const serviceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bHJud2lqc3hxYWxjeHlhdmtqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDI3Mzc3MiwiZXhwIjoyMDc1ODQ5NzcyfQ.UKUYbw3TOQ1gjq1H5e9N8yRQWEIo7Uuru4UdqhymGuU"
 
-console.log('🔍 Testing Supabase MCP Connection...')
+console.log('🔍 Testing Supabase Connection...')
 console.log('📋 Using service role key for admin access')
 
 // Create Supabase client with service role key
@@ -70,13 +70,13 @@ async function testConnection() {
         }
 
         console.log('\n🎉 Connection test completed!')
-        console.log('\n📝 MCP is ready if:')
+        console.log('\n📝 Supabase connection is ready if:')
         console.log('   ✅ Tables are accessible')
         console.log('   ✅ Service role key works')
         console.log('   ✅ Basic queries succeed')
 
-        console.log('\n🚀 To start MCP server:')
-        console.log('   cd tools/supabase-mcp && npm start')
+        console.log('\n🚀 Using Official MCP Supabase:')
+        console.log('   https://mcp.supabase.com/mcp (configured in memory.md)')
 
     } catch (error) {
         console.error('❌ Connection test failed:', error.message)

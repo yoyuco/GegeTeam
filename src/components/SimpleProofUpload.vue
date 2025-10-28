@@ -7,7 +7,7 @@
       multiple
       list-type="image-card"
       :default-upload="false"
-      :custom-request="() => {}"
+      :custom-request="handleCustomUpload"
       :on-remove="handleFileRemove"
       :on-change="handleFileChange"
       :show-file-list="true"
@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { NUpload, useMessage, type UploadFileInfo, type UploadCustomRequestOptions } from 'naive-ui'
-import { uploadFile } from '@/utils/supabase.js'
+import { uploadFile } from '@/lib/supabase'
 
 interface FileInfo {
   id: string
@@ -97,6 +97,8 @@ interface Props {
   modelValue?: FileInfo[]
   uploadPath?: string
   bucket?: string
+  orderId?: string  // Accept order ID for direct upload
+  autoUpload?: boolean  // Control auto-upload behavior
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -105,16 +107,12 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: () => [],
   uploadPath: 'exchange-proofs',
   bucket: 'work-proofs',
+  orderId: '',
+  autoUpload: false,  // Default to false to prevent auto-upload
 })
 
 const emit = defineEmits(['update:modelValue', 'upload-complete'])
 
-// Debug: Log when component is mounted
-console.log('🔍 SimpleProofUpload: Component mounted with props:', {
-  uploadPath: props.uploadPath,
-  bucket: props.bucket,
-  maxFiles: props.maxFiles
-})
 
 const message = useMessage()
 
@@ -162,30 +160,64 @@ const generateId = () => {
   return `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 }
 
-// Watch for external changes
+// Watch for external changes (only if different from current fileList)
 watch(
   () => props.modelValue,
   (newValue) => {
-    fileList.value = [...newValue]
+    // Only update if the new value is actually different
+    if (JSON.stringify(newValue) !== JSON.stringify(fileList.value)) {
+      fileList.value = [...newValue]
+    }
   },
   { deep: true }
 )
 
-// Watch for internal changes and emit
+// Watch for internal changes and emit (only if different from props.modelValue)
 watch(
   fileList,
   (newValue) => {
-    emit('update:modelValue', newValue)
+    // Only emit if the new value is actually different from props
+    if (JSON.stringify(newValue) !== JSON.stringify(props.modelValue)) {
+      emit('update:modelValue', newValue)
+    }
   },
   { deep: true }
 )
 
 const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
-  console.log('🔍 SimpleProofUpload: handleCustomUpload called with:', options.file?.name)
   const { file, onProgress, onError, onFinish } = options
 
   // Use the file ID from n-upload to avoid "no corresponding id" error
   const fileId = (file as any).id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+
+  // If autoUpload is disabled, just mark as finished and keep file locally
+  if (!props.autoUpload) {
+    
+    // Check if file already exists in list
+    let fileIndex = fileList.value.findIndex((f) => f.id === fileId)
+    if (fileIndex < 0) {
+      // Add new file to list if not found
+      const newFileInfo: FileInfo = {
+        id: fileId,
+        file: file.file as File,
+        name: file.name,
+        status: 'finished',
+      }
+      fileList.value.push(newFileInfo)
+    } else {
+      // Update existing file
+      fileList.value[fileIndex] = {
+        ...fileList.value[fileIndex],
+        file: file.file as File,
+        status: 'finished',
+      }
+    }
+
+    // Mark as finished
+    if (onFinish) onFinish()
+
+        return
+  }
 
   // Update existing file status to uploading
   const existingFileIndex = fileList.value.findIndex((f) => f.id === fileId || f.name === file.name)
@@ -213,7 +245,13 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 8)
     const filename = `${timestamp}-${randomString}-${actualFile.name}`
-    const filePath = `${props.uploadPath}/${filename}`
+
+    // Dynamic file path based on orderId availability
+    let filePath = `${props.uploadPath}/${filename}`
+    if (props.orderId) {
+      // If orderId provided, upload directly to order folder
+      filePath = `${props.uploadPath}/${props.orderId}/${filename}`
+    }
 
     // Simulate progress for better UX
     let progress = 0
@@ -273,8 +311,7 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
           path: uploadResult.path,
         },
       ]
-      console.log('🔍 SimpleProofUpload: About to emit upload-complete with:', uploadedData)
-      emit('upload-complete', uploadedData)
+            emit('upload-complete', uploadedData)
 
       // Clear success status after 3 seconds
       setTimeout(() => {
@@ -289,7 +326,6 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
       throw new Error(uploadResult.error || 'Upload thất bại')
     }
   } catch (error) {
-    console.error('🔍 SimpleProofUpload: Upload error:', error)
 
     // Update file status to error
     const errorFileInfo: FileInfo = {
@@ -331,15 +367,10 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
   }
 }
 
-const handleFileChange = (options: any) => {
-  console.log('🔍 SimpleProofUpload: handleFileChange called with:', options.file?.name)
+const handleFileChange = (_options: any) => {
   // This might trigger the upload
 }
 
-const handleUploadFinish = () => {
-  // This is called when n-upload considers the upload finished
-  // We handle the actual upload in handleCustomUpload
-}
 
 const handleFileRemove = ({ file }: { file: UploadFileInfo }) => {
   // File is automatically removed from fileList by n-upload
@@ -373,8 +404,7 @@ const validateFile = (file: File): boolean => {
 
 // Expose method to upload files on demand
 const uploadFiles = async () => {
-  console.log('🔍 SimpleProofUpload: Starting upload of', fileList.value.length, 'files')
-
+  
   if (fileList.value.length === 0) {
     return []
   }
@@ -427,7 +457,6 @@ const uploadFiles = async () => {
           throw new Error(uploadResult.error)
         }
       } catch (error) {
-        console.error('Upload error:', error)
         fileInfo.status = 'error'
         message.error(`Upload thất bại: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
       }

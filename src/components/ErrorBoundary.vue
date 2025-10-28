@@ -171,8 +171,8 @@ const handleGlobalError = (event: ErrorEvent) => {
 
 // Setup global error handlers
 if (typeof window !== 'undefined') {
-  window.addEventListener('unhandledrejection', handleUnhandledRejection)
-  window.addEventListener('error', handleGlobalError)
+  window.addEventListener('unhandledrejection', handleUnhandledRejection, { passive: true })
+  window.addEventListener('error', handleGlobalError, { passive: true })
 }
 
 // Cleanup on unmount

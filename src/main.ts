@@ -122,7 +122,7 @@ if (typeof window !== 'undefined') {
 
     // Prevent default browser behavior
     event.preventDefault()
-  })
+  }, { passive: true })
 
   // Handle global errors
   window.addEventListener('error', (event) => {
@@ -133,7 +133,7 @@ if (typeof window !== 'undefined') {
       colno: event.colno,
       phase: 'pre-startup',
     })
-  })
+  }, { passive: true })
 }
 
 // Bắt đầu ứng dụng

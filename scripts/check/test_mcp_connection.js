@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-console.log('🔍 Testing Supabase MCP Connection...')
+console.log('🔍 Testing Supabase Connection...')
 console.log('📋 Environment Check:')
 console.log(`   SUPABASE_URL: ${supabaseUrl ? '✅' : '❌'}`)
 console.log(`   SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? '✅' : '❌'}`)
@@ -93,8 +93,8 @@ async function testConnection() {
 
         console.log('\n🎉 Connection test completed!')
         console.log('\n📝 Next steps:')
-        console.log('   1. Start MCP server: cd tools/supabase-mcp && npm start')
-        console.log('   2. Test MCP tools via Claude Code')
+        console.log('   1. Use Official MCP Supabase: https://mcp.supabase.com/mcp')
+        console.log('   2. Test MCP tools via Claude Code (configured in memory.md)')
         console.log('   3. Run migrations if needed')
 
     } catch (error) {
