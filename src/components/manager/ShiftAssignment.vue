@@ -243,6 +243,7 @@ import {
   formatGMT7Date,
   formatGMT7Vietnamese
 } from '@/utils/timezoneHelper'
+import { AssignmentHelper } from '@/utils/assignmentHelper'
 
 const { message } = createDiscreteApi(['message'])
 
@@ -256,6 +257,12 @@ type EmployeeAssignment = {
   assigned_date: string
   is_active: boolean
   assigned_at: string
+  last_handover_time?: string
+  handover_count?: number
+  backup_employee_id?: string
+  is_fallback?: boolean
+  fallback_reason?: string
+  fallback_time?: string
 }
 
 type AccountAccess = {
@@ -310,6 +317,7 @@ const accessLevelOptions = [
 const employeeModal = reactive({
   open: false,
   saving: false,
+  editingAssignment: null as EmployeeAssignment | null,
   form: {
     employee_profile_id: '',
     shift_id: '',
@@ -383,8 +391,34 @@ const employeeAssignmentColumns: DataTableColumns<EmployeeAssignment> = [
   {
     title: 'Ngày phân công',
     key: 'assigned_date',
-    width: 120,
-    render: (row) => formatGMT7Vietnamese(row.assigned_date),
+    width: 140,
+    render: (row) => {
+      const dateStr = formatGMT7Vietnamese(row.assigned_date)
+      if (row.is_fallback) {
+        return h('div', [
+          h('div', dateStr),
+          h('div', { class: 'text-xs text-orange-500' }, '(Fallback)')
+        ])
+      }
+      return dateStr
+    },
+  },
+  {
+    title: 'Handover',
+    key: 'handover_info',
+    width: 100,
+    render: (row) => {
+      if (row.handover_count > 0) {
+        return h('div', [
+          h('div', { class: 'text-xs text-blue-600' }, `${row.handover_count} lần`),
+          row.last_handover_time &&
+            h('div', { class: 'text-xs text-gray-500' },
+              new Date(row.last_handover_time).toLocaleDateString('vi-VN')
+            )
+        ])
+      }
+      return '-'
+    },
   },
   {
     title: 'Trạng thái',
@@ -400,17 +434,28 @@ const employeeAssignmentColumns: DataTableColumns<EmployeeAssignment> = [
     title: 'Hành động',
     key: 'actions',
     align: 'right',
-    width: 80,
+    width: 120,
     render: (row) =>
-      h(
-        NButton,
-        {
-          size: 'small',
-          type: 'error',
-          onClick: () => deleteEmployeeAssignment(row.id),
-        },
-        { default: () => 'Xóa' }
-      ),
+      h('div', { class: 'flex gap-1' }, [
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'primary',
+            onClick: () => openEmployeeAssignmentModal(row),
+          },
+          { default: () => 'Sửa' }
+        ),
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'error',
+            onClick: () => deleteEmployeeAssignment(row.id),
+          },
+          { default: () => 'Xóa' }
+        ),
+      ]),
   },
 ]
 
@@ -566,6 +611,12 @@ async function loadEmployeeAssignments() {
       assigned_date: item.assigned_date,
       is_active: item.is_active,
       assigned_at: item.assigned_at,
+      last_handover_time: item.last_handover_time,
+      handover_count: item.handover_count || 0,
+      backup_employee_id: item.backup_employee_id,
+      is_fallback: item.is_fallback || false,
+      fallback_reason: item.fallback_reason,
+      fallback_time: item.fallback_time,
     }))
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách phân công nhân viên')
@@ -626,12 +677,25 @@ async function loadAccountAccess() {
   }
 }
 
-function openEmployeeAssignmentModal() {
-  employeeModal.form = {
-    employee_profile_id: '',
-    shift_id: '',
-    assigned_date: getGMT7TodayTimestamp(),
-    is_active: true,
+function openEmployeeAssignmentModal(assignment: EmployeeAssignment | null = null) {
+  employeeModal.editingAssignment = assignment
+
+  if (assignment) {
+    // Edit mode
+    employeeModal.form = {
+      employee_profile_id: assignment.employee_profile_id,
+      shift_id: assignment.shift_id,
+      assigned_date: new Date(assignment.assigned_date).getTime(),
+      is_active: assignment.is_active,
+    }
+  } else {
+    // Add mode
+    employeeModal.form = {
+      employee_profile_id: '',
+      shift_id: '',
+      assigned_date: getGMT7TodayTimestamp(),
+      is_active: true,
+    }
   }
   employeeModal.open = true
 }
@@ -660,17 +724,51 @@ async function saveEmployeeAssignment() {
   employeeModal.saving = true
   try {
     const formData = { ...employeeModal.form }
-    formData.assigned_date = formatGMT7Date(formData.assigned_date)
+    const formattedDate = formatGMT7Date(formData.assigned_date)
 
-    const { error } = await supabase.rpc('assign_employee_to_shift', {
-      p_employee_profile_id: formData.employee_profile_id,
-      p_shift_id: formData.shift_id,
-      p_assigned_date: formData.assigned_date,
-      p_is_active: formData.is_active,
-    })
+    if (employeeModal.editingAssignment) {
+      // Update existing assignment using AssignmentHelper
+      const result = await AssignmentHelper.handleAssignmentChange(
+        employeeModal.editingAssignment.id,
+        {
+          employee_profile_id: formData.employee_profile_id,
+          shift_id: formData.shift_id,
+          assigned_date: formattedDate,
+          is_active: formData.is_active,
+        }
+      )
 
-    if (error) throw error
-    message.success('Phân công nhân viên thành công!')
+      if (result.success) {
+        // Show appropriate message based on impact
+        switch (result.impact.type) {
+          case 'future':
+            message.success('Cập nhật phân công thành công (có hiệu lực từ ngày mai)')
+            break
+          case 'active_handover':
+            message.warning('Handover đã được khởi tạo - nhân viên sẽ được thông báo')
+            break
+          case 'emergency':
+            message.error('Emergency reassignment đã được thực hiện!')
+            break
+          default:
+            message.success('Cập nhật phân công thành công')
+        }
+      } else {
+        throw new Error(result.impact.message)
+      }
+    } else {
+      // Create new assignment
+      const { error } = await supabase.rpc('assign_employee_to_shift', {
+        p_employee_profile_id: formData.employee_profile_id,
+        p_shift_id: formData.shift_id,
+        p_assigned_date: formattedDate,
+        p_is_active: formData.is_active,
+      })
+
+      if (error) throw error
+      message.success('Phân công nhân viên thành công!')
+    }
+
     employeeModal.open = false
     await loadEmployeeAssignments()
   } catch (error: any) {

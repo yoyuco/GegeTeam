@@ -36,6 +36,11 @@
         <n-tab-pane name="employees" tab="👤 Nhân viên & Phân quyền">
           <EmployeeManagement />
         </n-tab-pane>
+
+        <!-- Tab 6: Emergency Management -->
+        <n-tab-pane name="emergency" tab="🚨 Emergency Management">
+          <EmergencyReassignment />
+        </n-tab-pane>
       </n-tabs>
     </div>
   </div>
@@ -58,6 +63,7 @@ import AccountManagement from '@/components/manager/AccountManagement.vue'
 import ShiftAssignment from '@/components/manager/ShiftAssignment.vue'
 import RoleManagement from '@/components/manager/RoleManagement.vue'
 import EmployeeManagement from '@/components/manager/EmployeeManagement.vue'
+import EmergencyReassignment from '@/components/manager/EmergencyReassignment.vue'
 
 const { message } = createDiscreteApi(['message'])
 const auth = useAuth()
