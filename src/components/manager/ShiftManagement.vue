@@ -127,10 +127,24 @@ const shiftRules = {
     { min: 2, message: 'Tên ca phải có ít nhất 2 ký tự', trigger: 'blur' },
   ],
   start_time: [
-    { required: true, message: 'Vui lòng chọn thời gian bắt đầu', trigger: 'change' },
+    {
+      required: true,
+      validator: (rule: any, value: number) => {
+        return value && value > 0
+      },
+      message: 'Vui lòng chọn thời gian bắt đầu',
+      trigger: ['blur', 'change']
+    },
   ],
   end_time: [
-    { required: true, message: 'Vui lòng chọn thời gian kết thúc', trigger: 'change' },
+    {
+      required: true,
+      validator: (rule: any, value: number) => {
+        return value && value > 0
+      },
+      message: 'Vui lòng chọn thời gian kết thúc',
+      trigger: ['blur', 'change']
+    },
   ],
 }
 
@@ -223,6 +237,13 @@ function openShiftModal(shift: WorkShift | null = null) {
     const endDate = new Date()
     endDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0)
 
+    console.log('Edit mode - Times:', {
+      start_time_str: shift.start_time,
+      end_time_str: shift.end_time,
+      start_timestamp: startDate.getTime(),
+      end_timestamp: endDate.getTime()
+    })
+
     shiftModal.form = {
       name: shift.name,
       start_time: startDate.getTime(),
@@ -234,6 +255,11 @@ function openShiftModal(shift: WorkShift | null = null) {
     // Add mode - set default times (current time for start, 1 hour later for end)
     const now = new Date()
     const later = new Date(now.getTime() + 60 * 60 * 1000) // +1 hour
+
+    console.log('Add mode - Times:', {
+      start_timestamp: now.getTime(),
+      end_timestamp: later.getTime()
+    })
 
     shiftModal.form = {
       name: '',
@@ -249,13 +275,16 @@ function openShiftModal(shift: WorkShift | null = null) {
 async function saveShift() {
   try {
     await shiftFormRef.value?.validate()
-  } catch {
+  } catch (error) {
+    console.log('Validation failed:', error)
+    console.log('Form data:', shiftModal.form)
     return
   }
 
   shiftModal.saving = true
   try {
     const formData = { ...shiftModal.form }
+    console.log('Saving form data:', formData)
 
     // Convert timestamp values to "HH:mm:ss" format for database
     const startDate = new Date(formData.start_time)
@@ -263,6 +292,8 @@ async function saveShift() {
 
     const startTime = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}:00`
     const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}:00`
+
+    console.log('Converted times:', { startTime, endTime })
 
     if (shiftModal.editingShift) {
       // Update existing shift
