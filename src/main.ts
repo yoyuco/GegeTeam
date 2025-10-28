@@ -7,6 +7,43 @@ import router from './router'
 import { useAuth } from './stores/auth'
 import { errorLogger } from './utils/errorLogger'
 
+// Suppress annoying browser warnings in development
+if (import.meta.env.DEV) {
+  const originalConsoleWarn = console.warn
+  const originalConsoleError = console.error
+
+  // Filter console.warn
+  console.warn = (...args: any[]) => {
+    const message = args[0]
+    if (
+      typeof message === 'string' && (
+        message.includes('Added non-passive event listener') ||
+        message.includes('wheel event') ||
+        message.includes('passive') ||
+        message.includes('chrome-status')
+      )
+    ) {
+      return // Suppress these specific warnings
+    }
+    originalConsoleWarn.apply(console, args)
+  }
+
+  // Filter console.error (for violations)
+  console.error = (...args: any[]) => {
+    const message = args[0]
+    if (
+      typeof message === 'string' && (
+        message.includes('[Violation]') ||
+        message.includes('Added non-passive event listener to a scroll-blocking') ||
+        message.includes('wheel event')
+      )
+    ) {
+      return // Suppress violation errors
+    }
+    originalConsoleError.apply(console, args)
+  }
+}
+
 async function startApp() {
   try {
     const app = createApp(App)
