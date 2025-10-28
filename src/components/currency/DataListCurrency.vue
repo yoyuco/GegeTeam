@@ -95,11 +95,11 @@
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
       <div class="bg-white p-4 rounded-lg border border-gray-200">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-600">Tổng giao dịch</p>
+            <p class="text-sm text-gray-600">Tổng</p>
             <p class="text-2xl font-bold text-gray-800">{{ stats.total }}</p>
           </div>
           <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -118,7 +118,7 @@
       <div class="bg-white p-4 rounded-lg border border-gray-200">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-600">Đang xử lý</p>
+            <p class="text-sm text-gray-600">Chờ xử lý</p>
             <p class="text-2xl font-bold text-yellow-600">{{ stats.pending }}</p>
           </div>
           <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -128,6 +128,44 @@
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg border border-gray-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-600">Đã phân công</p>
+            <p class="text-2xl font-bold text-blue-600">{{ stats.assigned }}</p>
+          </div>
+          <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg border border-gray-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-600">Đang xử lý</p>
+            <p class="text-2xl font-bold text-purple-600">{{ stats.inProgress }}</p>
+          </div>
+          <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
               />
             </svg>
           </div>
@@ -147,25 +185,6 @@
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white p-4 rounded-lg border border-gray-200">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600">Hủy bỏ</p>
-            <p class="text-2xl font-bold text-red-600">{{ stats.cancelled }}</p>
-          </div>
-          <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
               />
             </svg>
           </div>
@@ -261,10 +280,12 @@ const pagination = ref({
 const stats = computed(() => {
   const total = props.data.length
   const pending = props.data.filter(item => item.status === 'pending').length
+  const assigned = props.data.filter(item => item.status === 'assigned').length
+  const inProgress = props.data.filter(item => item.status === 'in_progress').length
   const completed = props.data.filter(item => item.status === 'completed').length
   const cancelled = props.data.filter(item => item.status === 'cancelled').length
 
-  return { total, pending, completed, cancelled }
+  return { total, pending, assigned, inProgress, completed, cancelled }
 })
 
 // Filter options based on model type
@@ -309,45 +330,82 @@ const tableColumns = computed(() => {
   const baseColumns = [
     {
       title: 'Mã đơn',
-      key: 'id',
+      key: 'order_number',
       width: 120,
-      render: (row: any) => `#${row.id}`
+      render: (row: any) => row.order_number || `#${row.id?.slice(0, 8)}...`
     },
     {
       title: 'Loại',
-      key: 'type',
+      key: 'order_type',
       width: 120,
       render: (row: any) => {
+        const orderType = row.order_type || row.type
         const colors: { [key: string]: string } = {
+          PURCHASE: 'blue',
+          SELL: 'green',
           purchase: 'blue',
           sell: 'green',
           exchange: 'purple',
           deposit: 'orange',
           withdraw: 'red'
         }
-        const colorKey = (row.type as string) in colors ? row.type as string : 'gray'
+        const labels: { [key: string]: string } = {
+          PURCHASE: 'Mua',
+          SELL: 'Bán',
+          purchase: 'Mua',
+          sell: 'Bán',
+          exchange: 'Đổi',
+          deposit: 'Nạp',
+          withdraw: 'Rút'
+        }
+        const colorKey = (orderType as string) in colors ? orderType as string : 'gray'
         return h('span', {
           class: `px-2 py-1 text-xs rounded-full bg-${colors[colorKey]}-100 text-${colors[colorKey]}-800`
-        }, row.type)
+        }, labels[orderType as string] || orderType)
       }
     },
     {
       title: 'Khách hàng',
       key: 'customer',
       width: 150,
-      render: (row: any) => row.customerName || row.customer?.name || '-'
+      render: (row: any) => row.customer_name || row.customerName || row.customer?.name || '-'
     },
     {
       title: 'Currency',
       key: 'currency',
       width: 120,
-      render: (row: any) => row.currencyName || row.currency?.name || '-'
+      render: (row: any) => row.currency_attribute?.name || row.currencyName || row.currency?.name || '-'
     },
     {
       title: 'Số lượng',
-      key: 'amount',
+      key: 'quantity',
       width: 120,
-      render: (row: any) => `${row.amount || 0} ${row.currencyName || ''}`
+      render: (row: any) => {
+        const quantity = row.quantity || row.amount || 0
+        const currencyName = row.currency_attribute?.name || row.currencyName || ''
+        return `${quantity.toLocaleString()} ${currencyName || ''}`
+      }
+    },
+    {
+      title: 'Tổng giá',
+      key: 'total_price',
+      width: 120,
+      render: (row: any) => {
+        const totalVND = row.total_price_vnd || 0
+        const totalUSD = row.total_price_usd || 0
+        if (totalUSD > 0) {
+          return `$${totalUSD.toLocaleString()}`
+        } else if (totalVND > 0) {
+          return `${totalVND.toLocaleString()}₫`
+        }
+        return '-'
+      }
+    },
+    {
+      title: 'Kênh',
+      key: 'channel',
+      width: 100,
+      render: (row: any) => row.channel?.name || row.channelName || '-'
     }
   ]
 
@@ -361,15 +419,21 @@ const tableColumns = computed(() => {
         render: (row: any) => {
           const statusColors: { [key: string]: string } = {
             pending: 'yellow',
+            assigned: 'blue',
+            in_progress: 'purple',
+            completed: 'green',
+            cancelled: 'red',
             delivering: 'blue',
-            delivered: 'green',
-            cancelled: 'red'
+            delivered: 'green'
           }
           const statusLabels: { [key: string]: string } = {
             pending: 'Chờ xử lý',
+            assigned: 'Đã phân công',
+            in_progress: 'Đang xử lý',
+            completed: 'Hoàn thành',
+            cancelled: 'Hủy bỏ',
             delivering: 'Đang giao',
-            delivered: 'Đã giao',
-            cancelled: 'Hủy bỏ'
+            delivered: 'Đã giao'
           }
           const statusKey = (row.status as string) in statusColors ? row.status as string : 'gray'
           return h('span', {

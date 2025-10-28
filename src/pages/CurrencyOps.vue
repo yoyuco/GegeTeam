@@ -470,8 +470,11 @@ const loadData = async () => {
     // Load accounts
     await loadAccounts()
 
-    // Load mock data for demo
-    loadMockData()
+    // Load delivery orders from database
+    await loadDeliveryOrders()
+
+    // Load transaction history
+    await loadTransactionHistory()
   } catch {
     message.error('Không thể tải dữ liệu')
   } finally {
@@ -509,42 +512,123 @@ const handleExchangeReset = () => {
   message.info('Form đã được reset.')
 }
 
-// Delivery handlers
-const handleDeliverySearch = () => {
-  // Handle delivery search
+// Load delivery orders from database
+const loadDeliveryOrders = async () => {
+  if (!currentGame.value || !currentServer.value) {
+    deliveryOrders.value = []
+    return
+  }
+
+  loadingDelivery.value = true
+  try {
+    const { data, error } = await supabase
+      .from('currency_orders')
+      .select(`
+        *,
+        currency_attribute:currency_attribute_id (
+          id,
+          code,
+          name,
+          type
+        ),
+        channel:channel_id (
+          id,
+          code,
+          name
+        ),
+        assigned_account:assigned_account_id (
+          id,
+          name,
+          game_tag
+        )
+      `)
+      .eq('game_code', currentGame.value)
+      .eq('server_attribute_code', currentServer.value)
+      .in('status', ['pending', 'assigned', 'in_progress']) // Only show active orders
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error loading delivery orders:', error)
+      message.error('Không thể tải danh sách đơn hàng')
+      return
+    }
+
+    deliveryOrders.value = data || []
+  } catch (error) {
+    console.error('Error in loadDeliveryOrders:', error)
+    message.error('Có lỗi xảy ra khi tải đơn hàng')
+  } finally {
+    loadingDelivery.value = false
+  }
 }
 
-const handleDeliveryFilter = () => {
-  // Handle delivery filter
+// Delivery handlers
+const handleDeliverySearch = (query: string) => {
+  // Handle delivery search - will be implemented with real search logic
+  console.log('Search query:', query)
+}
+
+const handleDeliveryFilter = (filters: any) => {
+  // Handle delivery filter - will be implemented with real filter logic
+  console.log('Filters:', filters)
 }
 
 const handleDeliveryExport = () => {
-  message.info('Xuất file danh sách giao nhận...')
+  // TODO: Implement export functionality
+  message.info('Tính năng xuất file đang được phát triển...')
 }
 
-const handleDeliveryViewDetail = () => {
-  // Handle delivery view detail
+const handleDeliveryViewDetail = (order: any) => {
+  // TODO: Implement view detail modal
+  console.log('View order detail:', order)
+  message.info(`Xem chi tiết đơn #${order.order_number}`)
 }
 
-const handleDeliveryUpdateStatus = () => {
-  message.success('Cập nhật trạng thái thành công')
+const handleDeliveryUpdateStatus = async (order: any, newStatus: string) => {
+  try {
+    const { error } = await supabase
+      .from('currency_orders')
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+
+    if (error) {
+      message.error('Không thể cập nhật trạng thái')
+      return
+    }
+
+    message.success(`Đã cập nhật trạng thái đơn #${order.order_number} thành công`)
+    // Reload data
+    await loadDeliveryOrders()
+  } catch (error) {
+    console.error('Error updating order status:', error)
+    message.error('Có lỗi xảy ra khi cập nhật trạng thái')
+  }
 }
 
 // History handlers
-const handleHistorySearch = () => {
-  // Handle history search
+const handleHistorySearch = (query: string) => {
+  // Handle history search - will be implemented with real search logic
+  console.log('History search query:', query)
 }
 
-const handleHistoryFilter = () => {
-  // Handle history filter
+const handleHistoryFilter = (filters: any) => {
+  // Handle history filter - will be implemented with real filter logic
+  console.log('History filters:', filters)
 }
 
 const handleHistoryExport = () => {
-  message.info('Xuất file lịch sử giao dịch...')
+  // TODO: Implement export functionality
+  message.info('Tính năng xuất file lịch sử đang được phát triển...')
 }
 
-const handleHistoryViewDetail = () => {
-  // Handle history view detail
+const handleHistoryViewDetail = (order: any) => {
+  // TODO: Implement view detail modal
+  console.log('View history order detail:', order)
+  message.info(`Xem chi tiết đơn #${order.order_number}`)
 }
 
 // Game context handlers
@@ -583,7 +667,53 @@ const resetAllForms = () => {
   // No additional reset logic needed for ExchangeCurrencyForm
 }
 
-// Mock data for demo
+// Load transaction history from database
+const loadTransactionHistory = async () => {
+  if (!currentGame.value || !currentServer.value) {
+    transactionHistory.value = []
+    return
+  }
+
+  loadingHistory.value = true
+  try {
+    const { data, error } = await supabase
+      .from('currency_orders')
+      .select(`
+        *,
+        currency_attribute:currency_attribute_id (
+          id,
+          code,
+          name,
+          type
+        ),
+        channel:channel_id (
+          id,
+          code,
+          name
+        )
+      `)
+      .eq('game_code', currentGame.value)
+      .eq('server_attribute_code', currentServer.value)
+      .in('status', ['completed', 'cancelled']) // Show completed and cancelled orders
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error loading transaction history:', error)
+      message.error('Không thể tải lịch sử giao dịch')
+      return
+    }
+
+    transactionHistory.value = data || []
+  } catch (error) {
+    console.error('Error in loadTransactionHistory:', error)
+    message.error('Có lỗi xảy ra khi tải lịch sử giao dịch')
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+// Mock data for demo (deprecated - use database functions instead)
 const loadMockData = () => {
   // Mock delivery orders
   deliveryOrders.value = [
@@ -642,14 +772,25 @@ const loadMockData = () => {
   ]
 }
 
-// Watch for game/server changes to reload inventory
+// Watch for game/server changes to reload data
 watch([currentGame, currentServer], async () => {
   // Only proceed if we have both game and server
   if (!currentGame.value || !currentServer.value) return
-    // Reset forms - this will set currencyId to null briefly
+
+  // Reset forms - this will set currencyId to null briefly
   resetAllForms()
-  // Immediately load new data to minimize flicker
+
+  // Load new data including delivery orders and transaction history
   await loadData()
+})
+
+// Watch for tab changes to load data when switching to delivery tab
+watch(activeTab, async (newTab) => {
+  if (newTab === 'delivery' && currentGame.value && currentServer.value) {
+    await loadDeliveryOrders()
+  } else if (newTab === 'history' && currentGame.value && currentServer.value) {
+    await loadTransactionHistory()
+  }
 })
 
 // --- LIFECYCLE ---
