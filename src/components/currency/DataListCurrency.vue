@@ -244,9 +244,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { NInput, NButton, NSelect, NDatePicker, NDataTable, NModal } from 'naive-ui'
-import { h } from 'vue'
+import { NButton, NDataTable, NDatePicker, NInput, NModal, NSelect } from 'naive-ui'
+import { computed, h, onMounted, ref, watch } from 'vue'
 
 // Props
 interface Props {
@@ -401,7 +400,7 @@ const tableColumns = computed(() => {
         render: (row: any) => row.channel?.name || row.channelName || '-'
       },
       {
-        title: 'Khách hàng/Supplier',
+        title: 'Customer/Supplier',
         key: 'customer',
         width: 150,
         render: (row: any) => {

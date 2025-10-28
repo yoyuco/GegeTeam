@@ -148,7 +148,7 @@ export function useInventory() {
         .select(
           `
           *,
-          game_account:game_accounts(id, account_name, purpose, manager_profile_id)
+          game_account:game_accounts(id, account_name, purpose)
         `
         )
         .in('game_account_id', accountIds)
@@ -227,10 +227,8 @@ export function useInventory() {
         .from('game_accounts')
         .insert({
           game_code: currentGame.value,
-          server_attribute_code: currentServer.value,
           account_name: accountData.accountName,
           purpose: accountData.purpose || 'INVENTORY',
-          manager_profile_id: accountData.managerId || null,
           is_active: true,
         })
         .select()

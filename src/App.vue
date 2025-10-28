@@ -46,18 +46,29 @@
                   <n-icon><ArchiveIcon /></n-icon><span>Quản lý Báo cáo</span>
                 </RouterLink>
                 <RouterLink
+                  v-if="
+                    auth.hasPermission('admin:manage_roles') ||
+                    auth.hasPermission('shift:manage') ||
+                    auth.hasPermission('account:manage')
+                  "
+                  to="/manager"
+                  class="menu-item"
+                >
+                  <n-icon><SettingsIcon /></n-icon><span>Quản lý Tổ chức</span>
+                </RouterLink>
+                <RouterLink
                   v-if="auth.hasPermission('admin:manage_roles')"
                   to="/employees"
                   class="menu-item"
                 >
-                  <n-icon><PeopleIcon /></n-icon><span>Nhân viên</span>
+                  <n-icon><PeopleIcon /></n-icon><span>Nhân viên (cũ)</span>
                 </RouterLink>
                 <RouterLink
                   v-if="auth.hasPermission('admin:manage_roles')"
                   to="/role-management"
                   class="menu-item"
                 >
-                  <n-icon><ShieldCheckmarkOutline /></n-icon><span>Phân quyền vai trò</span>
+                  <n-icon><ShieldCheckmarkOutline /></n-icon><span>Phân quyền (cũ)</span>
                 </RouterLink>
                 <RouterLink
                   v-if="auth.hasPermission('system:view_audit_logs')"
@@ -146,6 +157,7 @@ import {
   ArchiveOutline as ArchiveIcon,
   PeopleOutline as PeopleIcon,
   AnalyticsOutline as AnalyticsIcon,
+  SettingsOutline as SettingsIcon,
   DiamondOutline,
   ShieldCheckmarkOutline,
   BuildOutline,
