@@ -267,7 +267,6 @@
                     ref="sellProofUploadRef"
                     :max-files="10"
                     :auto-upload="false"
-                    label="Hình ảnh bán hàng"
                     @upload-complete="handleSellProofUploadComplete"
                   />
                 </div>
@@ -383,7 +382,6 @@
                   v-model="purchaseNegotiationFiles"
                   :max-files="5"
                   :auto-upload="false"
-                  label="Ảnh đàm phán"
                   @upload-complete="handlePurchaseNegotiationProofUploadComplete"
                 />
               </div>
@@ -402,7 +400,6 @@
                   v-model="purchasePaymentFiles"
                   :max-files="5"
                   :auto-upload="false"
-                  label="Ảnh thanh toán"
                   @upload-complete="handlePurchasePaymentProofUploadComplete"
                 />
               </div>
@@ -883,6 +880,12 @@ const onQuantityChanged = (quantity: number) => {
 const onPriceChanged = (price: { vnd?: number; usd?: number }) => {
   saleData.totalPriceVnd = price.vnd || null
   calculateTotal()
+}
+// Calculate total price for sell orders
+const calculateTotal = () => {
+  // For sell orders, totalPrice is directly set by user input, not calculated
+  // This function is kept for compatibility but doesn't perform calculations
+  // as the form now handles total price directly instead of unit price
 }
 // Game & League selector event handlers
 const onGameChanged = async (gameCode: string) => {
