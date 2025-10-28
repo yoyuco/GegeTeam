@@ -188,12 +188,13 @@
                 />
               </svg>
               <h2 class="text-lg font-semibold text-gray-800">Giao nhận Currency</h2>
+            <p class="text-sm text-gray-600 mt-1">Các đơn đã được phân công tự động và đang chờ xử lý</p>
             </div>
 
             <DataListCurrency
               model-type="delivery"
               title="Quản lý giao nhận Currency"
-              description="Xử lý các đơn hàng mua/bán currency đang được giao"
+              description="Xử lý các đơn hàng đã được hệ thống phân công cho nhân viên vận hành"
               :data="deliveryOrders"
               :loading="loadingDelivery"
               @search="handleDeliverySearch"
@@ -230,7 +231,7 @@
             <DataListCurrency
               model-type="history"
               title="Lịch sử giao dịch Currency"
-              description="Xem lại các giao dịch đã hoàn thành"
+              description="Xem lại các đơn đã hoàn thành, bị hủy và đang chờ phân công"
               :data="transactionHistory"
               :loading="loadingHistory"
               @search="handleHistorySearch"
@@ -513,6 +514,8 @@ const handleExchangeReset = () => {
 }
 
 // Load delivery orders from database
+// Note: This shows orders that have been automatically assigned by the system
+// to operation team members for processing
 const loadDeliveryOrders = async () => {
   if (!currentGame.value || !currentServer.value) {
     deliveryOrders.value = []
@@ -544,7 +547,7 @@ const loadDeliveryOrders = async () => {
       `)
       .eq('game_code', currentGame.value)
       .eq('server_attribute_code', currentServer.value)
-      .in('status', ['pending', 'assigned', 'in_progress']) // Only show active orders
+      .in('status', ['assigned', 'in_progress']) // Only show assigned and processing orders
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -668,6 +671,7 @@ const resetAllForms = () => {
 }
 
 // Load transaction history from database
+// Note: This shows completed, cancelled orders and pending orders waiting for auto-assignment
 const loadTransactionHistory = async () => {
   if (!currentGame.value || !currentServer.value) {
     transactionHistory.value = []
@@ -694,7 +698,7 @@ const loadTransactionHistory = async () => {
       `)
       .eq('game_code', currentGame.value)
       .eq('server_attribute_code', currentServer.value)
-      .in('status', ['completed', 'cancelled']) // Show completed and cancelled orders
+      .in('status', ['completed', 'cancelled', 'pending']) // Show completed, cancelled and pending orders
       .order('created_at', { ascending: false })
       .limit(50)
 
