@@ -213,20 +213,32 @@ async function loadShifts() {
 function openShiftModal(shift: WorkShift | null = null) {
   shiftModal.editingShift = shift
   if (shift) {
-    // Edit mode - convert time strings to proper format for time picker
+    // Edit mode - convert time strings to timestamp for time picker
+    const [startHours, startMinutes] = shift.start_time.split(':')
+    const [endHours, endMinutes] = shift.end_time.split(':')
+
+    const startDate = new Date()
+    startDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0)
+
+    const endDate = new Date()
+    endDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0)
+
     shiftModal.form = {
       name: shift.name,
-      start_time: shift.start_time.substring(0, 5), // Convert "07:00:00" to "07:00"
-      end_time: shift.end_time.substring(0, 5), // Convert "15:00:00" to "15:00"
+      start_time: startDate.getTime(),
+      end_time: endDate.getTime(),
       description: shift.description || '',
       is_active: shift.is_active,
     }
   } else {
-    // Add mode
+    // Add mode - set default times (current time for start, 1 hour later for end)
+    const now = new Date()
+    const later = new Date(now.getTime() + 60 * 60 * 1000) // +1 hour
+
     shiftModal.form = {
       name: '',
-      start_time: '',
-      end_time: '',
+      start_time: now.getTime(),
+      end_time: later.getTime(),
       description: '',
       is_active: true,
     }
@@ -245,9 +257,12 @@ async function saveShift() {
   try {
     const formData = { ...shiftModal.form }
 
-    // Convert time format from "HH:mm" to "HH:mm:ss" for database
-    const startTime = formData.start_time ? formData.start_time + ':00' : formData.start_time
-    const endTime = formData.end_time ? formData.end_time + ':00' : formData.end_time
+    // Convert timestamp values to "HH:mm:ss" format for database
+    const startDate = new Date(formData.start_time)
+    const endDate = new Date(formData.end_time)
+
+    const startTime = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}:00`
+    const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}:00`
 
     if (shiftModal.editingShift) {
       // Update existing shift
