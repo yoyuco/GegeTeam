@@ -32,11 +32,7 @@ const routes = [
     component: () => import('@/pages/Manager.vue'),
     meta: { requiresAuth: true },
   },
-  {
-    path: '/employees',
-    component: () => import('@/pages/Employees.vue'),
-    meta: { requiresAuth: true },
-  },
+  // /employees route removed - Employees.vue file does not exist
   {
     path: '/role-management',
     name: 'role-management',

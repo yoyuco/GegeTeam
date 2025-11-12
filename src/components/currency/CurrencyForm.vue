@@ -60,59 +60,37 @@
           />
         </div>
 
-        <!-- Total Prices -->
-        <div class="grid grid-cols-2 gap-4">
-          <!-- Total Price USD -->
-          <div>
-            <div class="flex items-center gap-2 mb-3">
-              <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
-                <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
-              <span class="text-red-500">*</span>
+        <!-- Total Price -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
+              <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
             </div>
-            <n-input-number
-              v-model:value="buyFormData.totalPriceUsd"
-              :min="0"
-              :placeholder="isBuyVndFilled ? 'VND has value, USD will be cleared' : 'Nhập tổng tiền USD'"
-              size="large"
-              class="w-full"
-              :class="{ 'border-yellow-400 bg-yellow-50': isBuyVndFilled }"
-              @update:value="onBuyUsdChange"
-            />
+            <label class="text-sm font-medium text-gray-700">Tổng tiền</label>
+            <span class="text-red-500">*</span>
           </div>
-
-          <!-- Total Price VND -->
-          <div>
-            <div class="flex items-center gap-2 mb-3">
-              <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
-                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <label class="text-sm font-medium text-gray-700">Tổng tiền (VND)</label>
-              <span class="text-red-500">*</span>
-            </div>
+          <div class="flex gap-2">
             <n-input-number
-              v-model:value="buyFormData.totalPriceVnd"
+              v-model:value="buyFormData.totalPrice"
               :min="0"
-              :placeholder="isBuyUsdFilled ? 'USD has value, VND will be cleared' : 'Nhập tổng tiền VND'"
+              placeholder="Nhập tổng tiền"
               size="large"
-              class="w-full"
-              :class="{ 'border-yellow-400 bg-yellow-50': isBuyUsdFilled }"
-              @update:value="onBuyVndChange"
+              class="flex-1"
+            />
+            <n-select
+              v-model:value="buyFormData.currencyCode"
+              :options="currencyCodeOptions"
+              placeholder="VND"
+              size="large"
+              class="w-20"
+              style="min-width: 80px; max-width: 100px;"
             />
           </div>
         </div>
@@ -197,59 +175,37 @@
           />
         </div>
 
-        <!-- Total Prices -->
-        <div class="grid grid-cols-2 gap-4">
-          <!-- Total Price USD -->
-          <div>
-            <div class="flex items-center gap-2 mb-3">
-              <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
-                <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <label class="text-sm font-medium text-gray-700">Tổng tiền (USD)</label>
-              <span class="text-red-500">*</span>
+        <!-- Total Price -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-6 h-6 bg-yellow-100 rounded flex items-center justify-center">
+              <svg class="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
             </div>
-            <n-input-number
-              v-model:value="sellFormData.totalPriceUsd"
-              :min="0"
-              :placeholder="isSellVndFilled ? 'VND has value, USD will be cleared' : 'Nhập tổng tiền USD'"
-              size="large"
-              class="w-full"
-              :class="{ 'border-yellow-400 bg-yellow-50': isSellVndFilled }"
-              @update:value="onSellUsdChange"
-            />
+            <label class="text-sm font-medium text-gray-700">Tổng tiền</label>
+            <span class="text-red-500">*</span>
           </div>
-
-          <!-- Total Price VND -->
-          <div>
-            <div class="flex items-center gap-2 mb-3">
-              <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
-                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <label class="text-sm font-medium text-gray-700">Tổng tiền (VND)</label>
-              <span class="text-red-500">*</span>
-            </div>
+          <div class="flex gap-2">
             <n-input-number
-              v-model:value="sellFormData.totalPriceVnd"
+              v-model:value="sellFormData.totalPrice"
               :min="0"
-              :placeholder="isSellUsdFilled ? 'USD has value, VND will be cleared' : 'Nhập tổng tiền VND'"
+              placeholder="Nhập tổng tiền"
               size="large"
-              class="w-full"
-              :class="{ 'border-yellow-400 bg-yellow-50': isSellUsdFilled }"
-              @update:value="onSellVndChange"
+              class="flex-1"
+            />
+            <n-select
+              v-model:value="sellFormData.currencyCode"
+              :options="currencyCodeOptions"
+              placeholder="VND"
+              size="large"
+              class="w-20"
+              style="min-width: 80px; max-width: 100px;"
             />
           </div>
         </div>
@@ -282,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref, nextTick } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { NSelect, NInputNumber, NInput } from 'naive-ui'
 
 // Props
@@ -290,18 +246,19 @@ interface Props {
   buyModelValue?: {
     currencyId: string | null
     quantity: number | null
-    totalPriceVnd: number | null
-    totalPriceUsd: number | null
+    totalPrice: number | null
+    currencyCode: string
     notes: string
   }
   sellModelValue?: {
     currencyId: string | null
     quantity: number | null
-    totalPriceVnd: number | null
-    totalPriceUsd: number | null
+    totalPrice: number | null
+    currencyCode: string
     notes: string
   }
   currencies: any[]
+  currencyCodeOptions?: any[]
   loading?: boolean
   transactionType?: 'sale' | 'purchase'
   activeTab?: 'buy' | 'sell'
@@ -310,7 +267,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   transactionType: 'sale',
-  activeTab: 'sell'
+  activeTab: 'sell',
+  currencyCodeOptions: () => []
 })
 
 // Emits
@@ -331,8 +289,8 @@ const buyFormData = computed({
   get: () => props.buyModelValue || {
     currencyId: null,
     quantity: null,
-    totalPriceVnd: null,
-    totalPriceUsd: null,
+    totalPrice: null,
+    currencyCode: 'VND',
     notes: ''
   },
   set: (value) => emit('update:buyModelValue', value),
@@ -342,8 +300,8 @@ const sellFormData = computed({
   get: () => props.sellModelValue || {
     currencyId: null,
     quantity: null,
-    totalPriceVnd: null,
-    totalPriceUsd: null,
+    totalPrice: null,
+    currencyCode: 'VND',
     notes: ''
   },
   set: (value) => emit('update:sellModelValue', value),
@@ -373,27 +331,29 @@ const currencyOptions = computed(() => {
   return props.currencies
 })
 
+// Currency code options for the dropdown - use provided options or fallback to extracting from currencies
+const currencyCodeOptions = computed(() => {
+  // Use provided currency code options if available
+  if (props.currencyCodeOptions && Array.isArray(props.currencyCodeOptions) && props.currencyCodeOptions.length > 0) {
+    return props.currencyCodeOptions
+  }
 
-// Computed properties for mutual exclusivity
-const isBuyVndFilled = computed(() => {
-  const vndValue = buyFormData.value.totalPriceVnd
-  return vndValue != null && vndValue >= 0 && isFinite(vndValue)
+  // Fallback: extract from currencies data (for backward compatibility)
+  if (!props.currencies || !Array.isArray(props.currencies) || props.currencies.length === 0) {
+    return []
+  }
+
+  // Extract unique currency codes from the currencies data
+  const uniqueCodes = [...new Set(props.currencies.map((currency: any) => currency.code).filter(Boolean))]
+
+  // Sort alphabetically for better UX
+  return uniqueCodes.sort().map(code => ({
+    label: code,
+    value: code
+  }))
 })
 
-const isBuyUsdFilled = computed(() => {
-  const usdValue = buyFormData.value.totalPriceUsd
-  return usdValue != null && usdValue >= 0 && isFinite(usdValue)
-})
 
-const isSellVndFilled = computed(() => {
-  const vndValue = sellFormData.value.totalPriceVnd
-  return vndValue != null && vndValue >= 0 && isFinite(vndValue)
-})
-
-const isSellUsdFilled = computed(() => {
-  const usdValue = sellFormData.value.totalPriceUsd
-  return usdValue != null && usdValue >= 0 && isFinite(usdValue)
-})
 
 // Watch for tab changes
 watch(activeTab, (newTab) => {
@@ -449,21 +409,19 @@ watch(
 )
 
 watch(
-  () => buyFormData.value.totalPriceVnd,
-  (newPriceVnd: number | null) => {
+  () => buyFormData.value.totalPrice,
+  (newPrice: number | null) => {
     emit('price-changed', {
-      vnd: newPriceVnd || undefined,
-      usd: buyFormData.value.totalPriceUsd || undefined
+      [buyFormData.value.currencyCode]: newPrice || undefined
     })
   }
 )
 
 watch(
-  () => buyFormData.value.totalPriceUsd,
-  (newPriceUsd: number | null) => {
+  () => buyFormData.value.currencyCode,
+  (newCurrencyCode: string) => {
     emit('price-changed', {
-      vnd: buyFormData.value.totalPriceVnd || undefined,
-      usd: newPriceUsd || undefined
+      [newCurrencyCode]: buyFormData.value.totalPrice || undefined
     })
   }
 )
@@ -484,16 +442,16 @@ watch(
 )
 
 watch(
-  () => buyFormData.value.totalPriceVnd,
-  (newPriceVnd) => {
-    emit('update:buyModelValue', { ...buyFormData.value, totalPriceVnd: newPriceVnd })
+  () => buyFormData.value.totalPrice,
+  (newPrice) => {
+    emit('update:buyModelValue', { ...buyFormData.value, totalPrice: newPrice })
   }
 )
 
 watch(
-  () => buyFormData.value.totalPriceUsd,
-  (newPriceUsd) => {
-    emit('update:buyModelValue', { ...buyFormData.value, totalPriceUsd: newPriceUsd })
+  () => buyFormData.value.currencyCode,
+  (newCurrencyCode) => {
+    emit('update:buyModelValue', { ...buyFormData.value, currencyCode: newCurrencyCode })
   }
 )
 
@@ -519,23 +477,21 @@ watch(
   }
 )
 
-// Watch for sell form changes and emit events (simple like buy tab)
+// Watch for sell form changes and emit events
 watch(
-  () => sellFormData.value.totalPriceVnd,
-  (newPriceVnd: number | null) => {
+  () => sellFormData.value.totalPrice,
+  (newPrice: number | null) => {
     emit('price-changed', {
-      vnd: newPriceVnd || undefined,
-      usd: sellFormData.value.totalPriceUsd || undefined
+      [sellFormData.value.currencyCode]: newPrice || undefined
     })
   }
 )
 
 watch(
-  () => sellFormData.value.totalPriceUsd,
-  (newPriceUsd: number | null) => {
+  () => sellFormData.value.currencyCode,
+  (newCurrencyCode: string) => {
     emit('price-changed', {
-      vnd: sellFormData.value.totalPriceVnd || undefined,
-      usd: newPriceUsd || undefined
+      [newCurrencyCode]: sellFormData.value.totalPrice || undefined
     })
   }
 )
@@ -547,16 +503,16 @@ const resetForm = () => {
     emit('update:buyModelValue', {
       currencyId: null,
       quantity: null,
-      totalPriceVnd: null,
-      totalPriceUsd: null,
+      totalPrice: null,
+      currencyCode: 'VND',
       notes: '',
     })
   } else {
     emit('update:sellModelValue', {
       currencyId: null,
       quantity: null,
-      totalPriceVnd: null,
-      totalPriceUsd: null,
+      totalPrice: null,
+      currencyCode: 'VND',
       notes: '',
     })
   }
@@ -572,10 +528,11 @@ const validateForm = () => {
     if (!buyFormData.value.quantity || buyFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    const hasVndPrice = buyFormData.value.totalPriceVnd !== null && buyFormData.value.totalPriceVnd >= 0
-    const hasUsdPrice = buyFormData.value.totalPriceUsd !== null && buyFormData.value.totalPriceUsd >= 0
-    if (!hasVndPrice && !hasUsdPrice) {
-      errors.push('Tổng giá phải lớn hơn hoặc bằng 0 (VND hoặc USD)')
+    if (!buyFormData.value.currencyCode) {
+      errors.push('Vui lòng chọn đơn vị tiền tệ')
+    }
+    if (buyFormData.value.totalPrice === null || buyFormData.value.totalPrice < 0) {
+      errors.push('Tổng tiền phải lớn hơn hoặc bằng 0')
     }
   } else {
     if (!sellFormData.value.currencyId) {
@@ -584,78 +541,17 @@ const validateForm = () => {
     if (!sellFormData.value.quantity || sellFormData.value.quantity <= 0) {
       errors.push('Số lượng phải lớn hơn 0')
     }
-    const hasSellVndPrice = sellFormData.value.totalPriceVnd !== null && sellFormData.value.totalPriceVnd >= 0
-    const hasSellUsdPrice = sellFormData.value.totalPriceUsd !== null && sellFormData.value.totalPriceUsd >= 0
-    if (!hasSellVndPrice && !hasSellUsdPrice) {
-      errors.push('Tổng giá phải lớn hơn hoặc bằng 0 (VND hoặc USD)')
+    if (!sellFormData.value.currencyCode) {
+      errors.push('Vui lòng chọn đơn vị tiền tệ')
+    }
+    if (sellFormData.value.totalPrice === null || sellFormData.value.totalPrice < 0) {
+      errors.push('Tổng tiền phải lớn hơn hoặc bằng 0')
     }
   }
 
   return errors
 }
 
-// Methods for mutual exclusivity
-const onBuyUsdChange = (value: number | null) => {
-  // Only clear VND if USD has a positive value (not 0)
-  if (value !== null && value > 0) {
-    // Clear VND field when USD is entered with positive value
-    buyFormData.value.totalPriceVnd = null
-  }
-  // Emit price change immediately to ensure parent gets the latest values
-  nextTick(() => {
-    emit('price-changed', {
-      vnd: buyFormData.value.totalPriceVnd || undefined,
-      usd: value || undefined
-    })
-  })
-}
-
-const onBuyVndChange = (value: number | null) => {
-  // Only clear USD if VND has a positive value (not 0)
-  if (value !== null && value > 0) {
-    // Clear USD field when VND is entered with positive value
-    buyFormData.value.totalPriceUsd = null
-  }
-  // Emit price change immediately to ensure parent gets the latest values
-  nextTick(() => {
-    emit('price-changed', {
-      vnd: value || undefined,
-      usd: buyFormData.value.totalPriceUsd || undefined
-    })
-  })
-}
-
-const onSellUsdChange = (value: number | null) => {
-  // Only clear VND if USD has a positive value (not 0)
-  if (value !== null && value > 0) {
-    // Clear VND field when USD is entered with positive value
-    sellFormData.value.totalPriceVnd = null
-  }
-  // Emit price change immediately to ensure parent gets the latest values
-  nextTick(() => {
-    emit('price-changed', {
-      vnd: sellFormData.value.totalPriceVnd || undefined,
-      usd: value || undefined
-    })
-  })
-}
-
-const onSellVndChange = (value: number | null) => {
-  // Only clear USD if VND has a positive value (not 0)
-  if (value !== null && value > 0) {
-    // Clear USD field when VND is entered with positive value
-    sellFormData.value.totalPriceUsd = null
-  }
-  // Emit price change immediately to ensure parent gets the latest values
-  nextTick(() => {
-    emit('price-changed', {
-      vnd: value || undefined,
-      usd: sellFormData.value.totalPriceUsd || undefined
-    })
-  })
-}
-
-// Focus handlers removed - mutual exclusivity is handled by change handlers only
 
 // Expose methods for parent component
 defineExpose({

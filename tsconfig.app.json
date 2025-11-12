@@ -16,7 +16,8 @@
     },
     "types": ["vite/client", "vitest/globals"],
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]
 }

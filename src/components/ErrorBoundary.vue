@@ -142,13 +142,25 @@ onErrorCaptured((err: Error, instance, info) => {
 
 // Handle unhandled promise rejections
 const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-  console.error('Unhandled promise rejection:', event.reason)
-
-  if (window.$errorLogger) {
-    window.$errorLogger.log(event.reason, {
-      type: 'unhandledRejection',
-      route: router.currentRoute.value.fullPath,
-    })
+  // Completely suppress ResizeObserver errors since they're non-critical browser warnings
+  if (event.reason && event.reason.message &&
+      event.reason.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+    // Silently ignore ResizeObserver errors - they don't affect functionality
+    // Only log for debugging in development mode, but not in production
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('ResizeObserver loop suppressed (non-critical)', {
+        reason: event.reason.message,
+        route: router.currentRoute.value.fullPath
+      })
+    }
+  } else {
+    console.error('Unhandled promise rejection:', event.reason)
+    if (window.$errorLogger) {
+      window.$errorLogger.log(event.reason, {
+        type: 'unhandledRejection',
+        route: router.currentRoute.value.fullPath,
+      })
+    }
   }
 
   event.preventDefault()
@@ -156,16 +168,30 @@ const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
 
 // Handle global errors
 const handleGlobalError = (event: ErrorEvent) => {
-  console.error('Global error:', event.error)
-
-  if (window.$errorLogger) {
-    window.$errorLogger.log(event.error, {
-      type: 'globalError',
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-      route: router.currentRoute.value.fullPath,
-    })
+  // Completely suppress ResizeObserver errors since they're non-critical browser warnings
+  if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+    // Silently ignore ResizeObserver errors - they don't affect functionality
+    // Only log for debugging in development mode, but not in production
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('ResizeObserver loop suppressed (non-critical)', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        route: router.currentRoute.value.fullPath
+      })
+    }
+  } else {
+    console.error('Global error:', event.error || event.message)
+    if (window.$errorLogger) {
+      window.$errorLogger.log(event.error, {
+        type: 'globalError',
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        route: router.currentRoute.value.fullPath,
+      })
+    }
   }
 }
 

@@ -142,12 +142,12 @@
                 <CustomerForm
                   :customer-model-value="customerFormData"
                   :channels="salesChannels"
-                  :game-code="currentGame?.value"
+                  :game-code="gameCodeForForm"
                   @update:customerModelValue="(value) => { customerFormData = value || { channelId: null, customerName: '', gameTag: '', deliveryInfo: '' } }"
                   @customer-changed="onCustomerChanged"
                   @game-tag-changed="onGameTagChanged"
                 />
-              </div>
+                              </div>
             </div>
             <!-- Right Column - Currency Information -->
             <div class="space-y-6">
@@ -174,6 +174,7 @@
                   :key="`${currentGame?.value}-${currentServer?.value}`"
                   transaction-type="sale"
                   :currencies="filteredCurrencies"
+                  :currency-code-options="currencyCodes"
                   :loading="currenciesLoading"
                   :active-tab="'sell'"
                   :sell-model-value="saleData"
@@ -267,6 +268,9 @@
                     ref="sellProofUploadRef"
                     :max-files="10"
                     :auto-upload="false"
+                    :upload-path="'currency/sale'"
+                    :sub-path="'exchange'"
+                    :bucket="'work-proofs'"
                     @upload-complete="handleSellProofUploadComplete"
                   />
                 </div>
@@ -338,10 +342,11 @@
                   :key="`${currentGame?.value}-${currentServer?.value}`"
                   transaction-type="purchase"
                   :currencies="filteredCurrencies"
+                  :currency-code-options="currencyCodes"
                   :loading="currenciesLoading"
                   :active-tab="'buy'"
                   :buy-model-value="purchaseData"
-                  @update:buy-model-value="(value) => { if (value) { purchaseData.currencyId = value.currencyId; purchaseData.quantity = value.quantity; purchaseData.notes = value.notes || ''; } }"
+                  @update:buy-model-value="(value) => { if (value) { purchaseData.currencyId = value.currencyId; purchaseData.quantity = value.quantity; purchaseData.totalPrice = value.totalPrice; purchaseData.currencyCode = value.currencyCode; purchaseData.notes = value.notes || ''; } }"
                   @currency-changed="onPurchaseCurrencyChanged"
                   @quantity-changed="(quantity: number | null) => onPurchaseQuantityChanged(quantity || 0)"
                   @price-changed="onPurchasePriceChanged"
@@ -382,28 +387,14 @@
                   v-model="purchaseNegotiationFiles"
                   :max-files="5"
                   :auto-upload="false"
+                  :upload-path="'currency/purchase'"
+                  :sub-path="'negotiation'"
+                  :bucket="'work-proofs'"
                   @upload-complete="handlePurchaseNegotiationProofUploadComplete"
                 />
               </div>
 
-              <!-- Ảnh thanh toán (Bắt buộc) - Bên phải -->
-              <div>
-                <label class="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  Ảnh thanh toán
-                  <span class="text-red-500 font-medium">*</span>
-                </label>
-                <SimpleProofUpload
-                  ref="purchasePaymentProofRef"
-                  v-model="purchasePaymentFiles"
-                  :max-files="5"
-                  :auto-upload="false"
-                  @upload-complete="handlePurchasePaymentProofUploadComplete"
-                />
               </div>
-            </div>
           </div>
         </div>
       </div>
@@ -431,7 +422,8 @@
               ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
               : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800',
           ]"
-          :loading="saving"
+          :loading="activeTab === 'purchase' ? purchaseSaving : saving"
+        :disabled="activeTab === 'purchase' ? purchaseSaving : saving"
           @click="activeTab === 'purchase' ? _handlePurchaseSubmit() : handleCurrencyFormSubmit()"
         >
           <template #icon>
@@ -458,10 +450,10 @@
   </div>
 </template>
 <script setup lang="ts">
-import CustomerForm from '@/components/CustomerForm.vue'
 import CurrencyForm from '@/components/currency/CurrencyForm.vue'
 import CurrencyInventoryPanel from '@/components/currency/CurrencyInventoryPanel.vue'
 import GameServerSelector from '@/components/currency/GameServerSelector.vue'
+import CustomerForm from '@/components/CustomerForm.vue'
 import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
 import { useCurrency } from '@/composables/useCurrency.js'
 import { useGameContext } from '@/composables/useGameContext.js'
@@ -555,8 +547,28 @@ const {
   purchaseChannels,
   allCurrencies,
   initialize: initializeCurrency,
+  loadCurrencyCodes,
   loading: currenciesLoading,
 } = useCurrency()
+
+// Currency codes for price dropdown (VND, USD, etc.)
+const currencyCodes = ref<any[]>([])
+const currencyCodesLoading = ref(false)
+
+// Load currency codes for price dropdown
+const loadCurrencyCodesData = async () => {
+  currencyCodesLoading.value = true
+  try {
+    const codes = await loadCurrencyCodes()
+    currencyCodes.value = codes
+  } catch (err) {
+    console.error('Error loading currency codes:', err)
+    currencyCodes.value = []
+  } finally {
+    currencyCodesLoading.value = false
+  }
+}
+
 // Inventory composable (temporarily disabled due to schema errors)
 // const { loadInventory, inventoryByCurrency } = useInventory()
 // Filtered currencies based on current game - now using GAME_CURRENCY type via attribute_relationships
@@ -597,8 +609,8 @@ const customerFormData = ref({
 const saleData = reactive({
   currencyId: null as string | null,
   quantity: null as number | null,
-  totalPriceVnd: null as number | null,
-  totalPriceUsd: null as number | null,
+  totalPrice: null as number | null,
+  currencyCode: 'VND',
   notes: '',
 })
 // Purchase data
@@ -611,15 +623,14 @@ const supplierFormData = ref({
 const purchaseData = reactive({
   currencyId: null as string | null,
   quantity: null as number | null,
-  totalPriceVnd: null as number | null, // ← Total cost amount - goes to cost_amount field
-  totalPriceUsd: null as number | null, // ← Option cho USD (nếu cần trong tương lai)
+  totalPrice: null as number | null, // ← Total cost amount - goes to cost_amount field
+  currencyCode: 'VND', // ← Currency code (VND, USD, etc.)
   notes: '',
 })
 // Supplier information for purchase orders is now handled directly by supplierFormData
 const purchaseCurrencyFormRef = ref()
 const sellProofUploadRef = ref()
 const purchaseNegotiationProofRef = ref()
-const purchasePaymentProofRef = ref()
 // SimpleProofUpload data
 const sellProofFiles = ref<Array<{ url: string; path: string; filename: string }>>([])
 interface FileInfo {
@@ -633,7 +644,6 @@ interface FileInfo {
 }
 
 const purchaseNegotiationFiles = ref<FileInfo[]>([])
-const purchasePaymentFiles = ref<FileInfo[]>([])
 
 // SimpleProofUpload paths - will be updated after order creation
 const currentOrderId = ref<string | null>(null)
@@ -643,36 +653,49 @@ const currentOrderId = ref<string | null>(null)
 // Temporary paths are used in the template for initial upload
 
 const purchaseFormValid = computed(() => {
-  const hasVndPrice = purchaseData.totalPriceVnd !== null && purchaseData.totalPriceVnd >= 0
-  const hasUsdPrice = purchaseData.totalPriceUsd !== null && purchaseData.totalPriceUsd >= 0
+  const hasValidPrice = purchaseData.totalPrice !== null && purchaseData.totalPrice >= 0
   const hasValidQuantity = (purchaseData.quantity || 0) > 0
-  // For purchase orders, both negotiation AND payment proofs are required
-  const hasProofFiles = (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) &&
-                       (purchasePaymentFiles.value && purchasePaymentFiles.value.length > 0)
-  // Currency validation: must have exactly ONE of VND or USD, not both
-  const hasValidCurrency = (hasVndPrice && !hasUsdPrice) || (!hasVndPrice && hasUsdPrice)
+  const hasValidCurrency = purchaseData.currencyCode && purchaseData.currencyCode.length > 0
+  // For purchase orders, only negotiation proof is required
+  const hasProofFiles = purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0
 
-  
   return (
     supplierFormData.value.channelId &&
     supplierFormData.value.customerName &&
     supplierFormData.value.gameTag &&
     purchaseData.currencyId &&
+    hasValidPrice &&
     hasValidQuantity &&
     hasValidCurrency &&
     hasProofFiles
   )
 })
 // Computed property for formatted currency display
-// Detect which currency is being used for cost
-const purchaseCostCurrency = computed(() => {
-  return (purchaseData.totalPriceUsd || 0) > 0 ? 'USD' : 'VND'
-})
-// Get cost amount based on selected currency
+// Get cost amount and currency from purchase data
 const purchaseCostAmount = computed(() => {
-  return purchaseCostCurrency.value === 'USD'
-    ? (purchaseData.totalPriceUsd || 0)
-    : (purchaseData.totalPriceVnd || 0)
+  return purchaseData.totalPrice || 0
+})
+
+const purchaseCostCurrency = computed(() => {
+  if (!supplierFormData.value.channelId) {
+    return 'VND'
+  }
+
+  const selectedChannel = purchaseChannels.value.find((channel: any) => channel.id === supplierFormData.value.channelId)
+
+  if (purchaseData.currencyCode) {
+    return purchaseData.currencyCode
+  }
+
+  if (!selectedChannel) {
+    return 'VND'
+  }
+
+  const isWeChatChannel = (selectedChannel as any).name?.toLowerCase().includes('wechat') ||
+                        (selectedChannel as any).code?.toLowerCase().includes('wechat') ||
+                        (selectedChannel as any).displayName?.toLowerCase().includes('wechat')
+
+  return isWeChatChannel ? 'CNY' : 'VND'
 })
 // Purchase evidence data
 const purchaseEvidenceData = reactive({
@@ -712,6 +735,8 @@ watch(activeTab, (newTab) => {
       )
       if (g2gChannel) {
         customerFormData.value.channelId = (g2gChannel as any).id
+        // G2G is a USD channel, so set currency to USD
+        saleData.currencyCode = 'USD'
       }
     }
     // Auto-select first currency if not already selected
@@ -758,11 +783,13 @@ const loadData = async () => {
     }
   
     // Now initialize currency composable properly (same pattern as GameLeagueSelector)
-  
+
     await initializeCurrency()
     // Manual currency loading to ensure currencies are loaded
-  
+
     await loadCurrenciesForCurrentGame()
+    // Load currency codes for price dropdown (VND, USD, etc.)
+    await loadCurrencyCodesData()
     // Give a moment for reactive updates to propagate
     await new Promise(resolve => setTimeout(resolve, 100))
     // Ensure currencies are loaded before proceeding
@@ -777,7 +804,8 @@ const loadData = async () => {
     await setDefaultSelectionsAsync()
     // Log auto-selection results after setting
     // Auto-selection completed successfully
-  } catch {
+  } catch (error) {
+    console.error('Error loading data:', error)
     message.error('Không thể tải dữ liệu')
   } finally {
     isDataLoading.value = false
@@ -787,44 +815,56 @@ const loadData = async () => {
 // Watch for currency availability to auto-select when currencies are loaded
 watch(
   () => filteredCurrencies.value.length,
-  async (newLength) => {
+  (newLength) => {
     if (newLength > 0 && !isDataLoading.value) {
-      await setDefaultSelectionsAsync()
+      setDefaultSelectionsAsync()
     }
   }
 )
 
-// Watch for channel changes to load suppliers
+const syncCurrencyWithChannel = async (channelId: string) => {
+  if (!channelId) return
+
+  const selectedChannel = purchaseChannels.value.find((channel: any) => channel.id === channelId)
+  if (!selectedChannel) return
+
+  const isWeChatChannel = (selectedChannel as any).name?.toLowerCase().includes('wechat') ||
+                        (selectedChannel as any).code?.toLowerCase().includes('wechat') ||
+                        (selectedChannel as any).displayName?.toLowerCase().includes('wechat')
+
+  if (isWeChatChannel && purchaseData.currencyCode === 'VND') {
+    purchaseData.currencyCode = 'CNY'
+  } else if (!isWeChatChannel && purchaseData.currencyCode === 'CNY') {
+    purchaseData.currencyCode = 'VND'
+  }
+}
+
+// Watch for channel changes to load suppliers and sync currency
 watch(
   () => supplierFormData.value.channelId,
   async (newChannelId) => {
     if (newChannelId && currentGame.value) {
       await loadSuppliersForChannel()
+      await syncCurrencyWithChannel(newChannelId)
     }
   }
 )
-// Async version of setDefaultSelections with nextTick for smooth transitions
 const setDefaultSelectionsAsync = async () => {
-  // Continue even if currencies are not loaded yet - channels can be selected independently
   if (salesChannels.value.length === 0 && purchaseChannels.value.length === 0) {
     return
   }
 
   const firstCurrency = filteredCurrencies.value.length > 0 ? filteredCurrencies.value[0].value : null
-  // Use nextTick to ensure DOM is updated after state changes
   await nextTick()
-  // Batch all updates to minimize reactivity triggers
   const updates: {
     saleCurrency?: string
     sellChannelId?: string
     purchaseChannelId?: string
     purchaseCurrencyId?: string
   } = {}
-  // Sell tab updates - always set default for sell tab since activeTab defaults to 'sell'
   if (firstCurrency) {
     updates.saleCurrency = firstCurrency
   }
-  // Sell channel updates - always set default for sell tab
   if (salesChannels.value.length > 0) {
     const g2gChannel = salesChannels.value.find(
       (channel: any) =>
@@ -878,7 +918,14 @@ const onQuantityChanged = (quantity: number) => {
   calculateTotal()
 }
 const onPriceChanged = (price: { vnd?: number; usd?: number }) => {
-  saleData.totalPriceVnd = price.vnd || null
+  // For backward compatibility - convert old price format to new format
+  if (price.vnd !== undefined) {
+    saleData.totalPrice = price.vnd || null
+    saleData.currencyCode = 'VND'
+  } else if (price.usd !== undefined) {
+    saleData.totalPrice = price.usd || null
+    saleData.currencyCode = 'USD'
+  }
   calculateTotal()
 }
 // Calculate total price for sell orders
@@ -932,14 +979,19 @@ const onPurchaseCurrencyChanged = (currencyId: string | null) => {
 }
 const onPurchaseQuantityChanged = (quantity: number) => {
   purchaseData.quantity = quantity
-  // Don't modify totalPriceVnd when quantity changes - keep user input intact
+  // Don't modify totalPrice when quantity changes - keep user input intact
   // calculatePurchaseTotal is no longer needed as it was overriding user input
 }
-const onPurchasePriceChanged = (price: { vnd?: number; usd?: number }) => {
-  purchaseData.totalPriceVnd = price.vnd || null
-  purchaseData.totalPriceUsd = price.usd || null
-  // No calculation here - the component now handles total price directly
-  // calculatePurchaseTotal is no longer needed for basic price updates
+const onPurchasePriceChanged = (price: { [currency: string]: number | undefined }) => {
+  // Find the currency and amount from the price object
+  const currencies = Object.keys(price)
+  if (currencies.length > 0) {
+    const currency = currencies[0] // Take the first currency
+    const amount = price[currency]
+
+    purchaseData.totalPrice = amount || null
+    purchaseData.currencyCode = currency || 'VND'
+  }
 }
 // Clear cache when game/league changes
 const clearBuyOrdersCache = () => {
@@ -961,15 +1013,16 @@ const resetAllForms = () => {
   Object.assign(saleData, {
     currencyId: null,
     quantity: null,
-    totalPriceVnd: null,
-    totalPriceUsd: null,
+    totalPrice: null,
+    currencyCode: 'VND',
   })
   // Reset purchase data
   Object.assign(purchaseData, {
     currencyId: null,
     quantity: null,
-    totalPriceVnd: null,
-    totalPriceUsd: null,
+    totalPrice: null,
+    currencyCode: 'VND',
+    notes: '',
   })
   // Reset customer form data
   Object.assign(customerFormData, {
@@ -1000,7 +1053,6 @@ const resetAllForms = () => {
   // Reset file lists
   sellProofFiles.value = []
   purchaseNegotiationFiles.value = []
-  purchasePaymentFiles.value = []
 }
 // Get exchange type placeholder based on selected type
 const getExchangeTypePlaceholder = () => {
@@ -1030,6 +1082,15 @@ const getExchangeTypeExample = () => {
 }
 // Currency form methods
 const handleCurrencyFormSubmit = async () => {
+  console.log('=== HANDLE CURRENCY FORM SUBMIT ===')
+  console.log('Active tab:', activeTab.value)
+
+  // Prevent double-click / multiple submissions
+  if (saving.value) {
+    console.log('Order creation already in progress, ignoring duplicate submission')
+    return
+  }
+
   try {
     // Upload files first before submitting form
     if (activeTab.value === 'purchase') {
@@ -1041,25 +1102,9 @@ const handleCurrencyFormSubmit = async () => {
         allUploadResults.push(...uploadResults)
       }
 
-      // Upload payment proofs (optional)
-      if (purchasePaymentProofRef.value) {
-        const uploadResults = await purchasePaymentProofRef.value.uploadFiles()
-        allUploadResults.push(...uploadResults)
-      }
-
-  
-      // Both negotiation and payment proofs are required for purchase orders
+      // Only negotiation proof is required for purchase orders
       if (purchaseNegotiationFiles.value.length === 0) {
         throw new Error('Vui lòng upload ít nhất một hình ảnh bằng chứng đàm phán')
-      }
-      if (purchasePaymentFiles.value.length === 0) {
-        throw new Error('Vui lòng upload ít nhất một hình ảnh thanh toán')
-      }
-    } else if (activeTab.value === 'sell' && sellProofUploadRef.value) {
-      const uploadResults = await sellProofUploadRef.value.uploadFiles()
-      
-      if (uploadResults.length === 0) {
-        throw new Error('Vui lòng upload ít nhất một hình ảnh bằng chứng')
       }
     }
 
@@ -1093,15 +1138,13 @@ const handleCurrencyFormSubmit = async () => {
         message.error('Vui lòng chọn loại currency')
         return
       }
-      // Validate currency amount: must have exactly ONE of VND or USD
-      const hasVndPrice = purchaseData.totalPriceVnd !== null && purchaseData.totalPriceVnd >= 0
-      const hasUsdPrice = purchaseData.totalPriceUsd !== null && purchaseData.totalPriceUsd >= 0
-      if (!hasVndPrice && !hasUsdPrice) {
-        message.error('Vui lòng nhập tổng tiền (VND hoặc USD)')
+      // Validate currency amount
+      if (purchaseData.totalPrice === null || purchaseData.totalPrice < 0) {
+        message.error('Vui lòng nhập tổng tiền hợp lệ')
         return
       }
-      if (hasVndPrice && hasUsdPrice) {
-        message.error('Chỉ được nhập một loại tiền tệ: VND hoặc USD, không được nhập cả hai')
+      if (!purchaseData.currencyCode) {
+        message.error('Vui lòng chọn đơn vị tiền tệ')
         return
       }
       // Validate server selection - required for all games
@@ -1114,23 +1157,35 @@ const handleCurrencyFormSubmit = async () => {
       // Use the purchase submit logic
       await _handlePurchaseSubmit()
     } else {
+      console.log('=== SELL ORDER SUBMISSION (old validation path) ===')
       // Sale order submission (original logic)
+
       // Validate customer data
       if (!customerFormData.value.customerName || !customerFormData.value.gameTag) {
+        console.error('Missing customer data in handleCurrencyFormSubmit:', customerFormData.value)
         message.error('Vui lòng điền đầy đủ thông tin khách hàng')
         return
       }
+
       // Validate server selection - required for all games
       if (!currentServer.value) {
+        console.error('Missing server selection in handleCurrencyFormSubmit:', currentServer.value)
         message.error(
           `Vui lòng chọn server cho ${currentGame.value === 'DIABLO_4' ? 'Diablo 4' : currentGame.value === 'POE_1' ? 'Path of Exile 1' : 'Path of Exile 2'}`
         )
         return
       }
+
+      console.log('Calling saveSale() from handleCurrencyFormSubmit')
       // Save the sale
       await saveSale()
     }
-  } catch {
+  } catch (error) {
+    console.error('=== ERROR IN handleCurrencyFormSubmit ===')
+    console.error('Active tab:', activeTab.value)
+    console.error('Error details:', error)
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error')
+
     const errorMessage =
       activeTab.value === 'purchase'
         ? 'Đã có lỗi xảy ra khi tạo đơn mua'
@@ -1147,46 +1202,162 @@ const handleCurrencyFormReset = () => {
 
   // Reset current order ID
   currentOrderId.value = null
-  
+
   // Reset data based on active tab
   if (activeTab.value === 'purchase') {
     // Reset purchase data
     purchaseData.currencyId = null
     purchaseData.quantity = null
-    purchaseData.totalPriceVnd = null
-    purchaseData.totalPriceUsd = null
+    purchaseData.totalPrice = null
+    purchaseData.currencyCode = 'VND'
     purchaseData.notes = ''
     // Supplier data is now handled directly by supplierFormData
+
+    // Auto-select first currency if available
+    if (!purchaseData.currencyId && filteredCurrencies.value.length > 0) {
+      purchaseData.currencyId = filteredCurrencies.value[0].value
+    }
+
+    // Auto-select Facebook channel when switching to purchase tab
+    if (!supplierFormData.value.channelId && purchaseChannels.value.length > 0) {
+      const facebookChannel = purchaseChannels.value.find(
+        (channel: any) =>
+          channel.name?.toLowerCase().includes('facebook') ||
+          channel.displayName?.toLowerCase().includes('facebook') ||
+          channel.code?.toLowerCase().includes('facebook')
+      )
+      if (facebookChannel) {
+        supplierFormData.value.channelId = (facebookChannel as any).id
+      }
+    }
   } else {
     // Reset sale data (original logic)
     saleData.currencyId = null
     saleData.quantity = null
-    saleData.totalPriceVnd = null
+    saleData.totalPrice = null
+    saleData.currencyCode = 'VND'
+
+    // Auto-select first currency if available
+    if (!saleData.currencyId && filteredCurrencies.value.length > 0) {
+      saleData.currencyId = filteredCurrencies.value[0].value
+    }
+
+    // Auto-select G2G channel when switching to sale tab
+    if (!customerFormData.value.channelId && salesChannels.value.length > 0) {
+      const g2gChannel = salesChannels.value.find(
+        (channel: any) =>
+          channel.name?.toLowerCase().includes('g2g') ||
+          channel.displayName?.toLowerCase().includes('g2g') ||
+          channel.code?.toLowerCase().includes('g2g')
+      )
+      if (g2gChannel) {
+        customerFormData.value.channelId = (g2gChannel as any).id
+        // G2G is a USD channel, so set currency to USD
+        saleData.currencyCode = 'USD'
+      }
+    }
   }
 }
 // Save sale
 const saveSale = async () => {
-  if (!currencyFormRef.value) return
-  const formData = currencyFormRef.value.formData
-  if (!formData.currencyId || !formData.quantity) {
+  console.log('=== SAVE SALE START ===')
+  console.log('currencyFormRef:', currencyFormRef)
+  console.log('sellProofUploadRef:', sellProofUploadRef)
+  console.log('All refs in component:', {
+    currencyFormRef: currencyFormRef.value,
+    sellProofUploadRef: sellProofUploadRef.value,
+    purchaseCurrencyFormRef: purchaseCurrencyFormRef.value,
+    purchaseNegotiationProofRef: purchaseNegotiationProofRef.value
+  })
+
+  if (!currencyFormRef.value) {
+    console.error('currencyFormRef.value is null')
+    return
+  }
+
+  console.log('currencyFormRef.value:', currencyFormRef.value)
+  console.log('currencyFormRef.value.sellFormData:', currencyFormRef.value.sellFormData)
+
+  const formData = currencyFormRef.value.sellFormData
+  console.log('Form data:', formData)
+  console.log('Customer data:', customerFormData.value)
+  console.log('Current game:', currentGame.value)
+  console.log('Current server:', currentServer.value)
+
+  if (!formData || !formData.currencyId || !formData.quantity) {
+    console.error('Missing currency data:', {
+      formData: formData,
+      currencyId: formData?.currencyId,
+      quantity: formData?.quantity
+    })
     message.warning('Vui lòng điền đầy đủ thông tin currency')
     return
   }
+
   if (!customerFormData.value.customerName || !customerFormData.value.gameTag) {
+    console.error('Missing customer data:', customerFormData.value)
     message.warning('Vui lòng nhập thông tin khách hàng')
     return
   }
-  if (!sellProofFiles.value || sellProofFiles.value.length === 0) {
-    message.warning('Vui lòng upload hình bằng chứng')
-    return
-  }
+
   // Validate server selection - required for all games
   if (!currentServer.value) {
+    console.error('Missing server selection')
     message.error(
       `Vui lòng chọn server cho ${currentGame.value === 'DIABLO_4' ? 'Diablo 4' : currentGame.value === 'POE_1' ? 'Path of Exile 1' : 'Path of Exile 2'}`
     )
     return
   }
+
+  console.log('All validations passed, checking inventory pool availability')
+
+  // Check inventory pool availability before creating sell order
+  try {
+    const { data: inventoryCheck, error: inventoryError } = await supabase.rpc('check_sell_order_feasibility', {
+      p_game_code: currentGame.value,
+      p_server_attribute_code: currentServer.value,
+      p_currency_attribute_id: formData.currencyId,
+      p_required_quantity: Number(formData.quantity)
+    })
+
+    if (inventoryError) {
+      console.error('Error checking inventory availability:', inventoryError)
+      message.error('Lỗi khi kiểm tra availability: ' + inventoryError.message)
+      return
+    }
+
+    if (!inventoryCheck || inventoryCheck.length === 0) {
+      message.error('Không thể kiểm tra availability. Vui lòng thử lại.')
+      return
+    }
+
+    const feasibility = inventoryCheck[0]
+    if (!feasibility.feasible) {
+      console.error('Inventory check failed:', feasibility)
+
+      // Show detailed error message with suggestions
+      message.error(`Không thể tạo đơn bán: ${feasibility.message}`)
+
+      // Show warning with suggestions if available
+      if (feasibility.max_available_quantity > 0) {
+        message.warning(
+          `Gợi ý: Số lượng tối đa có thể bán là ${feasibility.max_available_quantity}. ` +
+          `Accounts khả dụng: ${feasibility.available_accounts ? feasibility.available_accounts.join(', ') : 'Không có'}`
+        )
+      }
+
+      return
+    }
+
+    console.log('Inventory check passed:', feasibility)
+    message.info(`Tìm thấy ${feasibility.max_available_quantity} currency khả dụng. Tiếp tục tạo đơn...`)
+  } catch (inventoryCheckError) {
+    console.error('Exception during inventory check:', inventoryCheckError)
+    message.error('Lỗi khi kiểm tra inventory availability. Vui lòng thử lại.')
+    return
+  }
+
+  console.log('All validations passed, proceeding with order creation')
   saving.value = true
   try {
     // Dynamic currency detection for sale
@@ -1195,25 +1366,32 @@ const saveSale = async () => {
       saleCostCurrency === 'USD' && formData.unitPriceUsd
         ? formData.unitPriceUsd
         : formData.unitPriceVnd || 0
-    // Prepare payload for API call with new structure
-    const payload = {
+    // Prepare payload for create_currency_sell_order_draft
+    const payload: any = {
       p_currency_attribute_id: formData.currencyId,
       p_quantity: Number(formData.quantity),
-      p_sale_amount: Number(saleCostAmount), // Total sale amount (not unit price)
-      p_sale_currency_code: saleCostCurrency, // Dynamic currency code
       p_game_code: currentGame.value,
-      p_server_attribute_code: currentServer.value,
-      p_channel_id: customerFormData.value.channelId,
-      p_customer_name: customerFormData.value.customerName,
-      // Combine game tag and delivery info for complete delivery information
-      p_customer_game_tag: customerFormData.value.gameTag,
       p_delivery_info: customerFormData.value.deliveryInfo
         ? `${customerFormData.value.gameTag} - ${customerFormData.value.deliveryInfo}`
         : customerFormData.value.gameTag,
-      p_sales_notes: formData.notes || '',
+      p_channel_id: customerFormData.value.channelId,
+      p_server_attribute_code: currentServer.value, // Server attribute code
+      p_notes: formData.notes || '',
+      // Add character info
+      p_character_name: customerFormData.value.gameTag,
+      p_character_id: customerFormData.value.gameTag, // Using gameTag as character ID for now
+      // Add sale details
+      p_sale_amount: formData.totalPrice,
+      p_sale_currency_code: formData.currencyCode,
     }
     // Include exchange data in payload
     if (exchangeData.type !== 'none') {
+      payload.p_exchange_type = exchangeData.type
+      payload.p_exchange_details = {
+        exchangeType: exchangeData.exchangeType,
+        exchangeImages: exchangeData.exchangeImages
+      }
+
       const exchangeTypeText =
         exchangeData.type === 'items'
           ? 'Items'
@@ -1223,73 +1401,166 @@ const saveSale = async () => {
               ? 'Farmer'
               : exchangeData.type
       const exchangeText = `Loại hình: ${exchangeTypeText} - ${exchangeData.exchangeType}`
-      payload.p_sales_notes = payload.p_sales_notes
-        ? `${payload.p_sales_notes}\n${exchangeText}`
+      payload.p_notes = payload.p_notes
+        ? `${payload.p_notes}\n${exchangeText}`
         : exchangeText
     }
-    // Call the new RPC function to create sell order
-    const { data, error } = await supabase.rpc('create_currency_sell_order', payload)
-    if (error) {
-      throw new Error(`Không thể tạo đơn bán: ${error.message}`)
+    // Get current profile ID
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+    console.log('Profile RPC response:', { profileData, profileError })
+
+    if (profileError) {
+      console.error('Profile RPC error:', profileError)
+      throw new Error(`Lỗi khi lấy profile ID: ${profileError.message}`)
     }
-    // Check if function returned success
+
+    if (!profileData) {
+      console.error('Invalid profile data:', profileData)
+
+      // Try debug function to understand the issue
+      const { data: debugData, error: debugError } = await supabase.rpc('debug_get_current_profile_id')
+      console.log('Debug profile info:', { debugData, debugError })
+
+      throw new Error('Không thể lấy profile ID của người dùng. Vui lòng đảm bảo bạn đã đăng nhập và có profile hợp lệ.')
+    }
+
+    // Add created_by_id to payload (function returns UUID directly)
+    payload.p_created_by_id = profileData
+    console.log('Using profile ID:', payload.p_created_by_id)
+
+    // Step 1: Create sell order draft
+    console.log('Creating sell order draft with payload:', payload)
+    const { data, error } = await supabase.rpc('create_currency_sell_order_draft', payload)
+    if (error) {
+      console.error('Backend error:', error)
+      throw new Error(`Không thể tạo đơn bán draft: ${error.message}`)
+    }
+
+    // Check if draft was created successfully
+    console.log('Backend response:', data)
     if (data && data.length > 0 && data[0].success) {
+      // Extract order info from response structure
+      console.log('Data structure:', JSON.stringify(data[0], null, 2))
+      let orderId, orderNumber
+
+      // Try different response structures
+      if (data[0].order_id && data[0].order_number) {
+        // New structure: {success, order_id, order_number, message}
+        orderId = data[0].order_id
+        orderNumber = data[0].order_number
+      } else if (Array.isArray(data[0])) {
+        // Old structure: [success, v_order_id, v_order_number, message]
+        orderId = data[0][1]
+        orderNumber = data[0][2]
+      } else {
+        console.error('Unknown response structure:', data[0])
+        throw new Error('Không thể đọc thông tin đơn hàng từ response')
+      }
+
+      console.log('Extracted orderId:', orderId, 'orderNumber:', orderNumber)
+
       // Set current order ID for proof uploads
-      currentOrderId.value = data[0].order_number || data[0].id
-      
-      message.success(`Tạo đơn bán thành công! Order #${data[0].order_number}`)
-      // Upload proof images if any
-      const orderId = data[0].order_number || data[0].id
-      if (sellProofFiles.value && sellProofFiles.value.length > 0) {
-        try {
+      currentOrderId.value = orderNumber || orderId
 
-          // Use files already uploaded by SimpleProofUpload
-          const uploadedImages = sellProofFiles.value.map(img => ({
-            ...img,
-            type: 'sell'
-          }))
-          if (uploadedImages.length > 0) {
-            // Create structured proof data for sell order creation
-            const proofData = {
-              order_creation: {
-                sell: {
-                  proofs: uploadedImages.map(img => ({
-                    url: img.url,
-                    path: img.path,
-                    filename: img.filename,
-                    type: img.type,
-                    uploaded_at: new Date().toISOString()
-                  }))
-                }
-              }
-            }
+      message.success(`Tạo đơn bán draft thành công! Order #${orderNumber}`)
 
-            // Update the currency order with structured proof data
-            
-            const { error: updateError } = await supabase
-              .from('currency_orders')
-              .update({
-                proofs: proofData,
-                // Keep sales notes separate from proof data
-                notes: payload.p_sales_notes || null
-              })
-              .eq('order_number', orderId)
-              .select()
+      // Step 2: Upload proof images if any
+      let proofUrls: string[] = []
 
-            if (updateError) {
-              throw updateError
-            }
+      // Check if upload component has files (regardless of sellProofFiles state)
+      const uploadComponent = sellProofUploadRef.value as any
+      const hasFiles = uploadComponent?.fileList?.length > 0
 
-                      }
-        } catch (uploadError) {
-          // Don't fail the entire order creation, just log the error
-          message.warning('Đơn đã được tạo nhưng không thể upload hình bằng chứng')
+      if (uploadComponent && hasFiles) {
+        // Update the upload path with order ID using setter method
+        uploadComponent.setOrderId(orderNumber)
+
+        const uploadResults = await uploadComponent.uploadFiles()
+        proofUrls = uploadResults.map((result: any) => result)
+
+        if (uploadResults.length === 0) {
+          message.warning('Không có hình ảnh nào được upload. Tiếp tục tạo đơn không có hình ảnh.')
+        } else {
+          message.success(`Đã upload ${uploadResults.length} hình ảnh bằng chứng`)
+        }
+      } else {
+        message.info('Không có hình ảnh nào được chọn. Tạo đơn bán không có bằng chứng.')
+      }
+
+      // Validate orderId before proceeding
+      if (!orderId) {
+        throw new Error('Order ID is undefined, cannot update order status')
+      }
+
+      console.log('Updating order with ID:', orderId)
+
+      // Step 3: Update order with proofs and set status to pending using RPC (same as purchase)
+      if (proofUrls.length > 0) {
+        console.log('Updating order proofs and setting status to pending for order:', orderId)
+        const { data: updateResult, error: updateError } = await supabase.rpc('update_currency_order_proofs', {
+          p_order_id: orderId,
+          p_proofs: proofUrls
+        })
+
+        if (updateError) {
+          throw new Error(`Không thể cập nhật bằng chứng: ${updateError.message}`)
+        }
+
+        if (updateResult && updateResult.length > 0 && !updateResult[0].success) {
+          throw new Error(`Cập nhật bằng chứng thất bại: ${updateResult[0].message}`)
+        }
+      } else {
+        // If no proofs, just update status to pending
+        const { error: updateError } = await supabase
+          .from('currency_orders')
+          .update({
+            status: 'pending',
+            submitted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', orderId)
+
+        if (updateError) {
+          throw new Error(`Không thể cập nhật trạng thái đơn hàng: ${updateError.message}`)
         }
       }
-    } else {
-      const errorMessage = data && data.length > 0 ? data[0].message : 'Unknown error'
-      throw new Error(`Tạo đơn bán thất bại: ${errorMessage}`)
+
+      // Step 4: Auto-assign sell order using inventory-first approach
+      try {
+        console.log('Attempting auto-assignment for sell order:', orderId)
+        const { data: assignmentResult, error: assignmentError } = await supabase.rpc('assign_sell_order_with_inventory', {
+          p_order_id: orderId,
+          p_user_id: profileData
+        })
+
+        if (assignmentError) {
+          console.error('Assignment error:', assignmentError)
+          message.warning(
+            `✅ Đơn bán đã được tạo thành công! Tuy nhiên, không thể phân công tự động: ${assignmentError.message}. Admin sẽ phân công thủ công.`
+          )
+        } else if (assignmentResult && assignmentResult.length > 0 && assignmentResult[0].success) {
+          const assignment = assignmentResult[0]
+          message.success(
+            `✅ Đơn bán đã được tạo và phân công thành công! ` +
+            `Nhân viên: ${assignment.assigned_employee_name}, ` +
+            `Account: ${assignment.assigned_account_name}, ` +
+            `Channel: ${assignment.assigned_channel_name}, ` +
+            `Thời gian: ${assignment.assigned_at_gmt7 || 'N/A'} GMT+7, ` +
+            `Cost: ${assignment.cost_amount || 0} ${assignment.cost_currency || 'VND'}`
+          )
+        } else {
+          message.warning(
+            '✅ Đơn bán đã được tạo thành công! Không có inventory phù hợp hoặc nhân viên available. Admin sẽ xem xét và phân công thủ công.'
+          )
+        }
+      } catch (assignError) {
+        console.error('Assignment failed:', assignError)
+        message.warning(
+          '✅ Đơn bán đã được tạo thành công! Tuy nhiên, hệ thống phân công gặp sự cố. Admin sẽ phân công thủ công.'
+        )
+      }
     }
+
     // Reset form after successful submission
     handleCurrencyFormReset()
     Object.assign(customerFormData.value, {
@@ -1311,18 +1582,101 @@ const saveSale = async () => {
     if (sellProofUploadRef.value) {
       sellProofUploadRef.value.resetFiles()
     }
-  } catch {
-    message.error('Không thể tạo đơn bán')
+
+    // Auto-select first currency if available
+    if (!saleData.currencyId && filteredCurrencies.value.length > 0) {
+      saleData.currencyId = filteredCurrencies.value[0].value
+    }
+
+    // Auto-select G2G channel when switching to sale tab
+    if (!customerFormData.value.channelId && salesChannels.value.length > 0) {
+      const g2gChannel = salesChannels.value.find(
+        (channel: any) =>
+          channel.name?.toLowerCase().includes('g2g') ||
+          channel.displayName?.toLowerCase().includes('g2g') ||
+          channel.code?.toLowerCase().includes('g2g')
+      )
+      if (g2gChannel) {
+        customerFormData.value.channelId = (g2gChannel as any).id
+        // G2G is a USD channel, so set currency to USD
+        saleData.currencyCode = 'USD'
+      }
+    }
+  } catch (error) {
+    console.error('Sell order creation error:', error)
+    message.error(`Đã có lỗi xảy ra khi tạo đơn bán: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
   } finally {
     saving.value = false
   }
 }
+// Watch for channel changes to set default currency code for sell orders
+watch(
+  () => customerFormData.value.channelId,
+  (newChannelId) => {
+    
+    if (!newChannelId || !salesChannels.value.length) return
+
+    const selectedChannel = salesChannels.value.find((channel: any) => channel.id === newChannelId)
+    if (!selectedChannel) return
+
+    const channelName = (selectedChannel as any).name?.toLowerCase() ||
+                       (selectedChannel as any).code?.toLowerCase() ||
+                       (selectedChannel as any).displayName?.toLowerCase() || ''
+
+    
+    // Set currency code based on channel
+    const isUSDChannel = channelName.includes('eldorado') ||
+                        channelName.includes('g2g') ||
+                        channelName.includes('playerauctions')
+
+    // Always set currency code based on channel type
+    if (isUSDChannel) {
+      saleData.currencyCode = 'USD'
+    } else {
+      saleData.currencyCode = 'VND'
+    }
+
+      }
+)
+
+// Computed property for game code to ensure reactivity
+const gameCodeForForm = computed(() => {
+  const gameCode = currentGame?.value
+  return gameCode || ''
+})
+
 // Watch for game/server changes to reload inventory
 watch([currentGame, currentServer], async () => {
   // Only proceed if we have both game and server
   if (!currentGame.value || !currentServer.value) return
+
+  
+  // Store old channel before reset
+  const oldChannelId = customerFormData.value.channelId
+
     // Reset forms - this will set currencyId to null briefly
   resetAllForms()
+
+  // Check if old channel is still valid for new game and restore if valid
+  if (oldChannelId && salesChannels.value.some((ch: any) => ch.id === oldChannelId)) {
+        customerFormData.value.channelId = oldChannelId
+
+    // Force trigger currency type update based on restored channel
+    const selectedChannel = salesChannels.value.find((ch: any) => ch.id === oldChannelId)
+    if (selectedChannel) {
+      const channelName = (selectedChannel as any).name?.toLowerCase() ||
+                         (selectedChannel as any).code?.toLowerCase() ||
+                         (selectedChannel as any).displayName?.toLowerCase() || ''
+
+      const isUSDChannel = channelName.includes('eldorado') ||
+                          channelName.includes('g2g') ||
+                          channelName.includes('playerauctions')
+
+      saleData.currencyCode = isUSDChannel ? 'USD' : 'VND'
+
+          }
+  }
+
   // Immediately load new data to minimize flicker
   await loadData()
 })
@@ -1337,9 +1691,6 @@ const handlePurchaseNegotiationProofUploadComplete = (uploadedFiles: FileInfo[])
   purchaseNegotiationFiles.value = uploadedFiles
 }
 
-const handlePurchasePaymentProofUploadComplete = (uploadedFiles: FileInfo[]) => {
-  purchasePaymentFiles.value = uploadedFiles
-}
 
 
 
@@ -1364,20 +1715,22 @@ const validatePurchaseForm = () => {
   if (!purchaseData.quantity || purchaseData.quantity <= 0) {
     errors.push('Số lượng phải lớn hơn 0')
   }
-  // Check if at least one price is provided and greater than 0
-  const hasVndPrice = purchaseData.totalPriceVnd && purchaseData.totalPriceVnd > 0
-  const hasUsdPrice = purchaseData.totalPriceUsd && purchaseData.totalPriceUsd > 0
-
-  if (!hasVndPrice && !hasUsdPrice) {
-    errors.push('Tổng giá trị phải lớn hơn 0 (VND hoặc USD)')
+  // Check if price is provided and greater than 0
+  if (!purchaseData.totalPrice || purchaseData.totalPrice <= 0) {
+    errors.push('Tổng giá trị phải lớn hơn 0')
   }
 
-  // Validate maximum limits
-  if (hasVndPrice && (purchaseData.totalPriceVnd || 0) > 100000000) {
+  // Validate currency code
+  if (!purchaseData.currencyCode) {
+    errors.push('Vui lòng chọn đơn vị tiền tệ')
+  }
+
+  // Validate maximum limits based on currency
+  if (purchaseData.currencyCode === 'VND' && (purchaseData.totalPrice || 0) > 100000000) {
     errors.push('Tổng giá trị đơn hàng không được vượt quá 100 triệu VND')
   }
 
-  if (hasUsdPrice && (purchaseData.totalPriceUsd || 0) > 5000) {
+  if (purchaseData.currencyCode === 'USD' && (purchaseData.totalPrice || 0) > 5000) {
     errors.push('Tổng giá trị đơn hàng không được vượt quá 5000 USD')
   }
   
@@ -1386,6 +1739,25 @@ const validatePurchaseForm = () => {
     errors,
   }
 }
+
+
+
+// Auto assign purchase order to employee
+const autoAssignPurchaseOrder = async (orderId: string): Promise<void> => {
+  try {
+    const { error } = await supabase.rpc('assign_purchase_order', {
+      p_purchase_order_id: orderId
+    })
+
+    if (error) {
+      throw new Error(`Failed to auto-assign purchase order: ${error.message}`)
+    }
+  } catch (err) {
+    console.error('Error auto-assigning purchase order:', err)
+    throw err
+  }
+}
+
 // Simple cache for buy orders
 interface BuyOrder {
   id: string
@@ -1450,8 +1822,152 @@ const loadBuyOrders = async (forceRefresh = false) => {
     // Silently handle error
   }
 }
+
+// Check server availability and employee shift before creating order
+const checkOrderFeasibility = async (
+  gameCode: string,
+  serverCode: string,
+  channelId: string,
+  currencyCode: string // Add currency type parameter
+): Promise<{
+  feasible: boolean,
+  serverAvailable: boolean,
+  employeeAvailable: boolean,
+  message: string
+}> => {
+  try {
+    const now = new Date()
+    const hcmcTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}))
+    const currentTime = hcmcTime.toTimeString().slice(0, 5)
+
+    const { data: activeShifts, error: shiftError } = await supabase
+      .from('work_shifts')
+      .select('*')
+      .eq('is_active', true)
+
+    if (shiftError) {
+      return {
+        feasible: false,
+        serverAvailable: false,
+        employeeAvailable: false,
+        message: `Lỗi hệ thống khi kiểm tra giờ làm việc. Vui lòng thử lại hoặc liên hệ admin.`
+      }
+    }
+
+    if (!activeShifts || activeShifts.length === 0) {
+      return {
+        feasible: false,
+        serverAvailable: false,
+        employeeAvailable: false,
+        message: `Không có ca làm việc nào đang active tại thời gian hiện tại. Vui lòng thử lại sau.`
+      }
+    }
+
+    let activeShift = null
+    for (const shift of activeShifts) {
+      const shiftStart = shift.start_time.slice(0, 5)
+      const shiftEnd = shift.end_time.slice(0, 5)
+
+      let isOnShift = false
+      if (shift.start_time <= shift.end_time) {
+        isOnShift = currentTime >= shiftStart && currentTime <= shiftEnd
+      } else {
+        isOnShift = currentTime >= shiftStart || currentTime <= shiftEnd
+      }
+
+      if (isOnShift) {
+        activeShift = shift
+        break
+      }
+    }
+
+    if (!activeShift) {
+      return {
+        feasible: false,
+        serverAvailable: false,
+        employeeAvailable: false,
+        message: `Hiện tại đang ngoài giờ làm việc (${currentTime}). Ca làm việc: ${activeShift.name} (${activeShift.start_time} - ${activeShift.end_time}).`
+      }
+    }
+
+    
+    const { data: availableAccounts, error: serverError } = await supabase.rpc('get_available_game_accounts', {
+      p_game_code: gameCode,
+      p_server_attribute_code: serverCode,
+      p_limit: 10
+    })
+
+    if (serverError || !availableAccounts || availableAccounts.length === 0) {
+      const serverText = serverCode ? `server: ${serverCode}` : 'global accounts'
+      return {
+        feasible: false,
+        serverAvailable: false,
+        employeeAvailable: false,
+        message: `Hiện tại không có tài khoản game nào available cho ${gameCode} ${serverText === 'global accounts' ? '' : '(' + serverText + ')'}.`
+      }
+    }
+
+    const { data: shiftAssignments, error: assignmentError } = await supabase
+      .from('shift_assignments')
+      .select(`
+        *,
+        profiles!inner (
+          display_name,
+          status
+        ),
+        game_accounts!inner (
+          account_name,
+          game_code,
+          server_attribute_code
+        ),
+        work_shifts!inner (
+          name,
+          start_time,
+          end_time
+        )
+      `)
+      .eq('channels_id', channelId)
+      .eq('currency_code', currencyCode)
+      .eq('shift_id', activeShift.id)
+      .eq('is_active', true)
+      .eq('profiles.status', 'active')
+      .eq('game_accounts.is_active', true)
+
+    if (assignmentError || !shiftAssignments || shiftAssignments.length === 0) {
+      return {
+        feasible: false,
+        serverAvailable: true,
+        employeeAvailable: false,
+        message: `Hiện tại không có nhân viên nào phù hợp để xử lý đơn hàng này (Loại currency: ${currencyCode}). Vui lòng thử lại sau hoặc liên hệ admin để được hỗ trợ.`
+      }
+    }
+
+    const assignment = shiftAssignments[0]
+    return {
+      feasible: true,
+      serverAvailable: true,
+      employeeAvailable: true,
+      message: `✅ Sẵn sàng tạo đơn! Đơn hàng sẽ được tự động phân công cho ${assignment.profiles.display_name}.`
+    }
+
+  } catch (error) {
+    return {
+      feasible: false,
+      serverAvailable: false,
+      employeeAvailable: false,
+      message: `Lỗi hệ thống khi kiểm tra điều kiện tạo đơn. Vui lòng thử lại hoặc liên hệ admin.`
+    }
+  }
+}
+
 // Handle purchase submit for purchase tab
 const _handlePurchaseSubmit = async () => {
+  // Prevent double-click / multiple submissions
+  if (purchaseSaving.value) {
+    console.log('Purchase order creation already in progress, ignoring duplicate submission')
+    return
+  }
+
   try {
     purchaseSaving.value = true
 
@@ -1463,6 +1979,25 @@ const _handlePurchaseSubmit = async () => {
     if (!currentGame.value || !currentServer.value) {
       throw new Error('Vui lòng chọn game và server')
     }
+
+    // NEW: Comprehensive feasibility check (server + employee shift)
+    console.log('Checking order feasibility for:', currentGame.value, currentServer.value, 'channel:', supplierFormData.value.channelId)
+
+    if (!supplierFormData.value.channelId) {
+      throw new Error('Vui lòng chọn kênh mua hàng')
+    }
+
+    const feasibilityCheck = await checkOrderFeasibility(
+      currentGame.value,
+      currentServer.value,
+      supplierFormData.value.channelId,
+      purchaseCostCurrency.value // Add currency type parameter
+    )
+
+    if (!feasibilityCheck.feasible) {
+      throw new Error(feasibilityCheck.message)
+    }
+    
     // Use comprehensive validation
     const validation = validatePurchaseForm()
     if (!validation.isValid) {
@@ -1470,6 +2005,15 @@ const _handlePurchaseSubmit = async () => {
     }
 
     // NEW WORKFLOW: Create order draft first
+    console.log('Creating purchase order with data:', {
+      game: currentGame.value,
+      server: currentServer.value,
+      currencyId: purchaseData.currencyId,
+      costAmount: purchaseCostAmount.value,
+      costCurrency: purchaseCostCurrency.value,
+      channelId: supplierFormData.value.channelId
+    })
+
     const { data: orderDraftData, error: draftError } = await supabase.rpc('create_currency_purchase_order_draft', {
       p_currency_attribute_id: purchaseData.currencyId,
       p_quantity: Number(purchaseData.quantity),
@@ -1482,7 +2026,7 @@ const _handlePurchaseSubmit = async () => {
       p_supplier_contact: supplierFormData.value.deliveryInfo || '',
       p_delivery_info: supplierFormData.value.gameTag || null,
       p_notes: purchaseData.notes || null,
-      p_priority_level: 3,
+      p_priority_level: 3
     })
 
     if (draftError) {
@@ -1496,42 +2040,49 @@ const _handlePurchaseSubmit = async () => {
     const orderUuid = orderDraftData[0].order_id  // Use UUID for database operations
     const orderNumber = orderDraftData[0].order_number  // Use order number for display and file paths
     currentOrderId.value = orderNumber  // Keep current behavior for UI
-    
-    // Upload files directly to order folder using order number for path
+
+        
+    // Upload negotiation proofs using SimpleProofUpload component
     const allProofFiles = []
 
-    if (purchaseNegotiationFiles.value && purchaseNegotiationFiles.value.length > 0) {
-            const negotiationUploadResults = await uploadFilesDirectly(
-        purchaseNegotiationFiles.value,
-        orderNumber,
-        'negotiation'
-      )
+    if (purchaseNegotiationProofRef.value) {
+      // Set order ID using setter method
+      purchaseNegotiationProofRef.value.setOrderId(orderNumber)
+
+      const negotiationUploadResults = await purchaseNegotiationProofRef.value.uploadFiles()
       allProofFiles.push(...negotiationUploadResults)
     }
 
-    if (purchasePaymentFiles.value && purchasePaymentFiles.value.length > 0) {
-            const paymentUploadResults = await uploadFilesDirectly(
-        purchasePaymentFiles.value,
-        orderNumber,
-        'payment'
+  
+    // Use RPC function to update order with proofs and set status to pending in one atomic operation
+    console.log('Updating order proofs and setting status to pending for order:', orderUuid)
+    const { data: updateResult, error: updateError } = await supabase.rpc('update_currency_order_proofs', {
+      p_order_id: orderUuid,
+      p_proofs: allProofFiles
+    })
+
+    if (updateError) {
+      throw new Error(`Không thể cập nhật bằng chứng: ${updateError.message}`)
+    }
+
+    if (updateResult && updateResult.length > 0 && !updateResult[0].success) {
+      throw new Error(`Cập nhật bằng chứng thất bại: ${updateResult[0].message}`)
+    }
+
+    
+    // Auto assign purchase order to suitable employee (should succeed based on pre-check)
+    try {
+            await autoAssignPurchaseOrder(orderUuid)
+            message.success(`✅ Tạo đơn mua thành công! Order #${orderNumber} đã được phân công tự động`)
+    } catch (assignError) {
+            const errorMessage = assignError instanceof Error ? assignError.message : String(assignError)
+
+      // This should rarely happen due to pre-check, but handle gracefully
+      message.warning(
+        `⚠️ Tạo đơn thành công nhưng phân công thất bại: ${errorMessage}. ` +
+        `Admin sẽ xem xét và phân công thủ công.`
       )
-      allProofFiles.push(...paymentUploadResults)
     }
-
-    // Update order with proofs and change status to pending using UUID
-    if (allProofFiles.length > 0) {
-            const { error: updateError } = await supabase.rpc('update_currency_order_proofs', {
-        p_order_id: orderUuid,  // Use UUID for database operation
-        p_proofs: JSON.stringify(allProofFiles)
-      })
-
-      if (updateError) {
-        throw new Error(`Không thể cập nhật bằng chứng: ${updateError.message}`)
-      }
-    }
-
-    // Final success message
-    message.success(`✅ Tạo đơn mua thành công! Order #${orderNumber}`)
 
     // Reset form after successful submission
     resetPurchaseForm()
@@ -1551,8 +2102,8 @@ const _handlePurchaseSubmit = async () => {
 const resetPurchaseForm = () => {
   // Reset purchase form
   purchaseData.quantity = null
-  purchaseData.totalPriceVnd = null
-  purchaseData.totalPriceUsd = null
+  purchaseData.totalPrice = null
+  purchaseData.currencyCode = 'VND'
   purchaseData.currencyId = null
   purchaseData.notes = ''
 
@@ -1564,18 +2115,32 @@ const resetPurchaseForm = () => {
 
   // Reset file references
   purchaseNegotiationFiles.value = []
-  purchasePaymentFiles.value = []
 
   // Reset file upload components
   if (purchaseNegotiationProofRef.value) {
     purchaseNegotiationProofRef.value.resetFiles()
   }
-  if (purchasePaymentProofRef.value) {
-    purchasePaymentProofRef.value.resetFiles()
-  }
 
   // Reset current order ID
   currentOrderId.value = null
+
+  // Auto-select first currency if available
+  if (!purchaseData.currencyId && filteredCurrencies.value.length > 0) {
+    purchaseData.currencyId = filteredCurrencies.value[0].value
+  }
+
+  // Auto-select Facebook channel when switching to purchase tab
+  if (!supplierFormData.value.channelId && purchaseChannels.value.length > 0) {
+    const facebookChannel = purchaseChannels.value.find(
+      (channel: any) =>
+        channel.name?.toLowerCase().includes('facebook') ||
+        channel.displayName?.toLowerCase().includes('facebook') ||
+        channel.code?.toLowerCase().includes('facebook')
+    )
+    if (facebookChannel) {
+      supplierFormData.value.channelId = (facebookChannel as any).id
+    }
+  }
 }
 
 // New function to upload local files directly with order ID

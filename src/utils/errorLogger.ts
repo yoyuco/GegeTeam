@@ -24,12 +24,26 @@ class ErrorLogger {
   private maxLogs = 100
   private isDevelopment = import.meta.env.DEV
 
-  log(error: Error | string, context?: ErrorContext): void {
+  log(error: Error | string | null | undefined, context?: ErrorContext): void {
+    let message: string
+    let stack: string | undefined
+
+    if (error === null || error === undefined) {
+      message = 'Unknown error (null or undefined)'
+      stack = undefined
+    } else if (typeof error === 'string') {
+      message = error
+      stack = undefined
+    } else {
+      message = error.message || 'Unknown error'
+      stack = error.stack
+    }
+
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'error',
-      message: typeof error === 'string' ? error : error.message,
-      stack: typeof error === 'string' ? undefined : error.stack,
+      message,
+      stack,
       context,
     }
 

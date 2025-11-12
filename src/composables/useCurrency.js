@@ -207,6 +207,28 @@ export function useCurrency() {
     }
   }
 
+  // Load currency codes (VND, USD, etc.) from currencies table for price dropdown
+  const loadCurrencyCodes = async () => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('currencies')
+        .select('code')
+        .eq('is_active', true)
+        .order('code')
+
+      if (fetchError) throw fetchError
+
+      // Return formatted options for dropdown - only show code
+      return (data || []).map(currency => ({
+        label: currency.code,
+        value: currency.code
+      }))
+    } catch (err) {
+      console.error('Error loading currency codes:', err)
+      return []
+    }
+  }
+
   // Load exchange rates
   const loadExchangeRates = async () => {
     try {
@@ -647,6 +669,7 @@ export function useCurrency() {
     convertCurrency,
     loadAvailableCurrencies,
     loadAllCurrencies,
+    loadCurrencyCodes,
     loadExchangeRates,
     loadChannels,
     getChannelById,

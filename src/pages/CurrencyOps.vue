@@ -203,6 +203,9 @@
               @export="handleDeliveryExport"
               @view-detail="handleDeliveryViewDetail"
               @update-status="handleDeliveryUpdateStatus"
+              @finalize-order="handleDeliveryFinalizeOrder"
+              @proof-uploaded="handleProofUploaded"
+              @refresh-data="loadDeliveryOrders"
             />
           </div>
         </div>
@@ -253,6 +256,13 @@
     :inventory-data="inventoryByCurrency"
     @close="isInventoryOpen = false"
   />
+
+  <!-- Order Completion Modal -->
+  <OrderCompletionModal
+    v-model:show="showOrderCompletionModal"
+    :order="selectedOrderForCompletion"
+    @completed="handleOrderCompletionCompleted"
+  />
 </template>
 
 <script setup lang="ts">
@@ -265,6 +275,7 @@ import {
 // Import components
 import GameServerSelector from '@/components/currency/GameServerSelector.vue'
 import CurrencyInventoryPanel from '@/components/currency/CurrencyInventoryPanel.vue'
+import OrderCompletionModal from '@/components/currency/OrderCompletionModal.vue'
 import ExchangeCurrencyForm from '@/components/currency/ExchangeCurrencyForm.vue'
 import DataListCurrency from '@/components/currency/DataListCurrency.vue'
 
@@ -397,6 +408,10 @@ const loadingDelivery = ref(false)
 const transactionHistory = ref<any[]>([])
 const loadingHistory = ref(false)
 
+// Order completion modal state
+const showOrderCompletionModal = ref(false)
+const selectedOrderForCompletion = ref<any>(null)
+
 // Exchange form reference
 const exchangeFormRef = ref()
 
@@ -472,9 +487,8 @@ const loadData = async () => {
     }
 
     // Load delivery orders from database (for delivery tab)
-    if (activeTab.value === 'delivery') {
-      await loadDeliveryOrders()
-    }
+    // Always load delivery orders to ensure data is available
+    await loadDeliveryOrders()
 
     // Load transaction history (for history tab)
     if (activeTab.value === 'history') {
@@ -523,28 +537,11 @@ const handleExchangeReset = () => {
 const loadDeliveryOrders = async () => {
   loadingDelivery.value = true
   try {
+    // Since some relationships don't exist in the schema, we'll use manual joins
     const { data, error } = await supabase
       .from('currency_orders')
-      .select(`
-        *,
-        currency_attribute:currency_attribute_id (
-          id,
-          code,
-          name,
-          type
-        ),
-        channel:channel_id (
-          id,
-          code,
-          name
-        ),
-        assigned_account:assigned_account_id (
-          id,
-          name,
-          game_tag
-        )
-      `)
-      .in('status', ['assigned', 'in_progress']) // Only show assigned and processing orders
+      .select('*')
+      .in('status', ['assigned', 'preparing', 'delivering', 'ready', 'delivered']) // Include delivered orders
       .order('created_at', { ascending: false })
       .limit(100) // Increase limit since we're showing all games
 
@@ -554,7 +551,92 @@ const loadDeliveryOrders = async () => {
       return
     }
 
-    deliveryOrders.value = data || []
+    // Manual joins for related data since relationships don't exist in schema
+    const ordersWithData = []
+    if (data && data.length > 0) {
+      // Collect all unique IDs for batch queries
+      const currencyIds = [...new Set(data.map(order => order.currency_attribute_id).filter(Boolean))]
+      const channelIds = [...new Set(data.map(order => order.channel_id).filter(Boolean))]
+      const employeeIds = [...new Set(data.map(order => order.assigned_to).filter(Boolean))]
+      const gameAccountIds = [...new Set(data.map(order => order.game_account_id).filter(Boolean))]
+      const partyIds = [...new Set(data.map(order => order.party_id).filter(Boolean))]
+
+      // Collect unique game codes and server codes for name lookup
+      const gameCodes = [...new Set(data.map(order => order.game_code).filter(Boolean))]
+      const serverCodes = [...new Set(data.map(order => order.server_attribute_code).filter(Boolean))]
+
+      // Batch fetch all related data
+      const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
+        currencyIds.length > 0 ? supabase
+          .from('attributes')
+          .select('id, code, name, type')
+          .in('id', currencyIds) : Promise.resolve({ data: [] }),
+
+        channelIds.length > 0 ? supabase
+          .from('channels')
+          .select('id, code, name')
+          .in('id', channelIds) : Promise.resolve({ data: [] }),
+
+        employeeIds.length > 0 ? supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', employeeIds) : Promise.resolve({ data: [] }),
+
+        gameAccountIds.length > 0 ? supabase
+          .from('game_accounts')
+          .select('id, account_name, game_code, purpose')
+          .in('id', gameAccountIds) : Promise.resolve({ data: [] }),
+
+        partyIds.length > 0 ? supabase
+          .from('parties')
+          .select('id, name, type')
+          .in('id', partyIds) : Promise.resolve({ data: [] }),
+
+        // Fetch game names
+        gameCodes.length > 0 ? supabase
+          .from('attributes')
+          .select('code, name')
+          .eq('type', 'GAME')
+          .in('code', gameCodes) : Promise.resolve({ data: [] }),
+
+        // Fetch server names (handle both SERVER and GAME_SERVER types)
+        serverCodes.length > 0 ? supabase
+          .from('attributes')
+          .select('code, name')
+          .in('type', ['SERVER', 'GAME_SERVER'])
+          .in('code', serverCodes) : Promise.resolve({ data: [] })
+      ])
+
+      // Create lookup maps
+      const currencyMap = new Map(currencyData.data?.map(item => [item.id, item]) || [])
+      const channelMap = new Map(channelData.data?.map(item => [item.id, item]) || [])
+      const employeeMap = new Map(employeeData.data?.map(item => [item.id, item]) || [])
+      const gameAccountMap = new Map(gameAccountData.data?.map(item => [item.id, item]) || [])
+      const partyMap = new Map(partyData.data?.map(item => [item.id, item]) || [])
+
+      // Create lookup maps for game and server names
+      const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
+      const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
+
+      // Combine data
+      for (const order of data) {
+        const combinedOrder = {
+          ...order,
+          currency_attribute: order.currency_attribute_id ? currencyMap.get(order.currency_attribute_id) || null : null,
+          channel: order.channel_id ? channelMap.get(order.channel_id) || null : null,
+          assigned_employee: order.assigned_to ? employeeMap.get(order.assigned_to) || null : null,
+          game_account: order.game_account_id ? gameAccountMap.get(order.game_account_id) || null : null,
+          party: order.party_id ? partyMap.get(order.party_id) || null : null,
+          // Add game and server names
+          game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
+          server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null
+        }
+
+        ordersWithData.push(combinedOrder)
+      }
+    }
+
+    deliveryOrders.value = ordersWithData
   } catch (error) {
     console.error('Error in loadDeliveryOrders:', error)
     message.error('Có lỗi xảy ra khi tải đơn hàng')
@@ -579,34 +661,148 @@ const handleDeliveryExport = () => {
   message.info('Tính năng xuất file đang được phát triển...')
 }
 
-const handleDeliveryViewDetail = (order: any) => {
-  // TODO: Implement view detail modal
-  console.log('View order detail:', order)
-  message.info(`Xem chi tiết đơn #${order.order_number}`)
+const handleDeliveryViewDetail = async (order: any) => {
+  try {
+    // Only update status if order is currently 'assigned'
+    if (order.status === 'assigned') {
+      // Update order status to 'preparing' when viewing details
+      const { error } = await supabase
+        .from('currency_orders')
+        .update({
+          status: 'preparing',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      if (error) {
+        console.error('Error updating order status:', error)
+        message.warning(`Xem chi tiết đơn #${order.order_number} nhưng không thể cập nhật trạng thái`)
+      } else {
+        message.success(`✅ Đã xem chi tiết và chuyển đơn #${order.order_number} sang trạng thái "Đang chuẩn bị"`)
+        // Reload data to reflect the status change
+        await loadDeliveryOrders()
+      }
+    } else {
+      message.info(`Xem chi tiết đơn #${order.order_number} (trạng thái: ${getStatusLabel(order.status, order.order_type)})`)
+    }
+
+    console.log('View order detail:', order)
+    // TODO: Implement view detail modal here
+
+  } catch (error) {
+    console.error('Error in handleDeliveryViewDetail:', error)
+    message.error(`Có lỗi xảy ra khi xem chi tiết đơn #${order.order_number}`)
+  }
+}
+
+// Helper function to get status label in Vietnamese
+const getStatusLabel = (status: string, orderType?: string) => {
+  const statusLabels: { [key: string]: string } = {
+    draft: 'Nháp',
+    pending: 'Chờ xử lý',
+    assigned: 'Đã phân công',
+    preparing: 'Đang chuẩn bị',
+    ready: 'Sẵn sàng giao',
+    delivering: orderType === 'PURCHASE' ? 'Đang nhận' : 'Đang giao',
+    delivered: orderType === 'PURCHASE' ? 'Đã nhận hàng' : 'Đã giao hàng', // Different text based on order type
+    completed: 'Hoàn thành',
+    cancelled: 'Hủy bỏ',
+    failed: 'Thất bại'
+  }
+  return statusLabels[status] || status
 }
 
 const handleDeliveryUpdateStatus = async (order: any, newStatus: string) => {
   try {
-    const { error } = await supabase
-      .from('currency_orders')
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString()
+    // Handle purchase order completion with proper WAC calculation
+    if (order.order_type === 'PURCHASE' && newStatus === 'completed') {
+      // Use the new WAC-optimized function for purchase orders
+      const { data, error } = await supabase.rpc('complete_purchase_order_wac', {
+        p_order_id: order.id,
+        p_completed_by: order.assigned_to
       })
-      .eq('id', order.id)
 
-    if (error) {
-      message.error('Không thể cập nhật trạng thái')
-      return
+      if (error) {
+        throw new Error(`Không thể hoàn thành đơn mua: ${error.message}`)
+      }
+
+      if (data && data.success) {
+        const dataInfo = data.data || {}
+        message.success(`✅ Đơn mua #${order.order_number} đã hoàn thành! WAC cập nhật từ ${dataInfo.old_average_cost || 0} → ${dataInfo.new_average_cost || 0}. Tồn kho: ${dataInfo.new_quantity || 0}`)
+      } else {
+        throw new Error(data?.error || 'Hoàn thành đơn mua thất bại')
+      }
+    }
+    // Handle sell order cancellation with inventory rollback
+    else if (order.order_type === 'SELL' && newStatus === 'cancelled') {
+      // Get current user ID
+      const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+      if (profileError) {
+        throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
+      }
+
+      // Use the cancel sell order function with inventory rollback
+      const { data, error } = await supabase.rpc('cancel_sell_order_with_inventory_rollback', {
+        p_order_id: order.id,
+        p_user_id: profileData
+      })
+
+      if (error) {
+        throw new Error(`Không thể hủy đơn bán: ${error.message}`)
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        message.success(`✅ Đơn bán #${order.order_number} đã được hủy và đã hoàn trả inventory thành công!`)
+      } else {
+        throw new Error(data?.[0]?.message || 'Hủy đơn bán thất bại')
+      }
+    }
+    else {
+      // Simple status update for other cases
+      const { error } = await supabase
+        .from('currency_orders')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      if (error) {
+        message.error('Không thể cập nhật trạng thái')
+        return
+      }
+
+      message.success(`Đã cập nhật trạng thái đơn #${order.order_number} thành công`)
     }
 
-    message.success(`Đã cập nhật trạng thái đơn #${order.order_number} thành công`)
     // Reload data
     await loadDeliveryOrders()
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating order status:', error)
-    message.error('Có lỗi xảy ra khi cập nhật trạng thái')
+    message.error(error.message || 'Có lỗi xảy ra khi cập nhật trạng thái')
   }
+}
+
+const handleDeliveryFinalizeOrder = (order: any) => {
+  selectedOrderForCompletion.value = order
+  showOrderCompletionModal.value = true
+}
+
+const handleOrderCompletionCompleted = async () => {
+  // Reload delivery orders to show updated status
+  await loadDeliveryOrders()
+}
+
+
+// Proof upload handler
+const handleProofUploaded = async (data: { orderId: string; proofs: any }) => {
+  console.log('Proof uploaded for order:', data.orderId)
+
+  // Refresh the delivery orders to show updated proofs
+  await loadDeliveryOrders()
+
+  message.success('Bằng chứng đã được tải lên và cập nhật thành công!')
 }
 
 // History handlers
@@ -673,22 +869,10 @@ const resetAllForms = () => {
 const loadTransactionHistory = async () => {
   loadingHistory.value = true
   try {
+    // Since some relationships don't exist in the schema, we'll use manual joins
     const { data, error } = await supabase
       .from('currency_orders')
-      .select(`
-        *,
-        currency_attribute:currency_attribute_id (
-          id,
-          code,
-          name,
-          type
-        ),
-        channel:channel_id (
-          id,
-          code,
-          name
-        )
-      `)
+      .select('*')
       .in('status', ['completed', 'cancelled']) // Only show completed and cancelled orders
       .order('created_at', { ascending: false })
       .limit(100) // Increase limit since we're showing all games
@@ -699,7 +883,92 @@ const loadTransactionHistory = async () => {
       return
     }
 
-    transactionHistory.value = data || []
+    // Manual joins for related data since relationships don't exist in schema
+    const ordersWithData = []
+    if (data && data.length > 0) {
+      // Collect all unique IDs for batch queries
+      const currencyIds = [...new Set(data.map(order => order.currency_attribute_id).filter(Boolean))]
+      const channelIds = [...new Set(data.map(order => order.channel_id).filter(Boolean))]
+      const employeeIds = [...new Set(data.map(order => order.assigned_to).filter(Boolean))]
+      const gameAccountIds = [...new Set(data.map(order => order.game_account_id).filter(Boolean))]
+      const partyIds = [...new Set(data.map(order => order.party_id).filter(Boolean))]
+
+      // Collect unique game codes and server codes for name lookup
+      const gameCodes = [...new Set(data.map(order => order.game_code).filter(Boolean))]
+      const serverCodes = [...new Set(data.map(order => order.server_attribute_code).filter(Boolean))]
+
+      // Batch fetch all related data
+      const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
+        currencyIds.length > 0 ? supabase
+          .from('attributes')
+          .select('id, code, name, type')
+          .in('id', currencyIds) : Promise.resolve({ data: [] }),
+
+        channelIds.length > 0 ? supabase
+          .from('channels')
+          .select('id, code, name')
+          .in('id', channelIds) : Promise.resolve({ data: [] }),
+
+        employeeIds.length > 0 ? supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', employeeIds) : Promise.resolve({ data: [] }),
+
+        gameAccountIds.length > 0 ? supabase
+          .from('game_accounts')
+          .select('id, account_name, game_code, purpose')
+          .in('id', gameAccountIds) : Promise.resolve({ data: [] }),
+
+        partyIds.length > 0 ? supabase
+          .from('parties')
+          .select('id, name, type')
+          .in('id', partyIds) : Promise.resolve({ data: [] }),
+
+        // Fetch game names
+        gameCodes.length > 0 ? supabase
+          .from('attributes')
+          .select('code, name')
+          .eq('type', 'GAME')
+          .in('code', gameCodes) : Promise.resolve({ data: [] }),
+
+        // Fetch server names (handle both SERVER and GAME_SERVER types)
+        serverCodes.length > 0 ? supabase
+          .from('attributes')
+          .select('code, name')
+          .in('type', ['SERVER', 'GAME_SERVER'])
+          .in('code', serverCodes) : Promise.resolve({ data: [] })
+      ])
+
+      // Create lookup maps
+      const currencyMap = new Map(currencyData.data?.map(item => [item.id, item]) || [])
+      const channelMap = new Map(channelData.data?.map(item => [item.id, item]) || [])
+      const employeeMap = new Map(employeeData.data?.map(item => [item.id, item]) || [])
+      const gameAccountMap = new Map(gameAccountData.data?.map(item => [item.id, item]) || [])
+      const partyMap = new Map(partyData.data?.map(item => [item.id, item]) || [])
+
+      // Create lookup maps for game and server names
+      const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
+      const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
+
+      // Combine data
+      for (const order of data) {
+        const combinedOrder = {
+          ...order,
+          currency_attribute: order.currency_attribute_id ? currencyMap.get(order.currency_attribute_id) || null : null,
+          channel: order.channel_id ? channelMap.get(order.channel_id) || null : null,
+          assigned_employee: order.assigned_to ? employeeMap.get(order.assigned_to) || null : null,
+          game_account: order.game_account_id ? gameAccountMap.get(order.game_account_id) || null : null,
+          party: order.party_id ? partyMap.get(order.party_id) || null : null,
+          // Add game and server names
+          game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
+          server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null
+        }
+
+        ordersWithData.push(combinedOrder)
+      }
+    }
+
+    transactionHistory.value = ordersWithData
   } catch (error) {
     console.error('Error in loadTransactionHistory:', error)
     message.error('Có lỗi xảy ra khi tải lịch sử giao dịch')

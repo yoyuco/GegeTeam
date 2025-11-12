@@ -153,10 +153,23 @@ function showFatalError(message: string) {
 if (typeof window !== 'undefined') {
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
-    errorLogger.log(event.reason, {
-      type: 'unhandledRejection',
-      phase: 'pre-startup',
-    })
+    // Completely suppress ResizeObserver errors since they're non-critical browser warnings
+    if (event.reason && event.reason.message &&
+        event.reason.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+      // Silently ignore ResizeObserver errors - they don't affect functionality
+      // Only log for debugging in development mode, but not in production
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('ResizeObserver loop suppressed (non-critical)', {
+          reason: event.reason.message,
+          phase: 'pre-startup'
+        })
+      }
+    } else {
+      errorLogger.log(event.reason, {
+        type: 'unhandledRejection',
+        phase: 'pre-startup',
+      })
+    }
 
     // Prevent default browser behavior
     event.preventDefault()
@@ -164,13 +177,28 @@ if (typeof window !== 'undefined') {
 
   // Handle global errors
   window.addEventListener('error', (event) => {
-    errorLogger.log(event.error || new Error(event.message), {
-      type: 'globalError',
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-      phase: 'pre-startup',
-    })
+    // Completely suppress ResizeObserver errors since they're non-critical browser warnings
+    if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+      // Silently ignore ResizeObserver errors - they don't affect functionality
+      // Only log for debugging in development mode, but not in production
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('ResizeObserver loop suppressed (non-critical)', {
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          phase: 'pre-startup'
+        })
+      }
+    } else {
+      errorLogger.log(event.error || new Error(event.message), {
+        type: 'globalError',
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        phase: 'pre-startup',
+      })
+    }
   }, { passive: true })
 }
 

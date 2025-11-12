@@ -227,12 +227,12 @@ async function loadEmergencyHistory() {
   try {
     // Since we don't have a dedicated emergency table yet,
     // we'll simulate with fallback assignments
+    // Get recent emergency reassignments from history
     const { data, error } = await supabase
-      .from('employee_shift_assignments')
+      .from('employee_shift_assignment_history')
       .select('*')
-      .eq('is_fallback', true)
-      .not('fallback_reason', 'is null')
-      .order('fallback_time', { ascending: false })
+      .eq('action_type', 'emergency')
+      .order('assigned_at', { ascending: false })
       .limit(50)
 
     if (error) throw error

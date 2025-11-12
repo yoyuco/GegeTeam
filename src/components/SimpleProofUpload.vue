@@ -1,6 +1,6 @@
 <template>
   <div class="proof-upload-section">
-    <label v-if="label" class="block text-sm font-medium text-gray-700 mb-2">{{ label }}</label>
+    <label v-if="label && !hideLabelIcon" class="block text-sm font-medium text-gray-700 mb-2">{{ label }}</label>
     <n-upload
       v-model:file-list="uploadFileList"
       :max="maxFiles"
@@ -98,17 +98,21 @@ interface Props {
   uploadPath?: string
   bucket?: string
   orderId?: string  // Accept order ID for direct upload
+  subPath?: string  // Sub-path within order folder (e.g., 'exchange', 'negotiation')
   autoUpload?: boolean  // Control auto-upload behavior
+  hideLabelIcon?: boolean  // Hide label and icon
 }
 
 const props = withDefaults(defineProps<Props>(), {
   label: '',
   maxFiles: 10,
   modelValue: () => [],
-  uploadPath: 'exchange-proofs',
+  uploadPath: 'currency/sale',
   bucket: 'work-proofs',
   orderId: '',
+  subPath: 'exchange',  // Default to 'exchange' for sell orders
   autoUpload: false,  // Default to false to prevent auto-upload
+  hideLabelIcon: false,  // Default to false to show label and icon
 })
 
 const emit = defineEmits(['update:modelValue', 'upload-complete'])
@@ -122,6 +126,14 @@ const uploadStatus = ref({
   success: false,
   error: false,
   message: '',
+})
+
+// Internal reactive state for orderId (more reliable than props)
+const internalOrderId = ref(props.orderId)
+
+// Watch for prop changes
+watch(() => props.orderId, (newValue) => {
+  internalOrderId.value = newValue
 })
 
 // Convert to NUpload format with writable computed for v-model
@@ -190,9 +202,8 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
   // Use the file ID from n-upload to avoid "no corresponding id" error
   const fileId = (file as any).id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 
-  // If autoUpload is disabled, just mark as finished and keep file locally
+  // If autoUpload is disabled, just store file locally without any processing
   if (!props.autoUpload) {
-    
     // Check if file already exists in list
     let fileIndex = fileList.value.findIndex((f) => f.id === fileId)
     if (fileIndex < 0) {
@@ -201,7 +212,7 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
         id: fileId,
         file: file.file as File,
         name: file.name,
-        status: 'finished',
+        status: 'pending', // Changed from 'finished' to 'pending'
       }
       fileList.value.push(newFileInfo)
     } else {
@@ -209,13 +220,12 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
       fileList.value[fileIndex] = {
         ...fileList.value[fileIndex],
         file: file.file as File,
-        status: 'finished',
+        status: 'pending', // Changed from 'finished' to 'pending'
       }
     }
 
-    // Mark as finished
+    // Mark as finished for UI but don't process upload
     if (onFinish) onFinish()
-
         return
   }
 
@@ -249,8 +259,8 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
     // Dynamic file path based on orderId availability
     let filePath = `${props.uploadPath}/${filename}`
     if (props.orderId) {
-      // If orderId provided, upload directly to order folder
-      filePath = `${props.uploadPath}/${props.orderId}/${filename}`
+      // If orderId provided, upload to order/subpath folder
+      filePath = `${props.uploadPath}/${props.orderId}/${props.subPath}/${filename}`
     }
 
     // Simulate progress for better UX
@@ -291,12 +301,10 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
       // Update global status
       uploadStatus.value = {
         uploading: false,
-        success: true,
+        success: false,  // Don't show success message
         error: false,
-        message: `${actualFile.name} đã được upload thành công`,
+        message: '',  // Clear message
       }
-
-      message.success(`${actualFile.name} upload thành công!`)
 
       // Call onFinish to let n-upload know the file is processed
       if (onFinish) {
@@ -307,8 +315,10 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
       const uploadedData = [
         {
           url: uploadResult.publicUrl,
-          name: actualFile.name,
           path: uploadResult.path,
+          type: props.subPath || 'exchange', // Use subPath as proof type
+          filename: actualFile.name,
+          uploaded_at: new Date().toISOString(),
         },
       ]
             emit('upload-complete', uploadedData)
@@ -368,7 +378,8 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
 }
 
 const handleFileChange = (_options: any) => {
-  // This might trigger the upload
+  // Disabled - do not trigger upload on file change when autoUpload=false
+  // Files are processed only when uploadFiles() is called explicitly
 }
 
 
@@ -404,7 +415,6 @@ const validateFile = (file: File): boolean => {
 
 // Expose method to upload files on demand
 const uploadFiles = async () => {
-  
   if (fileList.value.length === 0) {
     return []
   }
@@ -435,7 +445,13 @@ const uploadFiles = async () => {
         const timestamp = Date.now()
         const randomString = Math.random().toString(36).substring(2, 8)
         const filename = `${timestamp}-${randomString}-${fileInfo.file.name}`
-        const filePath = `${props.uploadPath}/${filename}`
+
+        // Dynamic file path based on orderId availability
+        let filePath = `${props.uploadPath}/${filename}`
+        if (internalOrderId.value) {
+          // If orderId provided, upload to order/subpath folder
+          filePath = `${props.uploadPath}/${internalOrderId.value}/${props.subPath}/${filename}`
+        }
 
         // Upload to Supabase
         const uploadResult = await uploadFile(fileInfo.file, filePath, props.bucket)
@@ -448,11 +464,11 @@ const uploadFiles = async () => {
 
           uploadResults.push({
             url: uploadResult.publicUrl,
-            name: fileInfo.name,
             path: uploadResult.path,
+            type: props.subPath || 'exchange', // Use subPath as proof type
+            filename: fileInfo.name,
+            uploaded_at: new Date().toISOString(),
           })
-
-          message.success(`${fileInfo.name} upload thành công!`)
         } else {
           throw new Error(uploadResult.error)
         }
@@ -465,11 +481,9 @@ const uploadFiles = async () => {
 
   uploadStatus.value = {
     uploading: false,
-    success: uploadResults.length > 0,
+    success: false,  // Don't show success message
     error: uploadResults.length === 0,
-    message: uploadResults.length > 0 ?
-      `Đã upload thành công ${uploadResults.length} file` :
-      'Upload thất bại',
+    message: '',  // Clear message
   }
 
   if (uploadResults.length > 0) {
@@ -488,7 +502,12 @@ const resetFiles = () => {
 
 defineExpose({
   uploadFiles,
-  resetFiles
+  resetFiles,
+  fileList,
+  // Expose orderId setter for parent to update
+  setOrderId: (orderId: string) => {
+    internalOrderId.value = orderId
+  }
 })
 </script>
 

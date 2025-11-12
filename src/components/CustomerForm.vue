@@ -514,8 +514,8 @@ const loadCustomers = async (channelId: string) => {
 
   customerLoading.value = true
   try {
-    const customers = await loadSuppliersOrCustomersByChannel(channelId, 'customer', props.gameCode)
-    customerOptions.value = customers
+        const customers = await loadSuppliersOrCustomersByChannel(channelId, 'customer', props.gameCode)
+        customerOptions.value = customers
   } catch (error) {
     console.error('Error loading customers:', error)
     customerOptions.value = []
@@ -575,10 +575,12 @@ watch(
   () => customerFormData.value?.channelId,
   async (newChannelId: string | null) => {
     if (newChannelId && (props.formMode === 'customer' || activeTab.value === 'customer')) {
-      await loadCustomers(newChannelId)
+      // Only load customers if we have a gameCode, or wait for gameCode to become available
+      if (props.gameCode) {
+        await loadCustomers(newChannelId)
+      }
     }
-  },
-  { immediate: true }
+  }
 )
 
 // Watch for customer search
@@ -588,10 +590,10 @@ watch(
     if (newSearch.length >= 2) {
       searchCustomers(newSearch)
     } else if (newSearch.length === 0) {
-      // Reload all customers when search is cleared
+      // Reload all customers when search is cleared - only if gameCode is available
       const channelId = customerFormData.value?.channelId
-      if (channelId) {
-        loadCustomers(channelId)
+      if (channelId && props.gameCode) {
+                loadCustomers(channelId)
       }
     }
   }

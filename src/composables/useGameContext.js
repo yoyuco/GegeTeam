@@ -256,12 +256,7 @@ export function useGameContext() {
     try {
       let query = supabase
         .from('game_accounts')
-        .select(
-          `
-          *,
-          manager:profiles(id, display_name)
-        `
-        )
+        .select('*')
         .eq('game_code', currentGame.value)
         .eq('server_attribute_code', currentServer.value)
 

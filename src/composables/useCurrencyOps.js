@@ -278,11 +278,6 @@ export function useCurrencyOps() {
   const performLeagueTransition = async (transitionData) => {
     console.warn('League transition is deprecated in server-based system')
     throw new Error('League transitions are not supported in server-based architecture')
-    // return await transitionLeague(
-      transitionData.fromLeagueId,
-      transitionData.toLeagueId,
-      transitionData.reason
-    )
   }
 
   // Discrepancy Management Functions

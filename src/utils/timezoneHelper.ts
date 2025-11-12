@@ -49,8 +49,28 @@ export function formatGMT7Date(date: Date | number): string {
  * @param date Date object or timestamp
  * @returns string Date string in Vietnamese format
  */
-export function formatGMT7Vietnamese(date: Date | number): string {
-  const targetDate = typeof date === 'number' ? new Date(date) : date
+export function formatGMT7Vietnamese(date: Date | number | string): string {
+  let targetDate: Date
+
+  if (typeof date === 'number') {
+    targetDate = new Date(date)
+  } else if (typeof date === 'string') {
+    // Handle string dates (YYYY-MM-DD format)
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // For date strings, treat as midnight GMT+7
+      const [year, month, day] = date.split('-').map(Number)
+      targetDate = new Date(year, month - 1, day)
+    } else {
+      targetDate = new Date(date)
+    }
+  } else {
+    targetDate = date
+  }
+
+  // Check if date is valid
+  if (isNaN(targetDate.getTime())) {
+    return 'Invalid date'
+  }
 
   // Convert to GMT+7
   const utcTime = targetDate.getTime() + (targetDate.getTimezoneOffset() * 60000)
