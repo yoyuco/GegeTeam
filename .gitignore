@@ -78,3 +78,8 @@ data_insert.sql.claude/settings.local.json
 /.serena/
 /WebGegeTeamtoolsmcp-vue-tools/
 tools/mcp-vue-tools/
+
+# Backup folders and archived files
+backup/
+production_full_backup.sql
+supabase/migrations_archive/
