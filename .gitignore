@@ -90,3 +90,6 @@ mcp-tools-specifications.json
 backup/
 production_full_backup.sql
 supabase/migrations_archive/
+
+# Staging schema exports
+staging-schema-export/
