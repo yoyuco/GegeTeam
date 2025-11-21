@@ -79,6 +79,13 @@ data_insert.sql.claude/settings.local.json
 /WebGegeTeamtoolsmcp-vue-tools/
 tools/mcp-vue-tools/
 
+# MCP discovery and configuration files
+complete-mcp-discovery.json
+context7.json
+mcp-tools-discovery.json
+mcp-system-config.json
+mcp-tools-specifications.json
+
 # Backup folders and archived files
 backup/
 production_full_backup.sql
