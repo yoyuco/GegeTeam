@@ -75,6 +75,20 @@
             </div>
             <label class="text-sm font-medium text-gray-700">Tổng tiền</label>
             <span class="text-red-500">*</span>
+            <!-- Exchange Rate Display with Price Warning -->
+            <div v-if="buyFormData.currencyId && buyFormData.quantity && buyFormData.totalPrice"
+                 :class="getPriceComparisonClass(buyFormData.currencyId, buyFormData.totalPrice / buyFormData.quantity)"
+                 class="ml-auto text-xs px-2 py-1 rounded-full border font-medium flex items-center gap-1">
+              1 {{ getCurrencyName(buyFormData.currencyId) }} = {{ formatCurrency(buyFormData.totalPrice / buyFormData.quantity) }}/{{ buyFormData.currencyCode }}
+              <!-- Warning Icon -->
+              <div v-if="priceComparisonData.warning_level === 'high'"
+                   class="w-3 h-3 bg-orange-100 rounded-full flex items-center justify-center"
+                   :title="priceComparisonData.comparison_message">
+                <svg class="w-2 h-2 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </div>
           </div>
           <div class="flex gap-2">
             <n-input-number
@@ -83,6 +97,7 @@
               placeholder="Nhập tổng tiền"
               size="large"
               class="flex-1"
+              @blur="validatePurchasePrice"
             />
             <n-select
               v-model:value="buyFormData.currencyCode"
@@ -92,6 +107,15 @@
               class="w-20"
               style="min-width: 80px; max-width: 100px;"
             />
+          </div>
+          <!-- Price Comparison Warning -->
+          <div v-if="priceComparisonData.warning_level === 'high' && priceComparisonData.has_inventory_pool"
+               class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-sm text-red-800 font-medium">
+              ⚠️ {{ priceComparisonData.price_difference_percent > 0 ? 'Giá cao hơn' : 'Giá thấp hơn' }}
+              {{ Math.abs(priceComparisonData.price_difference_percent).toFixed(1) }}% so với TB giá
+              ({{ formatCurrency(priceComparisonData.average_cost) }} {{ priceComparisonData.cost_currency }})
+            </p>
           </div>
         </div>
 
@@ -190,6 +214,11 @@
             </div>
             <label class="text-sm font-medium text-gray-700">Tổng tiền</label>
             <span class="text-red-500">*</span>
+            <!-- Exchange Rate Display -->
+            <div v-if="sellFormData.currencyId && sellFormData.quantity && sellFormData.totalPrice"
+                 class="ml-auto bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-200 font-medium">
+              1 {{ getCurrencyName(sellFormData.currencyId) }} = {{ formatCurrency(sellFormData.totalPrice / sellFormData.quantity) }}/{{ sellFormData.currencyCode }}
+            </div>
           </div>
           <div class="flex gap-2">
             <n-input-number
@@ -240,6 +269,104 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue'
 import { NSelect, NInputNumber, NInput } from 'naive-ui'
+import { supabase } from '@/lib/supabase'
+
+// Helper functions for exchange rate display
+const getCurrencyName = (currencyId: string) => {
+  const currency = currencyOptions.value.find((c: any) => c.value === currencyId)
+  return currency?.data?.name || currency?.data?.code || currency?.label || 'Unknown'
+}
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('vi-VN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: amount < 1 ? 4 : amount < 10 ? 2 : 0
+  }).format(amount)
+}
+
+// Price comparison reactive state
+const priceComparisonData = ref({
+  has_inventory_pool: false,
+  average_cost: 0,
+  cost_currency: '',
+  price_difference_percent: 0,
+  warning_level: 'no_data',
+  comparison_message: ''
+})
+
+// Price comparison methods
+const getPriceComparisonClass = (_currencyId: string, _unitPrice: number) => {
+  if (props.transactionType !== 'purchase') {
+    return 'bg-blue-100 text-blue-700 border-blue-200'
+  }
+
+  switch (priceComparisonData.value.warning_level) {
+    case 'high':
+      return 'bg-red-100 text-red-700 border-red-200'
+    case 'medium':
+      return 'bg-orange-100 text-orange-700 border-orange-200'
+    case 'low':
+      return 'bg-green-100 text-green-700 border-green-200'
+    default:
+      return 'bg-blue-100 text-blue-700 border-blue-200'
+  }
+}
+
+const validatePurchasePrice = async () => {
+  if (props.transactionType !== 'purchase') {
+    return
+  }
+
+  if (!buyFormData.value.currencyId || !buyFormData.value.quantity || !buyFormData.value.totalPrice) {
+    return
+  }
+
+  const unitPrice = buyFormData.value.totalPrice / buyFormData.value.quantity
+
+  if (!props.gameCode || !props.channelId) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('check_purchase_price_vs_inventory', {
+      p_game_code: props.gameCode,
+      p_server_attribute_code: props.serverCode || '',
+      p_currency_attribute_id: buyFormData.value.currencyId,
+      p_channel_id: props.channelId,
+      p_currency_code: buyFormData.value.currencyCode,
+      p_unit_price: unitPrice
+    })
+
+    if (!error && data && data.length > 0) {
+      priceComparisonData.value = {
+        ...data[0],
+        has_inventory_pool: data[0].has_inventory_pool
+      }
+    } else {
+      // Reset to no data state on error
+      priceComparisonData.value = {
+        has_inventory_pool: false,
+        average_cost: 0,
+        cost_currency: '',
+        price_difference_percent: 0,
+        warning_level: 'no_data',
+        comparison_message: ''
+      }
+    }
+  } catch (err) {
+    console.error('Error validating purchase price:', err)
+    // Reset to no data state on error
+    priceComparisonData.value = {
+      has_inventory_pool: false,
+      average_cost: 0,
+      cost_currency: '',
+      price_difference_percent: 0,
+      warning_level: 'no_data',
+      comparison_message: ''
+    }
+  }
+}
+
 
 // Props
 interface Props {
@@ -262,6 +389,9 @@ interface Props {
   loading?: boolean
   transactionType?: 'sale' | 'purchase'
   activeTab?: 'buy' | 'sell'
+  gameCode?: string
+  serverCode?: string
+  channelId?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -431,6 +561,17 @@ watch(
   () => buyFormData.value.currencyId,
   (newCurrencyId) => {
     emit('update:buyModelValue', { ...buyFormData.value, currencyId: newCurrencyId })
+    // Reset price comparison when currency changes
+    priceComparisonData.value = {
+      has_inventory_pool: false,
+      average_cost: 0,
+      cost_currency: '',
+      price_difference_percent: 0,
+      warning_level: 'no_data',
+      comparison_message: ''
+    }
+    // Validate price after reset
+    validatePurchasePrice()
   }
 )
 
@@ -438,6 +579,8 @@ watch(
   () => buyFormData.value.quantity,
   (newQuantity) => {
     emit('update:buyModelValue', { ...buyFormData.value, quantity: newQuantity })
+    // Validate price when quantity changes
+    validatePurchasePrice()
   }
 )
 
@@ -445,6 +588,8 @@ watch(
   () => buyFormData.value.totalPrice,
   (newPrice) => {
     emit('update:buyModelValue', { ...buyFormData.value, totalPrice: newPrice })
+    // Validate price when price changes
+    validatePurchasePrice()
   }
 )
 
@@ -452,6 +597,8 @@ watch(
   () => buyFormData.value.currencyCode,
   (newCurrencyCode) => {
     emit('update:buyModelValue', { ...buyFormData.value, currencyCode: newCurrencyCode })
+    // Validate price when currency code changes
+    validatePurchasePrice()
   }
 )
 
@@ -494,6 +641,29 @@ watch(
       [newCurrencyCode]: sellFormData.value.totalPrice || undefined
     })
   }
+)
+
+// Watch for context changes to reset price comparison
+watch(
+  [() => props.gameCode, () => props.serverCode, () => props.channelId],
+  ([newGameCode, newServerCode, newChannelId], [oldGameCode, oldServerCode, oldChannelId]) => {
+    // Only reset if any context value actually changed and has a value
+    if (
+      (newGameCode && newGameCode !== oldGameCode) ||
+      (newServerCode && newServerCode !== oldServerCode) ||
+      (newChannelId && newChannelId !== oldChannelId)
+    ) {
+      priceComparisonData.value = {
+        has_inventory_pool: false,
+        average_cost: 0,
+        cost_currency: '',
+        price_difference_percent: 0,
+        warning_level: 'no_data',
+        comparison_message: ''
+      }
+    }
+  },
+  { immediate: false }
 )
 
 

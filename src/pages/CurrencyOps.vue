@@ -14,7 +14,7 @@
             </div>
             <div>
               <h1 class="text-2xl font-bold">Vận hành Currency</h1>
-              <p class="text-green-100 text-sm mt-1">{{ contextString }}</p>
+              <p v-if="activeTab === 'exchange'" class="text-green-100 text-sm mt-1">{{ contextString }}</p>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -107,6 +107,12 @@
             />
           </svg>
           Giao nhận Currency
+          <span
+            v-if="assignedOrdersCount > 0"
+            class="ml-2 px-2 py-1 text-xs font-bold text-white bg-red-500 rounded-full"
+          >
+            {{ assignedOrdersCount }}
+          </span>
         </button>
         <button
           :class="[
@@ -189,7 +195,6 @@
                 />
               </svg>
               <h2 class="text-lg font-semibold text-gray-800">Giao nhận Currency</h2>
-            <p class="text-sm text-gray-600 mt-1">Các đơn đã được phân công tự động và đang chờ xử lý</p>
             </div>
 
             <DataListCurrency
@@ -198,13 +203,12 @@
               description="Xử lý các đơn hàng đã được hệ thống phân công cho nhân viên vận hành"
               :data="deliveryOrders"
               :loading="loadingDelivery"
-              @search="handleDeliverySearch"
-              @filter="handleDeliveryFilter"
               @export="handleDeliveryExport"
               @view-detail="handleDeliveryViewDetail"
               @update-status="handleDeliveryUpdateStatus"
               @finalize-order="handleDeliveryFinalizeOrder"
               @proof-uploaded="handleProofUploaded"
+              @process-inventory="handleProcessInventory"
               @refresh-data="loadDeliveryOrders"
             />
           </div>
@@ -238,10 +242,9 @@
               description="Xem lại các đơn đã hoàn thành và bị hủy"
               :data="transactionHistory"
               :loading="loadingHistory"
-              @search="handleHistorySearch"
-              @filter="handleHistoryFilter"
               @export="handleHistoryExport"
               @view-detail="handleHistoryViewDetail"
+              @refresh-data="loadTransactionHistory"
             />
           </div>
         </div>
@@ -283,8 +286,47 @@ import DataListCurrency from '@/components/currency/DataListCurrency.vue'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { useCurrency } from '@/composables/useCurrency.js'
 import { useInventory } from '@/composables/useInventory.js'
-import type { Currency, GameAccount } from '@/types/composables'
+import type { Currency, GameAccount, Channel } from '@/types/composables'
 import { supabase } from '@/lib/supabase'
+
+// Type definitions for currency orders
+interface CurrencyOrder {
+  id: string
+  order_number?: string
+  order_type?: string
+  status?: string
+  currency_attribute_id?: string
+  channel_id?: string
+  party_id?: string
+  assigned_to?: string
+  game_code?: string
+  server_attribute_code?: string
+  currency_attribute?: {
+    id: string
+    code: string
+    name: string
+    type?: string
+  } | null
+  channel?: {
+    id: string
+    code: string
+    name: string
+  } | null
+  party?: {
+    id: string
+    name?: string
+    type?: string
+  } | null
+  assigned_employee?: {
+    id: string
+    display_name?: string
+  } | null
+  game_account?: {
+    id: string
+    account_name?: string
+  } | null
+  [key: string]: any // Allow additional properties
+}
 
 // --- KHỞI TẠO ---
 const message = useMessage()
@@ -342,8 +384,7 @@ const loadCurrenciesForCurrentGame = async () => {
     const currencyIds = relationshipData?.map(rel => rel.child_attribute_id) || []
 
     if (currencyIds.length === 0) {
-      console.log('ℹ️ No currencies found for game:', currentGame.value)
-      console.log('✅ No currencies to load - this is normal for some games')
+      // No currencies found for game - this is normal for some games
       return
     }
 
@@ -392,7 +433,7 @@ const loadCurrenciesForCurrentGame = async () => {
 
 // --- TRẠNG THÁI (STATE) ---
 const isInventoryOpen = ref(false)
-const activeTab = ref('exchange')
+const activeTab = ref('delivery')
 const loadingAccounts = ref(false)
 const areCurrenciesLoading = ref(false)
 const isDataLoading = ref(false)
@@ -453,6 +494,11 @@ const accountOptions = computed(() => {
 
 
 
+// Assigned orders count for notification badge
+const assignedOrdersCount = computed(() => {
+  return deliveryOrders.value.filter(order => order.status === 'assigned').length
+})
+
 // --- METHODS ---
 // Load all necessary data
 const loadData = async () => {
@@ -462,9 +508,8 @@ const loadData = async () => {
 
     // Only load exchange-related data if we're on exchange tab
     if (activeTab.value === 'exchange') {
-      // First ensure game context is initialized
+      // Initialize and wait for game context
       await initializeFromStorage()
-      // Wait for game context to be available
       let retries = 0
       while ((!currentGame.value || !currentServer.value) && retries < 10) {
         await new Promise(resolve => setTimeout(resolve, 500))
@@ -477,17 +522,13 @@ const loadData = async () => {
 
       // Now initialize currency composable properly (same pattern as GameLeagueSelector)
       await initializeCurrency()
-      // Manual currency loading to ensure currencies are loaded
+      // Load currencies and accounts for exchange
       await loadCurrenciesForCurrentGame()
-      // Give a moment for reactive updates to propagate
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Load accounts for exchange functionality
+      await new Promise(resolve => setTimeout(resolve, 100)) // Allow reactive updates
       await loadAccounts()
     }
 
-    // Load delivery orders from database (for delivery tab)
-    // Always load delivery orders to ensure data is available
+    // Load delivery orders (always loaded for data availability)
     await loadDeliveryOrders()
 
     // Load transaction history (for history tab)
@@ -531,112 +572,81 @@ const handleExchangeReset = () => {
   message.info('Form đã được reset.')
 }
 
-// Load delivery orders from database
-// Note: This shows orders that have been automatically assigned by the system
-// to operation team members for processing. Shows all orders regardless of game/server.
+// Load delivery orders from database using RPC function with role-based access
 const loadDeliveryOrders = async () => {
   loadingDelivery.value = true
   try {
-    // Since some relationships don't exist in the schema, we'll use manual joins
+    // Get current user profile first - REQUIRED for security
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    if (profileError || !profileData) {
+      console.error('Authentication required:', profileError?.message || 'No profile data')
+      message.error('Bạn cần đăng nhập để xem danh sách đơn hàng')
+      return  // Dừng lại - không gọi RPC nếu không có auth
+    }
+
+    // Use the secure RPC function with role-based access
     const { data, error } = await supabase
-      .from('currency_orders')
-      .select('*')
-      .in('status', ['assigned', 'preparing', 'delivering', 'ready', 'delivered']) // Include delivered orders
-      .order('created_at', { ascending: false })
-      .limit(100) // Increase limit since we're showing all games
+      .rpc('get_currency_orders_v2_public', {
+        p_for_delivery: true,              // Filter for delivery-relevant statuses
+        p_limit: 100,                      // Get more orders for comprehensive view
+        p_current_profile_id: profileData   // REQUIRED: Valid profile ID for access control
+      })
 
     if (error) {
-      console.error('Error loading delivery orders:', error)
-      message.error('Không thể tải danh sách đơn hàng')
+      console.error('Error loading delivery orders via RPC:', error)
+      message.error('Không thể tải danh sách đơn hàng: ' + error.message)
       return
     }
 
-    // Manual joins for related data since relationships don't exist in schema
-    const ordersWithData = []
-    if (data && data.length > 0) {
-      // Collect all unique IDs for batch queries
-      const currencyIds = [...new Set(data.map(order => order.currency_attribute_id).filter(Boolean))]
-      const channelIds = [...new Set(data.map(order => order.channel_id).filter(Boolean))]
-      const employeeIds = [...new Set(data.map(order => order.assigned_to).filter(Boolean))]
-      const gameAccountIds = [...new Set(data.map(order => order.game_account_id).filter(Boolean))]
-      const partyIds = [...new Set(data.map(order => order.party_id).filter(Boolean))]
+    
+    // Collect unique game and server codes for name lookup
+    const gameCodes = [...new Set(data.map((order: any) => order.game_code).filter(Boolean))]
+    const serverCodes = [...new Set(data.map((order: any) => order.server_attribute_code).filter(Boolean))]
 
-      // Collect unique game codes and server codes for name lookup
-      const gameCodes = [...new Set(data.map(order => order.game_code).filter(Boolean))]
-      const serverCodes = [...new Set(data.map(order => order.server_attribute_code).filter(Boolean))]
+    // Fetch game and server names
+    const [gameData, serverData] = await Promise.all([
+      gameCodes.length > 0 ? supabase
+        .from('attributes')
+        .select('code, name')
+        .eq('type', 'GAME')
+        .in('code', gameCodes) : Promise.resolve({ data: [] }),
 
-      // Batch fetch all related data
-      const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
-        currencyIds.length > 0 ? supabase
-          .from('attributes')
-          .select('id, code, name, type')
-          .in('id', currencyIds) : Promise.resolve({ data: [] }),
+      serverCodes.length > 0 ? supabase
+        .from('attributes')
+        .select('code, name')
+        .in('type', ['SERVER', 'GAME_SERVER'])
+        .in('code', serverCodes) : Promise.resolve({ data: [] })
+    ])
 
-        channelIds.length > 0 ? supabase
-          .from('channels')
-          .select('id, code, name')
-          .in('id', channelIds) : Promise.resolve({ data: [] }),
+    // Create lookup maps
+    const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
+    const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
 
-        employeeIds.length > 0 ? supabase
-          .from('profiles')
-          .select('id, display_name')
-          .in('id', employeeIds) : Promise.resolve({ data: [] }),
+    // The RPC function returns pre-joined data, so we just need to format it
+    const formattedOrders = (data || []).map((order: CurrencyOrder) => ({
+      ...order,
+      // Add compatibility fields for existing component logic
+      currencyName: order.currency_attribute?.name || 'Unknown Currency',
+      currencyCode: order.currency_attribute?.code || 'Unknown',
+      channelName: order.channel?.name || 'Unknown Channel',
+      channelCode: order.channel?.code || 'Other',
+      customerName: order.party?.name || 'Direct Customer',
+      customer: order.party?.name || 'Direct Customer', // Added for table column mapping
+      employeeName: order.assigned_employee?.display_name || 'Unassigned',
+      // Add resolved names
+      game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
+      server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null,
+      // Flatten nested objects for templates
+      currency_attribute: order.currency_attribute,
+      channel: order.channel,
+      assigned_employee: order.assigned_employee,
+      game_account: order.game_account,
+      party: order.party
+    }))
 
-        gameAccountIds.length > 0 ? supabase
-          .from('game_accounts')
-          .select('id, account_name, game_code, purpose')
-          .in('id', gameAccountIds) : Promise.resolve({ data: [] }),
+    deliveryOrders.value = formattedOrders
 
-        partyIds.length > 0 ? supabase
-          .from('parties')
-          .select('id, name, type')
-          .in('id', partyIds) : Promise.resolve({ data: [] }),
-
-        // Fetch game names
-        gameCodes.length > 0 ? supabase
-          .from('attributes')
-          .select('code, name')
-          .eq('type', 'GAME')
-          .in('code', gameCodes) : Promise.resolve({ data: [] }),
-
-        // Fetch server names (handle both SERVER and GAME_SERVER types)
-        serverCodes.length > 0 ? supabase
-          .from('attributes')
-          .select('code, name')
-          .in('type', ['SERVER', 'GAME_SERVER'])
-          .in('code', serverCodes) : Promise.resolve({ data: [] })
-      ])
-
-      // Create lookup maps
-      const currencyMap = new Map(currencyData.data?.map(item => [item.id, item]) || [])
-      const channelMap = new Map(channelData.data?.map(item => [item.id, item]) || [])
-      const employeeMap = new Map(employeeData.data?.map(item => [item.id, item]) || [])
-      const gameAccountMap = new Map(gameAccountData.data?.map(item => [item.id, item]) || [])
-      const partyMap = new Map(partyData.data?.map(item => [item.id, item]) || [])
-
-      // Create lookup maps for game and server names
-      const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
-      const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
-
-      // Combine data
-      for (const order of data) {
-        const combinedOrder = {
-          ...order,
-          currency_attribute: order.currency_attribute_id ? currencyMap.get(order.currency_attribute_id) || null : null,
-          channel: order.channel_id ? channelMap.get(order.channel_id) || null : null,
-          assigned_employee: order.assigned_to ? employeeMap.get(order.assigned_to) || null : null,
-          game_account: order.game_account_id ? gameAccountMap.get(order.game_account_id) || null : null,
-          party: order.party_id ? partyMap.get(order.party_id) || null : null,
-          // Add game and server names
-          game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
-          server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null
-        }
-
-        ordersWithData.push(combinedOrder)
-      }
-    }
-
-    deliveryOrders.value = ordersWithData
   } catch (error) {
     console.error('Error in loadDeliveryOrders:', error)
     message.error('Có lỗi xảy ra khi tải đơn hàng')
@@ -645,16 +655,6 @@ const loadDeliveryOrders = async () => {
   }
 }
 
-// Delivery handlers
-const handleDeliverySearch = (query: string) => {
-  // Handle delivery search - will be implemented with real search logic
-  console.log('Search query:', query)
-}
-
-const handleDeliveryFilter = (filters: any) => {
-  // Handle delivery filter - will be implemented with real filter logic
-  console.log('Filters:', filters)
-}
 
 const handleDeliveryExport = () => {
   // TODO: Implement export functionality
@@ -670,6 +670,7 @@ const handleDeliveryViewDetail = async (order: any) => {
         .from('currency_orders')
         .update({
           status: 'preparing',
+          preparation_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id)
@@ -686,7 +687,7 @@ const handleDeliveryViewDetail = async (order: any) => {
       message.info(`Xem chi tiết đơn #${order.order_number} (trạng thái: ${getStatusLabel(order.status, order.order_type)})`)
     }
 
-    console.log('View order detail:', order)
+    // View order detail
     // TODO: Implement view detail modal here
 
   } catch (error) {
@@ -695,7 +696,7 @@ const handleDeliveryViewDetail = async (order: any) => {
   }
 }
 
-// Helper function to get status label in Vietnamese
+// Get status label in Vietnamese
 const getStatusLabel = (status: string, orderType?: string) => {
   const statusLabels: { [key: string]: string } = {
     draft: 'Nháp',
@@ -714,24 +715,41 @@ const getStatusLabel = (status: string, orderType?: string) => {
 
 const handleDeliveryUpdateStatus = async (order: any, newStatus: string) => {
   try {
-    // Handle purchase order completion with proper WAC calculation
-    if (order.order_type === 'PURCHASE' && newStatus === 'completed') {
-      // Use the new WAC-optimized function for purchase orders
-      const { data, error } = await supabase.rpc('complete_purchase_order_wac', {
-        p_order_id: order.id,
-        p_completed_by: order.assigned_to
-      })
+    // Note: Inventory processing is now handled by handleProcessInventory BEFORE status change
+    // This function now only handles cases where inventory doesn't need processing or was already processed
+
+    if (order.order_type === 'PURCHASE' && newStatus === 'delivered') {
+      // Status change to delivered for purchase order
+
+      // If order is already delivered, this might be a duplicate call
+      if (order.status === 'delivered') {
+        // Order is already delivered, no action needed
+        message.info(`Đơn mua #${order.order_number} đã ở trạng thái đã giao`)
+        return
+      }
+
+      // For purchase orders changing to delivered, inventory should have been processed already
+      // Purchase order marked as delivered (inventory should have been processed separately)
+      message.success(`✅ Đơn mua #${order.order_number} đã được giao hàng thành công!`)
+      return
+    }
+    // Handle purchase order final completion when status changes to completed
+    else if (order.order_type === 'PURCHASE' && newStatus === 'completed') {
+      // Just update status to completed, inventory already handled at delivered stage
+      const { error } = await supabase
+        .from('currency_orders')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
 
       if (error) {
-        throw new Error(`Không thể hoàn thành đơn mua: ${error.message}`)
+        message.error('Không thể cập nhật trạng thái hoàn thành')
+        return
       }
 
-      if (data && data.success) {
-        const dataInfo = data.data || {}
-        message.success(`✅ Đơn mua #${order.order_number} đã hoàn thành! WAC cập nhật từ ${dataInfo.old_average_cost || 0} → ${dataInfo.new_average_cost || 0}. Tồn kho: ${dataInfo.new_quantity || 0}`)
-      } else {
-        throw new Error(data?.error || 'Hoàn thành đơn mua thất bại')
-      }
+      message.success(`✅ Đơn mua #${order.order_number} đã được hoàn thành!`)
     }
     // Handle sell order cancellation with inventory rollback
     else if (order.order_type === 'SELL' && newStatus === 'cancelled') {
@@ -757,6 +775,75 @@ const handleDeliveryUpdateStatus = async (order: any, newStatus: string) => {
       } else {
         throw new Error(data?.[0]?.message || 'Hủy đơn bán thất bại')
       }
+    }
+    // Handle purchase order cancellation
+    else if (order.order_type === 'PURCHASE' && newStatus === 'cancelled') {
+      // Get current user ID
+      const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+      if (profileError) {
+        throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
+      }
+
+      // Use the cancel purchase order function
+      const { data, error } = await supabase.rpc('cancel_purchase_order', {
+        p_order_id: order.id,
+        p_user_id: profileData
+      })
+
+      if (error) {
+        throw new Error(`Không thể hủy đơn mua: ${error.message}`)
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        message.success(`✅ Đơn mua #${order.order_number} đã được hủy thành công!`)
+      } else {
+        throw new Error(data?.[0]?.message || 'Hủy đơn mua thất bại')
+      }
+    }
+    // Handle sell order delivery with inventory deduction
+    else if (order.order_type === 'SELL' && newStatus === 'delivered') {
+      // Get current user ID
+      const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+      if (profileError) {
+        throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
+      }
+
+      // Use the complete currency order function for sell orders when delivered
+      const { data, error } = await supabase.rpc('complete_currency_order_v1', {
+        p_order_id: order.id,
+        p_completed_by: profileData,
+        p_channel_id: order.channel_id
+      })
+
+      if (error) {
+        throw new Error(`Không thể cập nhật inventory cho đơn bán: ${error.message}`)
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        message.success(`✅ Đơn bán #${order.order_number} đã giao hàng! Inventory đã được cập nhật.`)
+      } else {
+        throw new Error(data?.[0]?.message || 'Cập nhật inventory cho đơn bán thất bại')
+      }
+    }
+    // Handle sell order final completion when status changes to completed
+    else if (order.order_type === 'SELL' && newStatus === 'completed') {
+      // Just update status to completed, inventory already handled at delivered stage
+      const { error } = await supabase
+        .from('currency_orders')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      if (error) {
+        message.error('Không thể cập nhật trạng thái hoàn thành')
+        return
+      }
+
+      message.success(`✅ Đơn bán #${order.order_number} đã được hoàn thành!`)
     }
     else {
       // Simple status update for other cases
@@ -794,27 +881,101 @@ const handleOrderCompletionCompleted = async () => {
   await loadDeliveryOrders()
 }
 
+// Process inventory for purchase orders before status change
+const handleProcessInventory = async (data: { order: any; currentStatus: string; targetStatus: string }) => {
+  const { order, currentStatus, targetStatus } = data
 
-// Proof upload handler
+  // Processing inventory for order
+  console.log('🔄 Processing inventory for order:', {
+    orderNumber: order.order_number,
+    currentStatus,
+    targetStatus,
+    orderType: order.order_type
+  })
+
+  try {
+    // Only process inventory for purchase orders
+    if (order.order_type !== 'PURCHASE') {
+      // Not a purchase order, skipping inventory processing
+      // Update status directly for non-purchase orders
+      await updateOrderStatus(order.id, targetStatus)
+      return
+    }
+
+    // Process inventory for purchase orders using RPC function
+
+    // Get current user profile
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+    if (profileError) {
+      throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
+    }
+
+    // Call confirm_purchase_order_receiving_v2 to create inventory pools (temporary fix for caching issue)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('confirm_purchase_order_receiving_v2', {
+      p_order_id: order.id,
+      p_completed_by: profileData
+    })
+
+    if (rpcError) {
+      console.error('❌ RPC confirm_purchase_order_receiving_v2 failed:', rpcError)
+
+      // Check for specific database schema errors
+      if (rpcError.message && rpcError.message.includes('relation "channels" does not exist')) {
+        console.error('🔴 DATABASE SCHEMA ERROR: channels table missing')
+        throw new Error('Lỗi schema database: Bảng "channels" không tồn tại. Vui lòng liên hệ admin để fix cấu trúc database.')
+      }
+
+      throw new Error(`Không thể xử lý inventory: ${rpcError.message}`)
+    }
+
+    if (rpcData && rpcData.length > 0 && rpcData[0].success) {
+      const dataInfo = rpcData[0].data || {}
+      // Inventory processed successfully
+      message.success(`✅ Xử lý inventory thành công! Chi phí trung bình: ${dataInfo.new_average_cost || 0}, Tồn kho: ${dataInfo.new_quantity || 0}`)
+    } else {
+      console.error('❌ RPC returned error:', rpcData)
+      throw new Error(rpcData?.[0]?.message || 'Xử lý inventory thất bại')
+    }
+
+    // Update status to delivered after successful inventory processing
+    await updateOrderStatus(order.id, targetStatus)
+
+  } catch (error: any) {
+    console.error('❌ Error processing inventory:', error)
+    message.error(`Lỗi xử lý inventory: ${error.message}`)
+
+    // Fallback: update status despite inventory processing error
+    await updateOrderStatus(order.id, targetStatus)
+  }
+}
+
+// Update order status
+const updateOrderStatus = async (orderId: string, newStatus: string) => {
+  const { error } = await supabase
+    .from('currency_orders')
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+
+  if (error) {
+    throw new Error(`Không thể cập nhật trạng thái: ${error.message}`)
+  }
+
+  // Reload data to show updated status
+  await loadDeliveryOrders()
+}
+
+
+// Handle proof upload
 const handleProofUploaded = async (data: { orderId: string; proofs: any }) => {
-  console.log('Proof uploaded for order:', data.orderId)
-
-  // Refresh the delivery orders to show updated proofs
+  // Refresh delivery orders to show updated proofs
   await loadDeliveryOrders()
 
   message.success('Bằng chứng đã được tải lên và cập nhật thành công!')
 }
 
-// History handlers
-const handleHistorySearch = (query: string) => {
-  // Handle history search - will be implemented with real search logic
-  console.log('History search query:', query)
-}
-
-const handleHistoryFilter = (filters: any) => {
-  // Handle history filter - will be implemented with real filter logic
-  console.log('History filters:', filters)
-}
 
 const handleHistoryExport = () => {
   // TODO: Implement export functionality
@@ -822,50 +983,34 @@ const handleHistoryExport = () => {
 }
 
 const handleHistoryViewDetail = (order: any) => {
-  // TODO: Implement view detail modal
-  console.log('View history order detail:', order)
   message.info(`Xem chi tiết đơn #${order.order_number}`)
 }
 
-// Game context handlers
 const onGameChanged = async (gameCode: string) => {
-  // Update useGameContext state
   currentGame.value = gameCode
-  currentServer.value = null // Reset server when game changes
-
-  // Reset all forms when game changes
+  currentServer.value = null
   resetAllForms()
-  // Data will be reloaded automatically by useGameContext
 }
 
 const onServerChanged = async (serverCode: string) => {
-  // Update useGameContext state
   currentServer.value = serverCode
-
-  // Reset all forms when server changes
   resetAllForms()
-  // Data will be reloaded automatically by useGameContext
 }
 
 const onContextChanged = async (context: { hasContext: boolean }) => {
   if (context.hasContext) {
     await loadData()
   } else {
-    // Reset forms when no context
     resetAllForms()
   }
 }
 
-// Reset all forms when game/league changes
+// Reset all forms (forms reset automatically via key props)
 const resetAllForms = () => {
-  // ExchangeCurrencyForm doesn't have resetForm method, it has internal reset logic
-  // The form will be reset automatically via key prop change when game changes
-  // No additional reset logic needed for ExchangeCurrencyForm
+  // Forms handle their own reset logic internally
 }
 
-// Load transaction history from database
-// Note: This shows only completed and cancelled orders for historical reference.
-// Shows all orders regardless of game/server.
+// Load transaction history from database (completed and cancelled orders only)
 const loadTransactionHistory = async () => {
   loadingHistory.value = true
   try {
@@ -883,7 +1028,7 @@ const loadTransactionHistory = async () => {
       return
     }
 
-    // Manual joins for related data since relationships don't exist in schema
+    // Manual joins for related data (relationships don't exist in schema)
     const ordersWithData = []
     if (data && data.length > 0) {
       // Collect all unique IDs for batch queries
@@ -893,11 +1038,11 @@ const loadTransactionHistory = async () => {
       const gameAccountIds = [...new Set(data.map(order => order.game_account_id).filter(Boolean))]
       const partyIds = [...new Set(data.map(order => order.party_id).filter(Boolean))]
 
-      // Collect unique game codes and server codes for name lookup
+      // Collect game and server codes for name lookup
       const gameCodes = [...new Set(data.map(order => order.game_code).filter(Boolean))]
       const serverCodes = [...new Set(data.map(order => order.server_attribute_code).filter(Boolean))]
 
-      // Batch fetch all related data
+      // Batch fetch related data
       const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
         currencyIds.length > 0 ? supabase
           .from('attributes')
@@ -945,8 +1090,6 @@ const loadTransactionHistory = async () => {
       const employeeMap = new Map(employeeData.data?.map(item => [item.id, item]) || [])
       const gameAccountMap = new Map(gameAccountData.data?.map(item => [item.id, item]) || [])
       const partyMap = new Map(partyData.data?.map(item => [item.id, item]) || [])
-
-      // Create lookup maps for game and server names
       const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
       const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
 
@@ -959,7 +1102,7 @@ const loadTransactionHistory = async () => {
           assigned_employee: order.assigned_to ? employeeMap.get(order.assigned_to) || null : null,
           game_account: order.game_account_id ? gameAccountMap.get(order.game_account_id) || null : null,
           party: order.party_id ? partyMap.get(order.party_id) || null : null,
-          // Add game and server names
+          // Add resolved names
           game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
           server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null
         }
@@ -1000,7 +1143,7 @@ const loadMockData = () => {
       currencyName: 'Exalted Orb',
       amount: 50,
       status: 'delivering',
-      channelName: 'Zalo',
+      channelName: 'Zalo', // cspell:disable-line
       deliveryInfo: 'Giao tại khu vực quận 3',
       notes: 'Đã xác nhận với khách hàng',
       createdAt: new Date().toISOString()

@@ -367,6 +367,66 @@ export function useCurrencyOps() {
     }
   }
 
+  // NEW: Complete Currency Order with Dynamic Function Selection
+  const completeCurrencyOrder = async (orderId, completionData) => {
+    try {
+      // First, get order details to determine order type
+      const { data: orderData, error: orderError } = await supabase
+        .from('currency_orders')
+        .select('order_type, channel_id')
+        .eq('id', orderId)
+        .single()
+
+      if (orderError) {
+        throw new Error(`Failed to get order details: ${orderError.message}`)
+      }
+
+      if (!orderData) {
+        throw new Error('Order not found')
+      }
+
+      let result
+      const { order_type, channel_id } = orderData
+
+      console.log(`📋 Completing ${order_type} order with channel: ${channel_id}`)
+
+      // Route to appropriate function based on order type
+      if (order_type === 'PURCHASE') {
+        // Use WAC function for purchase orders with inventory pool creation
+        const { data, error: rpcError } = await supabase.rpc('complete_purchase_order_wac', {
+          p_order_id: orderId,
+          p_completed_by: null, // Will use current profile
+          p_proofs: completionData.proofUrls,
+          p_channel_id: channel_id // Pass actual channel from order
+        })
+
+        if (rpcError) throw rpcError
+        result = data
+      } else {
+        // Use standard function for sell orders
+        const { data, error: rpcError } = await supabase.rpc('complete_currency_order_v1', {
+          p_order_id: orderId,
+          p_completion_notes: completionData.notes,
+          p_proof_urls: completionData.proofUrls,
+          p_actual_quantity: completionData.actualQuantity,
+          p_actual_unit_price_vnd: completionData.actualUnitPriceVnd,
+        })
+
+        if (rpcError) throw rpcError
+        result = data
+      }
+
+      // Refresh orders and inventory
+      await Promise.all([loadSellOrders(), loadPurchaseOrders(), detectDiscrepancies()])
+
+      return result
+    } catch (err) {
+      console.error('Error completing currency order:', err)
+      error.value = err.message
+      throw err
+    }
+  }
+
   // Initialize
   const initialize = async () => {
     loading.value = true
@@ -415,6 +475,10 @@ export function useCurrencyOps() {
     // Purchase Order Functions
     createPurchaseOrder,
     loadPurchaseOrders,
+
+    // Order Completion Functions
+    completeSellOrder,
+    completeCurrencyOrder,  // NEW: Dynamic order completion
 
     // Exchange Functions
     performExchange,

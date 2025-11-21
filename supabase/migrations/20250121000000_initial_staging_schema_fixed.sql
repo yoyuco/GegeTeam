@@ -190,9 +190,9 @@ CREATE TABLE IF NOT EXISTS currency_orders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     submitted_at TIMESTAMPTZ,
     assigned_at TIMESTAMPTZ,
-    started_preparation_at TIMESTAMPTZ,
+    preparation_at TIMESTAMPTZ,
     ready_at TIMESTAMPTZ,
-    started_delivery_at TIMESTAMPTZ,
+    delivery_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,
 

@@ -213,8 +213,6 @@ export function useGameContext() {
 
     try {
       const gameInfo = currentGameInfo.value
-      console.log('🔍 Debug gameInfo:', gameInfo)
-      console.log('🔍 Current game value:', currentGame.value)
 
       // Use correct currency prefix mapping
       let currencyType = null
@@ -225,8 +223,6 @@ export function useGameContext() {
       } else if (currentGame.value === 'DIABLO_4') {
         currencyType = 'CURRENCY_D4'
       }
-
-      console.log('🔍 Using currency type:', currencyType)
 
       const { data, error: fetchError } = await supabase
         .from('attributes')

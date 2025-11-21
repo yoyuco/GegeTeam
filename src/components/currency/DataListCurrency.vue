@@ -291,11 +291,188 @@
                   <span class="font-bold text-blue-600 text-lg">{{ selectedItem?.quantity || selectedItem?.amount || 0 }}</span>
                 </div>
                 <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Chi phí:</span>
-                  <span class="text-sm font-bold text-green-600">{{ selectedItem?.cost_amount || 0 }} {{ selectedItem?.cost_currency_code || 'VND' }}</span>
+                  <span class="text-sm text-gray-600">Game:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ getGameDisplayName(selectedItem) }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Server:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ getServerDisplayName(selectedItem) }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Kênh:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.channel?.name || selectedItem?.channelName || '-' }}</span>
                 </div>
               </div>
             </div>
+
+            <!-- Customer/Supplier Information -->
+            <div class="bg-white rounded-lg border border-gray-200 p-5">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Thông tin {{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp' : 'Khách hàng' }}
+              </h3>
+              <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">{{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp:' : 'Khách hàng:' }}</span>
+                  <span class="text-sm font-medium text-gray-900">{{
+                    selectedItem?.party?.name ||
+                    (selectedItem?.order_type === 'PURCHASE' ? selectedItem?.supplier_name || selectedItem?.customer_name : selectedItem?.customer_name || selectedItem?.customerName) ||
+                    '-'
+                  }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Game Account:</span>
+                  <span class="text-sm font-medium text-blue-600 font-mono">{{ selectedItem?.game_account?.account_name || selectedItem?.gameAccountName || '-' }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Nhân viên xử lý:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.assigned_employee?.display_name || selectedItem?.assignedEmployeeName || '-' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Financial Information -->
+            <div class="bg-white rounded-lg border border-gray-200 p-5">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Thông tin tài chính
+              </h3>
+              <div class="space-y-3">
+                <!-- Cost Information -->
+                <div v-if="selectedItem?.cost_amount" class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Chi phí:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.cost_amount, selectedItem.cost_currency_code || 'VND') }}</span>
+                </div>
+
+                <!-- Sale Information -->
+                <div v-if="selectedItem?.sale_amount" class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Giá bán:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.sale_amount, selectedItem.sale_currency_code || 'USD') }}</span>
+                </div>
+
+                <!-- Profit Information (for completed orders) -->
+                <div v-if="selectedItem?.profit_amount && selectedItem.status === 'completed'" class="border-t pt-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600">Lợi nhuận:</span>
+                    <span :class="selectedItem.profit_amount > 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'" class="text-sm">
+                      {{ formatCurrency(selectedItem.profit_amount, selectedItem.profit_currency_code || 'USD') }}
+                    </span>
+                  </div>
+                  <div v-if="selectedItem.profit_margin_percentage" class="flex justify-between items-center mt-2">
+                    <span class="text-sm text-gray-600">Biên lợi nhuận:</span>
+                    <span class="text-sm font-medium">{{ selectedItem.profit_margin_percentage.toFixed(2) }}%</span>
+                  </div>
+                </div>
+
+                <!-- Exchange Rate Information -->
+                <div v-if="selectedItem?.cost_to_sale_exchange_rate" class="border-t pt-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600">Tỷ giá (Cost→Sale):</span>
+                    <span class="text-sm font-medium text-gray-900">{{ selectedItem.cost_to_sale_exchange_rate.toFixed(4) }}</span>
+                  </div>
+                  <div class="flex justify-between items-center mt-1">
+                    <span class="text-xs text-gray-500">Ngày áp dụng:</span>
+                    <span class="text-xs text-gray-600">{{ selectedItem.exchange_rate_date || '-' }}</span>
+                  </div>
+                </div>
+
+                <!-- Foreign Currency Information (for exchange orders) -->
+                <div v-if="selectedItem?.exchange_type !== 'none' && selectedItem?.foreign_amount" class="border-t pt-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600">Tiền tệ đối ứng:</span>
+                    <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.foreign_amount, selectedItem.foreign_currency_code || 'USD') }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Information -->
+            <div class="bg-white rounded-lg border border-gray-200 p-5">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Thông tin bổ sung
+              </h3>
+              <div class="space-y-3">
+                <!-- Game Tag/Delivery Info -->
+                <div v-if="selectedItem?.delivery_info">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-600">{{ selectedItem.order_type === 'PURCHASE' ? 'ID Game mua:' : 'ID Game bán:' }}</span>
+                    <n-button
+                      v-if="selectedItem.delivery_info && selectedItem.delivery_info !== '-'"
+                      size="tiny"
+                      type="primary"
+                      ghost
+                      @click="handleCopyGameTag"
+                      class="text-xs"
+                    >
+                      <template #icon>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </template>
+                      Copy
+                    </n-button>
+                  </div>
+                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
+                    {{ selectedItem.delivery_info }}
+                  </p>
+                </div>
+
+                <!-- Notes -->
+                <div v-if="selectedItem?.notes">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-600">Ghi chú:</span>
+                    <n-button
+                      v-if="selectedItem.notes && selectedItem.notes !== '-'"
+                      size="tiny"
+                      type="primary"
+                      ghost
+                      @click="handleCopyNotes"
+                      class="text-xs"
+                    >
+                      <template #icon>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </template>
+                      Copy
+                    </n-button>
+                  </div>
+                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
+                    {{ selectedItem.notes }}
+                  </p>
+                </div>
+
+                <!-- Priority and Deadline -->
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Độ ưu tiên:</span>
+                  <span :class="getPriorityBadgeClass(selectedItem?.priority_level)" class="px-2 py-1 rounded-full text-xs font-medium">
+                    {{ getPriorityLabel(selectedItem?.priority_level) }}
+                  </span>
+                </div>
+
+                <div v-if="selectedItem?.deadline_at" class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Deadline:</span>
+                  <span class="text-sm font-medium text-red-600">{{ new Date(selectedItem.deadline_at).toLocaleString('vi-VN') }}</span>
+                </div>
+
+                <!-- Exchange Type -->
+                <div v-if="selectedItem?.exchange_type !== 'none'" class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Loại trao đổi:</span>
+                  <span class="text-sm font-medium text-gray-900">{{ getExchangeTypeLabel(selectedItem.exchange_type) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column -->
+          <div class="space-y-4">
 
             <!-- Assignment Information -->
             <div class="bg-white rounded-lg border border-gray-200 p-5">
@@ -318,85 +495,207 @@
                   <span class="text-sm text-gray-600">Kênh:</span>
                   <span class="text-sm font-medium text-gray-900">{{ selectedItem?.channel?.name || selectedItem?.channelName || '-' }}</span>
                 </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-sm text-gray-600">Inventory Pool:</span>
+                  <span class="text-sm font-medium text-blue-600 font-mono">{{ selectedItem?.inventory_pool_id ? '#' + selectedItem.inventory_pool_id.slice(0, 8) : '-' }}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Right Column -->
-          <div class="space-y-4">
-            <!-- Customer/Supplier Information -->
+            <!-- Timeline Information -->
             <div class="bg-white rounded-lg border border-gray-200 p-5">
               <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Thông tin {{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp' : 'Khách hàng' }}
+                Dòng thời gian
               </h3>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">{{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp:' : 'Khách hàng:' }}</span>
-                  <span class="text-sm font-medium text-gray-900">{{
-                    selectedItem?.party?.name ||
-                    (selectedItem?.order_type === 'PURCHASE' ? selectedItem?.supplier_name || selectedItem?.customer_name : selectedItem?.customer_name || selectedItem?.customerName) ||
-                    '-'
-                  }}</span>
+
+              <!-- Visual Timeline -->
+              <div class="relative">
+                <!-- Progress Segments between completed steps -->
+                <div class="absolute left-6 top-8 w-0.5">
+                  <!-- From start to center of first completed step -->
+                  <template v-if="selectedItem?.assigned_at">
+                    <div class="w-full bg-green-500" style="height: 24px; top: 0px;"></div>
+                  </template>
+
+                  <!-- Between centers of consecutive completed steps -->
+                  <template v-if="selectedItem?.assigned_at && selectedItem?.preparation_at">
+                    <!-- From center of Assignment (24px) to center of Preparation (96px) -->
+                    <div class="w-full bg-green-500" style="height: 72px; top: 24px;"></div>
+                  </template>
+
+                  <template v-if="selectedItem?.preparation_at && selectedItem?.delivery_at">
+                    <!-- From center of Preparation (96px) to center of Delivery (168px) -->
+                    <div class="w-full bg-green-500" style="height: 72px; top: 96px;"></div>
+                  </template>
+
+                  <template v-if="selectedItem?.delivery_at && selectedItem?.completed_at">
+                    <!-- From center of Delivery (168px) to center of Completion (240px) -->
+                    <div class="w-full bg-green-500" style="height: 72px; top: 168px;"></div>
+                  </template>
+
+                  <!-- Current status indicator (pulsing blue) - centered at next step -->
+                  <template v-if="selectedItem?.assigned_at && !selectedItem?.preparation_at">
+                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 48px;"></div>
+                  </template>
+                  <template v-else-if="selectedItem?.preparation_at && !selectedItem?.delivery_at">
+                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 120px;"></div>
+                  </template>
+                  <template v-else-if="selectedItem?.delivery_at && !selectedItem?.completed_at">
+                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 192px;"></div>
+                  </template>
                 </div>
-                <div v-if="props.modelType === 'delivery'">
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Game:</span>
-                    <span class="text-sm font-medium text-gray-900">{{ selectedItem?.game_name || selectedItem?.game_code || selectedItem?.gameCode || '-' }}</span>
+
+              <!-- Timeline Events -->
+                <div class="space-y-6">
+                  <!-- Assignment -->
+                  <div class="flex items-start gap-4">
+                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('assigned')">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <h4 class="text-sm font-medium text-gray-900">Phân công</h4>
+                        <span v-if="selectedItem?.assigned_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.assigned_at) }}</span>
+                      </div>
+                      <p v-if="selectedItem?.assigned_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.assigned_at) }}</p>
+                      <p v-if="getTimeDifference('created_at', 'assigned_at')" class="text-xs text-blue-600 mt-1">
+                        {{ getTimeDifference('created_at', 'assigned_at') }} sau khi tạo đơn
+                      </p>
+                    </div>
                   </div>
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Server:</span>
-                    <span class="text-sm font-medium text-gray-900">{{ selectedItem?.server_name || selectedItem?.server_attribute_code || selectedItem?.serverCode || '-' }}</span>
+
+                  <!-- Preparation -->
+                  <div class="flex items-start gap-4">
+                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('preparation')">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <h4 class="text-sm font-medium text-gray-900">Chuẩn bị</h4>
+                        <span v-if="selectedItem?.preparation_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.preparation_at) }}</span>
+                      </div>
+                      <p v-if="selectedItem?.preparation_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.preparation_at) }}</p>
+                      <p v-if="getTimeDifference('assigned_at', 'preparation_at')" class="text-xs text-blue-600 mt-1">
+                        {{ getTimeDifference('assigned_at', 'preparation_at') }} sau khi phân công
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Delivery -->
+                  <div class="flex items-start gap-4">
+                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('delivery')">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <h4 class="text-sm font-medium text-gray-900">{{ selectedItem?.order_type === 'PURCHASE' ? 'Nhận hàng' : 'Giao hàng' }}</h4>
+                        <span v-if="selectedItem?.delivery_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.delivery_at) }}</span>
+                      </div>
+                      <p v-if="selectedItem?.delivery_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.delivery_at) }}</p>
+                      <p v-if="getTimeDifference('preparation_at', 'delivery_at')" class="text-xs text-blue-600 mt-1">
+                        {{ getTimeDifference('preparation_at', 'delivery_at') }} sau khi chuẩn bị
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Completion -->
+                  <div class="flex items-start gap-4">
+                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('completed')">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <h4 class="text-sm font-medium text-gray-900">Hoàn thành</h4>
+                        <span v-if="selectedItem?.completed_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.completed_at) }}</span>
+                      </div>
+                      <p v-if="selectedItem?.completed_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.completed_at) }}</p>
+                      <p v-if="getTimeDifference('delivery_at', 'completed_at')" class="text-xs text-blue-600 mt-1">
+                        {{ getTimeDifference('delivery_at', 'completed_at') }} sau khi giao hàng
+                      </p>
+                      <div v-if="selectedItem?.completed_at && selectedItem?.assigned_at" class="mt-2 pt-2 border-t border-gray-100">
+                        <p class="text-xs font-medium text-green-600">
+                          ⏱️ Tổng thời gian xử lý: {{ getTimeDifference('assigned_at', 'completed_at') }}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Additional Information -->
-            <div v-if="props.modelType === 'delivery'" class="bg-white rounded-lg border border-gray-200 p-5">
+            <!-- Proof Information (for History Tab) -->
+            <div v-if="props.modelType === 'history' && selectedItem?.proofs && Object.keys(selectedItem.proofs).length > 0" class="bg-white rounded-lg border border-gray-200 p-5">
               <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Thông tin bổ sung
+                By chứng đính kèm
               </h3>
+
+              <!-- Show all proofs from the JSONB array -->
               <div class="space-y-3">
-                <div>
-                  <div class="flex justify-between items-center mb-1">
-                    <span class="text-sm text-gray-600">Thông tin giao hàng:</span>
-                    <n-button
-                      v-if="selectedItem?.delivery_info || selectedItem?.deliveryInfo"
-                      size="tiny"
-                      type="primary"
-                      ghost
-                      @click="handleCopyDeliveryInfo"
-                      class="text-xs"
-                    >
-                      <template #icon>
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </template>
-                      Copy
-                    </n-button>
+                <div v-if="Array.isArray(selectedItem.proofs)" class="grid grid-cols-2 gap-3">
+                  <div
+                    v-for="(proof, index) in selectedItem.proofs"
+                    :key="index"
+                    class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-medium text-gray-700">
+                        {{ proof.type || 'Bằng chứng' }} {{ index + 1 }}
+                      </span>
+                      <span v-if="proof.uploaded_at" class="text-xs text-gray-500">
+                        {{ new Date(proof.uploaded_at).toLocaleDateString('vi-VN') }}
+                      </span>
+                    </div>
+
+                    <div v-if="proof.url" class="space-y-2">
+                      <div v-if="isImageFile(proof.url)" class="cursor-pointer" @click="viewImage(proof.url)">
+                        <img
+                          :src="getImageUrl(proof.url)"
+                          :alt="proof.type || 'Proof image'"
+                          class="w-full h-24 object-cover rounded border border-gray-300 hover:border-blue-400 transition-colors"
+                        />
+                        <p class="text-xs text-blue-600 mt-1 text-center">Click để xem lớn</p>
+                      </div>
+
+                      <div v-else class="flex items-center justify-between">
+                        <span class="text-xs text-gray-600 truncate flex-1 mr-2">{{ getFileName(proof.url) }}</span>
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          ghost
+                          @click="downloadFile(proof.url)"
+                        >
+                          <template #icon>
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </template>
+                          Tải
+                        </n-button>
+                      </div>
+                    </div>
+
+                    <div v-if="proof.uploaded_by" class="text-xs text-gray-500 mt-2">
+                      Người tải: {{ proof.uploaded_by }}
+                    </div>
                   </div>
-                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded">{{ selectedItem?.delivery_info || selectedItem?.deliveryInfo || '-' }}</p>
                 </div>
-                <div>
-                  <span class="text-sm text-gray-600">Ghi chú:</span>
-                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded">{{ selectedItem?.notes || '-' }}</p>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Độ ưu tiên:</span>
-                  <span :class="getPriorityBadgeClass(selectedItem?.priority_level)" class="px-2 py-1 rounded-full text-xs font-medium">
-                    {{ getPriorityLabel(selectedItem?.priority_level) }}
-                  </span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Deadline:</span>
-                  <span class="text-sm font-medium text-red-600">{{ selectedItem?.deadline_at ? new Date(selectedItem.deadline_at).toLocaleString('vi-VN') : '-' }}</span>
+
+                <div v-else class="text-sm text-gray-500 italic">
+                  Không có bằng chứng nào được tải lên
                 </div>
               </div>
             </div>
@@ -435,7 +734,7 @@
             <n-button
               type="primary"
               size="large"
-              :disabled="!selectedProofFiles.length"
+              :disabled="!canConfirmDelivery"
               :loading="uploading"
               @click="handleConfirmDelivery"
               block
@@ -450,6 +749,112 @@
           </div>
 
           </div>
+      </div>
+    </n-modal>
+
+    <!-- Cancel Order Modal -->
+    <n-modal v-model:show="showCancelModal" :style="{ width: '600px' }" preset="card">
+      <template #header>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Hủy đơn hàng</h2>
+            <p class="text-sm text-gray-500">{{ selectedOrderToCancel?.order_number || '#' + selectedOrderToCancel?.id?.slice(0, 8) }}</p>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="selectedOrderToCancel" class="space-y-6">
+        <!-- Order Summary -->
+        <div class="bg-gray-50 p-4 rounded-lg">
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Thông tin đơn hàng</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-600">Loại:</span>
+              <span class="font-medium">{{ selectedOrderToCancel.order_type === 'PURCHASE' ? 'Mua hàng' : 'Bán hàng' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Currency:</span>
+              <span class="font-medium">{{ selectedOrderToCancel.currency_attribute?.name || selectedOrderToCancel.currencyName || '-' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Số lượng:</span>
+              <span class="font-medium">{{ selectedOrderToCancel.quantity || selectedOrderToCancel.amount || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cancellation Reason -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Lý do hủy <span class="text-red-500">*</span>
+          </label>
+          <n-input
+            v-model:value="cancelReason"
+            type="textarea"
+            :rows="4"
+            placeholder="Nhập lý do hủy đơn hàng..."
+            size="large"
+            :maxlength="500"
+            show-count
+          />
+        </div>
+
+        <!-- Upload Proof Images -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Tải lên bằng chứng hủy đơn (nếu có)
+          </label>
+          <SimpleProofUpload
+            ref="cancelProofUploadRef"
+            :max-files="3"
+            v-model="cancelProofFiles"
+            :auto-upload="false"
+          />
+        </div>
+
+        <!-- Confirmation Checkbox -->
+        <div class="flex items-start gap-3">
+          <input
+            v-model="cancelConfirmed"
+            type="checkbox"
+            id="cancelConfirm"
+            class="mt-1 w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+          />
+          <label for="cancelConfirm" class="text-sm text-gray-700">
+            Tôi xác nhận muốn hủy đơn hàng này và chịu trách nhiệm về quyết định này.
+          </label>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3 pt-4 border-t">
+          <n-button
+            @click="showCancelModal = false"
+            size="large"
+            class="flex-1"
+          >
+            Quay lại
+          </n-button>
+          <n-button
+            type="error"
+            size="large"
+            :disabled="!cancelReason.trim() || !cancelConfirmed || cancellingOrder"
+            :loading="cancellingOrder"
+            @click="handleConfirmCancel"
+            class="flex-1"
+          >
+            <template #icon>
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </template>
+            Xác nhận hủy đơn
+          </n-button>
+        </div>
       </div>
     </n-modal>
 
@@ -489,6 +894,8 @@ interface Emits {
   (e: 'update-status', item: any, status: string): void
   (e: 'finalize-order', item: any): void
   (e: 'proof-uploaded', data: { orderId: string; proofs: any }): void
+  (e: 'process-inventory', data: { order: any; currentStatus: string; targetStatus: string }): void
+  (e: 'refresh-data'): void
 }
 
 const emit = defineEmits<Emits>()
@@ -503,6 +910,14 @@ const showDetailModal = ref(false)
 const selectedItem = ref<any>(null)
 const selectedProofFiles = ref<any[]>([])
 const uploading = ref(false)
+
+// Cancel order modal state
+const showCancelModal = ref(false)
+const selectedOrderToCancel = ref<any>(null)
+const cancelReason = ref('')
+const cancelProofFiles = ref<any[]>([])
+const cancelConfirmed = ref(false)
+const cancellingOrder = ref(false)
 
 const filters = ref<{
   status: string | null
@@ -531,7 +946,10 @@ const stats = computed(() => {
   if (props.modelType === 'delivery') {
     // For delivery tab: only show assigned and in-progress orders
     const assigned = data.filter(item => item.status === 'assigned').length
-    const inProgress = data.filter(item => item.status === 'in_progress').length
+    // "Đang xử lý" includes multiple statuses: preparing, ready, delivering
+    const inProgress = data.filter(item =>
+      ['preparing', 'ready', 'delivering'].includes(item.status)
+    ).length
     return { total, assigned, inProgress }
   } else {
     // For history tab: only show completed and cancelled
@@ -546,7 +964,10 @@ const statusOptions = computed(() => {
   if (props.modelType === 'delivery') {
     return [
       { label: 'Chờ xử lý', value: 'pending' },
-      { label: 'Đang giao / Đang nhận', value: 'delivering' },
+      { label: 'Đã phân công', value: 'assigned' },
+      { label: 'Đang chuẩn bị', value: 'preparing' },
+      { label: 'Sẵn sàng', value: 'ready' },
+      { label: 'Đang giao', value: 'delivering' },
       { label: 'Đã giao', value: 'delivered' },
       { label: 'Hủy bỏ', value: 'cancelled' }
     ]
@@ -561,17 +982,17 @@ const statusOptions = computed(() => {
 const typeOptions = computed(() => {
   if (props.modelType === 'delivery') {
     return [
-      { label: 'Mua currency', value: 'purchase' },
-      { label: 'Bán currency', value: 'sell' },
-      { label: 'Đổi currency', value: 'exchange' }
+      { label: 'Mua currency', value: 'PURCHASE' },
+      { label: 'Bán currency', value: 'SALE' },
+      { label: 'Đổi currency', value: 'EXCHANGE' }
     ]
   } else {
     return [
-      { label: 'Mua currency', value: 'purchase' },
-      { label: 'Bán currency', value: 'sell' },
-      { label: 'Đổi currency', value: 'exchange' },
-      { label: 'Nạp tiền', value: 'deposit' },
-      { label: 'Rút tiền', value: 'withdraw' }
+      { label: 'Mua currency', value: 'PURCHASE' },
+      { label: 'Bán currency', value: 'SALE' },
+      { label: 'Đổi currency', value: 'EXCHANGE' },
+      { label: 'Nạp tiền', value: 'DEPOSIT' },
+      { label: 'Rút tiền', value: 'WITHDRAW' }
     ]
   }
 })
@@ -594,19 +1015,19 @@ const tableColumns = computed(() => {
         render: (row: any) => {
           const orderType = row.order_type || row.type
           const colors: { [key: string]: string } = {
-            PURCHASE: 'blue',
-            SELL: 'green',
-            purchase: 'blue',
-            sell: 'green',
+            PURCHASE: 'green',
+            SALE: 'red',
+            purchase: 'green',
+            sale: 'red',
             exchange: 'purple',
             deposit: 'orange',
             withdraw: 'red'
           }
           const labels: { [key: string]: string } = {
             PURCHASE: 'Mua',
-            SELL: 'Bán',
+            SALE: 'Bán',
             purchase: 'Mua',
-            sell: 'Bán',
+            sale: 'Bán',
             exchange: 'Đổi',
             deposit: 'Nạp',
             withdraw: 'Rút'
@@ -667,28 +1088,12 @@ const tableColumns = computed(() => {
         }
       },
       {
-        title: 'Thông tin',
+        title: 'Game Tag',
         key: 'delivery_info',
-        width: 200,
+        width: 150,
         render: (row: any) => {
-          const deliveryInfo = row.delivery_info || ''
-          const notes = row.notes || ''
-          const combinedInfo = deliveryInfo && notes ? `${deliveryInfo} | ${notes}` : deliveryInfo || notes || '-'
-          return combinedInfo.length > 30 ? `${combinedInfo.substring(0, 30)}...` : combinedInfo
-        }
-      },
-      {
-        title: 'Bằng chứng',
-        key: 'proofs',
-        width: 120,
-        render: (row: any) => {
-          const proofs = row.proofs
-          const hasProof = proofs && (proofs.images && proofs.images.length > 0 || proofs.files && proofs.files.length > 0)
-          return h('div', { class: 'flex items-center gap-2' }, [
-            hasProof
-              ? h('span', { class: 'text-green-600 text-sm' }, '✓ Có')
-              : h('span', { class: 'text-red-600 text-sm' }, '✗ Chưa')
-          ])
+          const gameTag = row.delivery_info || row.deliveryInfo || '-'
+          return gameTag
         }
       },
       {
@@ -714,13 +1119,13 @@ const tableColumns = computed(() => {
               onClick: () => onFinalizeOrder(row)
             }, () => 'Hoàn tất'))
           }
-          // For all other statuses (except completed/cancelled): show "Hủy bỏ" button
-          else if (row.status !== 'completed' && row.status !== 'cancelled') {
+          // For all other statuses (except completed/cancelled/delivered): show "Hủy bỏ" button
+          else if (row.status !== 'completed' && row.status !== 'cancelled' && row.status !== 'delivered') {
             buttons.push(h(NButton, {
               size: 'small',
               type: 'error',
               ghost: true,
-              onClick: () => onUpdateStatus(row, 'cancelled')
+              onClick: () => handleCancelOrder(row)
             }, () => 'Hủy bỏ'))
           }
 
@@ -781,19 +1186,19 @@ const tableColumns = computed(() => {
       render: (row: any) => {
         const orderType = row.order_type || row.type
         const colors: { [key: string]: string } = {
-          PURCHASE: 'blue',
-          SELL: 'green',
-          purchase: 'blue',
-          sell: 'green',
+          PURCHASE: 'green',
+          SALE: 'red',
+          purchase: 'green',
+          sale: 'red',
           exchange: 'purple',
           deposit: 'orange',
           withdraw: 'red'
         }
         const labels: { [key: string]: string } = {
           PURCHASE: 'Mua',
-          SELL: 'Bán',
+          SALE: 'Bán',
           purchase: 'Mua',
-          sell: 'Bán',
+          sale: 'Bán',
           exchange: 'Đổi',
           deposit: 'Nạp',
           withdraw: 'Rút'
@@ -808,7 +1213,16 @@ const tableColumns = computed(() => {
       title: 'Khách hàng',
       key: 'customer',
       width: 150,
-      render: (row: any) => row.customer_name || row.customerName || row.customer?.name || '-'
+      render: (row: any) => {
+        // For purchase orders, show supplier name, for sell orders show customer name
+        const partyName = row.party?.name ||
+          (row.order_type === 'PURCHASE'
+            ? row.supplier_name || row.customer_name || row.customerName
+            : row.customer_name || row.customerName) ||
+          row.customer?.name ||
+          '-'
+        return partyName
+      }
     },
     {
       title: 'Currency',
@@ -826,6 +1240,15 @@ const tableColumns = computed(() => {
       }
     },
     {
+      title: 'Game Tag',
+      key: 'delivery_info',
+      width: 120,
+      render: (row: any) => {
+        const gameTag = row.delivery_info || row.deliveryInfo || '-'
+        return gameTag
+      }
+    },
+    {
       title: 'Số lượng',
       key: 'quantity',
       width: 120,
@@ -840,14 +1263,17 @@ const tableColumns = computed(() => {
       key: 'total_price',
       width: 120,
       render: (row: any) => {
-        const totalVND = row.total_price_vnd || 0
-        const totalUSD = row.total_price_usd || 0
-        if (totalUSD > 0) {
-          return `$${totalUSD.toLocaleString()}`
-        } else if (totalVND > 0) {
-          return `${totalVND.toLocaleString()}₫`
+        // Use cost_amount + cost_currency_code for purchase orders
+        // Use sale_amount + sale_currency_code for sale orders
+        if (row.order_type === 'PURCHASE') {
+          const amount = row.cost_amount || 0
+          const currency = row.cost_currency_code || 'VND'
+          return amount > 0 ? formatCurrency(amount, currency) : '-'
+        } else {
+          const amount = row.sale_amount || 0
+          const currency = row.sale_currency_code || 'USD'
+          return amount > 0 ? formatCurrency(amount, currency) : '-'
         }
-        return '-'
       }
     },
     {
@@ -917,8 +1343,24 @@ const filteredData = computed(() => {
     const query = searchQuery.value.toLowerCase()
     data = data.filter(item =>
       (item.id && item.id.toString().toLowerCase().includes(query)) ||
+      (item.order_number && item.order_number.toLowerCase().includes(query)) ||
+      // Search customer names from various possible fields
+      (item.party?.name && item.party.name.toLowerCase().includes(query)) ||
+      (item.customer_name && item.customer_name.toLowerCase().includes(query)) ||
       (item.customerName && item.customerName.toLowerCase().includes(query)) ||
-      (item.currencyName && item.currencyName.toLowerCase().includes(query))
+      (item.customer?.name && item.customer.name.toLowerCase().includes(query)) ||
+      // Search currency names
+      (item.currency_attribute?.name && item.currency_attribute.name.toLowerCase().includes(query)) ||
+      (item.currencyName && item.currencyName.toLowerCase().includes(query)) ||
+      // Search employee names
+      (item.assigned_employee?.display_name && item.assigned_employee.display_name.toLowerCase().includes(query)) ||
+      (item.employeeName && item.employeeName.toLowerCase().includes(query)) ||
+      // Search game and server codes
+      (item.game_code && item.game_code.toLowerCase().includes(query)) ||
+      (item.server_attribute_code && item.server_attribute_code.toLowerCase().includes(query)) ||
+      // Search channel names
+      (item.channel?.name && item.channel.name.toLowerCase().includes(query)) ||
+      (item.channelName && item.channelName.toLowerCase().includes(query))
     )
   }
 
@@ -926,19 +1368,33 @@ const filteredData = computed(() => {
   if (filters.value.status) {
     data = data.filter(item => item.status === filters.value.status)
   }
+  // Apply order type filter
   if (filters.value.type) {
-    data = data.filter(item => item.type === filters.value.type)
+    data = data.filter(item => item.order_type === filters.value.type)
   }
+  // Apply date range filter
   if (filters.value.dateRange && filters.value.dateRange.length === 2) {
     const [start, end] = filters.value.dateRange
     data = data.filter(item => {
-      const itemDate = new Date(item.createdAt).getTime()
+      const itemDate = new Date(item.created_at).getTime()
       return itemDate >= start && itemDate <= end
     })
   }
 
   pagination.value.itemCount = data.length
   return data
+})
+
+// Computed property for delivery confirmation button
+const canConfirmDelivery = computed(() => {
+  // Must have selected item and proof files
+  if (!selectedItem.value || selectedProofFiles.value.length === 0) {
+    return false
+  }
+
+  // Only allow confirmation for specific statuses
+  const allowedStatuses = ['assigned', 'preparing', 'ready', 'delivering']
+  return allowedStatuses.includes(selectedItem.value.status)
 })
 
 
@@ -959,6 +1415,210 @@ const getStatusLabel = (status: string, orderType?: string) => {
   return statusLabels[status] || status
 }
 
+// Timeline helper functions
+const formatTime = (dateString: string) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
+const getTimeDifference = (fromField: string, toField: string) => {
+  if (!selectedItem.value || !selectedItem.value[fromField] || !selectedItem.value[toField]) {
+    return null
+  }
+
+  const from = new Date(selectedItem.value[fromField])
+  const to = new Date(selectedItem.value[toField])
+  const diffMs = to.getTime() - from.getTime()
+
+  if (diffMs < 0) return null
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays > 0) {
+    return `${diffDays} ngày ${diffHours % 24} giờ`
+  } else if (diffHours > 0) {
+    return `${diffHours} giờ ${diffMinutes % 60} phút`
+  } else if (diffMinutes > 0) {
+    return `${diffMinutes} phút`
+  } else {
+    return 'vài giây'
+  }
+}
+
+const getTimelineStepClass = (step: string) => {
+  if (!selectedItem.value) return 'bg-gray-100 text-gray-400'
+
+  const isCompleted: { [key: string]: boolean } = {
+    assigned: !!selectedItem.value.assigned_at,
+    preparation: !!selectedItem.value.preparation_at,
+    delivery: !!selectedItem.value.delivery_at,
+    completed: !!selectedItem.value.completed_at
+  }
+
+  const isCurrent: { [key: string]: boolean } = {
+    assigned: !!selectedItem.value.assigned_at && !selectedItem.value.preparation_at,
+    preparation: !!selectedItem.value.preparation_at && !selectedItem.value.delivery_at,
+    delivery: !!selectedItem.value.delivery_at && !selectedItem.value.completed_at,
+    completed: !!selectedItem.value.completed_at
+  }
+
+  if (isCompleted[step]) {
+    return 'bg-green-500 text-white'
+  } else if (isCurrent[step]) {
+    return 'bg-blue-500 text-white'
+  } else {
+    return 'bg-gray-100 text-gray-400'
+  }
+}
+
+
+// Cache for game and server names to avoid repeated queries
+const gameNameCache = ref<Map<string, string>>(new Map())
+const serverNameCache = ref<Map<string, string>>(new Map())
+
+// Function to get game name from code
+const getGameNameFromCode = async (gameCode: string): Promise<string> => {
+  if (!gameCode) return '-'
+
+  // Check cache first
+  if (gameNameCache.value.has(gameCode)) {
+    const cached = gameNameCache.value.get(gameCode)!
+    return cached
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('attributes')
+      .select('name')
+      .eq('code', gameCode)
+      .eq('type', 'GAME')
+      .single()
+
+    if (error || !data) {
+      console.warn('Failed to fetch game name:', error)
+      gameNameCache.value.set(gameCode, gameCode) // Cache fallback
+      return gameCode
+    }
+    gameNameCache.value.set(gameCode, data.name)
+    return data.name
+  } catch (error) {
+    console.error('Error fetching game name:', error)
+    gameNameCache.value.set(gameCode, gameCode) // Cache fallback
+    return gameCode
+  }
+}
+
+// Function to get server name from code
+const getServerNameFromCode = async (serverCode: string): Promise<string> => {
+  if (!serverCode) return '-'
+
+  // Check cache first
+  if (serverNameCache.value.has(serverCode)) {
+    return serverNameCache.value.get(serverCode)!
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('attributes')
+      .select('name')
+      .eq('code', serverCode)
+      .eq('type', 'SERVER')
+      .single()
+
+    if (error || !data) {
+      console.warn('Failed to fetch server name:', error)
+      serverNameCache.value.set(serverCode, serverCode) // Cache fallback
+      return serverCode
+    }
+
+    serverNameCache.value.set(serverCode, data.name)
+    return data.name
+  } catch (error) {
+    console.error('Error fetching server name:', error)
+    serverNameCache.value.set(serverCode, serverCode) // Cache fallback
+    return serverCode
+  }
+}
+
+// Reactive display name functions
+const gameDisplayNames = ref<Map<string, string>>(new Map())
+const serverDisplayNames = ref<Map<string, string>>(new Map())
+
+// Functions to get display names from attributes
+const getGameDisplayName = (item: any) => {
+  if (!item) return '-'
+
+  // Check if name is already available (this should be set by CurrencyOps.vue)
+  if (item?.game_name) {
+    return item.game_name
+  }
+
+  // If we have game attribute with name, use it
+  if (item?.game_attribute?.name) {
+    return item.game_attribute.name
+  }
+
+  // Use cached name if available
+  const gameCode = item?.game_code
+
+  if (gameCode && gameDisplayNames.value.has(gameCode)) {
+    const cachedName = gameDisplayNames.value.get(gameCode)!
+    return cachedName
+  }
+
+  // Fetch name and cache it
+  if (gameCode) {
+    getGameNameFromCode(gameCode).then(name => {
+      gameDisplayNames.value.set(gameCode, name)
+    })
+  }
+
+  // Fallback to code while loading
+  return gameCode || '-'
+}
+
+const getServerDisplayName = (item: any) => {
+  if (!item) return '-'
+
+  // Check if name is already available (this should be set by CurrencyOps.vue)
+  if (item?.server_name) {
+    return item.server_name
+  }
+
+  // If we have server attribute with name, use it
+  if (item?.server_attribute?.name) {
+    return item.server_attribute.name
+  }
+
+  // Use cached name if available
+  const serverCode = item?.server_attribute_code
+
+  if (serverCode && serverDisplayNames.value.has(serverCode)) {
+    const cachedName = serverDisplayNames.value.get(serverCode)!
+    return cachedName
+  }
+
+  // Fetch name and cache it
+  if (serverCode) {
+    getServerNameFromCode(serverCode).then(name => {
+      serverDisplayNames.value.set(serverCode, name)
+    })
+  }
+
+  // Fallback to code while loading
+  return serverCode || '-'
+}
 
 const getPriorityLabel = (level: number) => {
   const priorityLabels: { [key: number]: string } = {
@@ -1178,6 +1838,54 @@ const getCurrencyType = (code: string) => {
   return 'MISC'
 }
 
+// Currency formatting function
+const formatCurrency = (amount: number | string, currency: string = 'VND') => {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+
+  // Format based on currency type
+  switch (currency.toUpperCase()) {
+    case 'VND':
+      // Vietnamese Dong: format with comma separators, no decimal places
+      return `${numAmount.toLocaleString('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      })} ₫`
+
+    case 'USD':
+      // US Dollar: format with comma separators, 2 decimal places
+      return `$${numAmount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`
+
+    case 'CNY':
+      // Chinese Yuan: format with comma separators, 2 decimal places
+      return `¥${numAmount.toLocaleString('zh-CN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`
+
+    case 'EUR':
+      // Euro: format with comma separators, 2 decimal places
+      return `€${numAmount.toLocaleString('de-DE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`
+
+    default:
+      // Default formatting: use Vietnamese locale for thousands separator
+      const formatted = numAmount.toLocaleString('vi-VN', {
+        minimumFractionDigits: currency === 'VND' ? 0 : 2,
+        maximumFractionDigits: currency === 'VND' ? 0 : 2
+      })
+
+      // Add currency symbol if not VND (which already has ₫)
+      return currency === 'VND' ? `${formatted} ₫` : `${formatted} ${currency}`
+  }
+}
+
+// Note: getCombinedDeliveryInfo function removed since modal now shows delivery_info and notes separately
+
 // Row key for table
 const rowKey = (row: any) => row.id
 
@@ -1217,20 +1925,16 @@ const onFinalizeOrder = (item: any) => {
   emit('finalize-order', item)
 }
 
-const handleCopyDeliveryInfo = async () => {
-  if (!selectedItem.value) return
-
+// Helper function to update order status and show message
+const updateOrderStatusAndShowMessage = async (copiedText: string, textType: string) => {
   try {
-    // Get delivery info text
-    const deliveryInfo = selectedItem.value?.delivery_info || selectedItem.value?.deliveryInfo || ''
-
     // Copy to clipboard
     if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(deliveryInfo)
+      await navigator.clipboard.writeText(copiedText)
     } else {
       // Fallback for older browsers
       const textArea = document.createElement('textarea')
-      textArea.value = deliveryInfo
+      textArea.value = copiedText
       document.body.appendChild(textArea)
       textArea.focus()
       textArea.select()
@@ -1240,30 +1944,42 @@ const handleCopyDeliveryInfo = async () => {
 
     // Update order status to 'delivering' if current status allows it
     const allowedStatuses = ['preparing', 'ready']
-    if (allowedStatuses.includes(selectedItem.value.status)) {
+    if (allowedStatuses.includes(selectedItem.value?.status)) {
       emit('update-status', selectedItem.value, 'delivering')
     }
 
     // Show success message
     const deliveringText = selectedItem.value?.order_type === 'PURCHASE' ? 'Đang nhận' : 'Đang giao'
-    message.success(`Đã copy thông tin giao hàng${allowedStatuses.includes(selectedItem.value.status) ? ` và chuyển sang trạng thái "${deliveringText}"` : ''}`)
+    message.success(`Đã copy ${textType}${allowedStatuses.includes(selectedItem.value?.status) ? ` và chuyển sang trạng thái "${deliveringText}"` : ''}`)
 
   } catch (error) {
-    console.error('Error copying delivery info:', error)
-    message.error('Không thể copy thông tin giao hàng')
+    console.error('Error copying:', error)
+    message.error(`Không thể copy ${textType}`)
   }
 }
 
+const handleCopyGameTag = async () => {
+  if (!selectedItem.value) return
+
+  const gameTagText = selectedItem.value?.delivery_info || selectedItem.value?.deliveryInfo || ''
+  await updateOrderStatusAndShowMessage(gameTagText, 'tên nhân vật/ID Game')
+}
+
+const handleCopyNotes = async () => {
+  if (!selectedItem.value) return
+
+  const notesText = selectedItem.value?.notes || ''
+  await updateOrderStatusAndShowMessage(notesText, 'thông tin giao hàng + Ghi chú')
+}
+
+// Legacy function for backward compatibility
+const handleCopyDeliveryInfo = handleCopyNotes
 
 
-// New handlers for integrated SimpleProofUpload component
-const handleProofUploadComplete = async (uploadedFiles: any[]) => {
-  console.log('Proof files uploaded via SimpleProofUpload:', uploadedFiles)
-  console.log('Current selectedProofFiles:', selectedProofFiles.value)
 
-  // Files are already uploaded by SimpleProofUpload component
-  // The component should have updated selectedProofFiles automatically
-  // Just log for debugging purposes
+// Handle proof upload completion
+const handleProofUploadComplete = async () => {
+  // Files are uploaded and cached by SimpleProofUpload component
 }
 
 const handleConfirmDelivery = async () => {
@@ -1278,9 +1994,12 @@ const handleConfirmDelivery = async () => {
     const order = selectedItem.value
     const orderNumber = order.order_number || `#${order.id?.slice(0, 8)}`
 
-    console.log('Processing files for order:', order.id)
-    console.log('Files to upload:', selectedProofFiles.value)
+    // Additional validation check
+    if (!order.id || !order.order_type || !order.status) {
+      throw new Error('Dữ liệu đơn hàng không hợp lệ')
+    }
 
+  
     // Upload files manually (work-proofs is bucket name, not part of path)
     const uploadPath = order.order_type === 'PURCHASE'
       ? `currency/purchase/${order.order_number}/delivery`
@@ -1300,8 +2019,6 @@ const handleConfirmDelivery = async () => {
       const randomString = Math.random().toString(36).substring(2, 8)
       const filename = `${timestamp}-${randomString}-${f.file.name}`
       const filePath = `${uploadPath}/${filename}`
-
-      console.log(`Uploading file ${index + 1}:`, f.name, 'to', filePath)
 
       const uploadResult = await uploadFile(f.file, filePath, 'work-proofs')
 
@@ -1356,145 +2073,148 @@ const handleConfirmDelivery = async () => {
     // Add new proofs
     const newProofs = [...mergedProofs, ...newProofFiles]
 
-    console.log('Upload completed successfully. Files uploaded:', newProofFiles.length)
-    console.log('Proof types in existing proofs:', existingProofs.map(p => p.type))
-    console.log('New proof type being added:', newProofType)
-    console.log('Final proofs count:', newProofs.length)
-
-    // Update the order in database with proofs and status
-    const updateData: any = {
-      proofs: newProofs,
-      updated_at: new Date().toISOString()
-    }
-
-    // Auto-update status to 'delivered' after successful proof upload
-    // Only if current status is 'assigned', 'delivering', 'ready', or 'preparing'
-    let statusChanged = false
-    if (['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
-      updateData.status = 'delivered'
-      statusChanged = true
-      console.log('Status will be updated from', order.status, 'to delivered')
-    } else {
-      console.log('Status will NOT be updated. Current status:', order.status, 'is not in allowed list')
-    }
-
-    const { error: updateError } = await supabase
-      .from('currency_orders')
-      .update(updateData)
-      .eq('id', order.id)
-
-    if (updateError) {
-      console.error('Error updating order with proofs:', updateError)
-      throw updateError
-    }
-
-    // Process inventory and transactions if order status changed to 'delivered'
-    let inventoryUpdateResult = null
-    console.log('=== Starting inventory update process ===')
-    console.log('Status changed:', statusChanged)
-    console.log('Order ID:', order.id)
-    console.log('Order Status:', order.status)
-    console.log('Order Type:', order.order_type)
-    console.log('Order Number:', order.order_number)
-
-    if (statusChanged) {
-      try {
-        // Get current user ID from profiles - handle both array and single return types
-        const { data: currentUserData, error: userError } = await supabase.rpc('get_current_profile_id')
-
-        if (userError) {
-          console.error('Error getting current user:', userError)
-          throw new Error(`Không thể lấy thông tin user: ${userError.message}`)
-        }
-
-        // Handle case where function returns array or single value
-        const currentUser = Array.isArray(currentUserData) ? currentUserData[0] : currentUserData
-
-        if (!currentUser) {
-          // Fallback: use assigned employee or create default system user
-          const fallbackUserId = order.assigned_to || '3c6f63c0-6cc5-4e04-9ccc-c5b92a8868dc' // Bot (auto) profile
-          console.log('Using fallback user ID:', fallbackUserId)
-          console.log('Calling process_delivery_confirmation_v2 with fallback order ID:', order.id, 'and user ID:', fallbackUserId)
-
-          // Call the process_delivery_confirmation_v2 function with fallback user
-          const { data: processResult, error: processError } = await supabase.rpc('process_delivery_confirmation_v2', {
-            p_order_id: order.id,
-            p_user_id: fallbackUserId
-          })
-
-          if (processError) {
-            console.error('Error processing delivery:', processError)
-            throw new Error(`Không thể cập nhật kho: ${processError.message}`)
-          }
-
-          inventoryUpdateResult = processResult
-        } else {
-          // Call the process_delivery_confirmation_v2 function with current user
-          console.log('Calling process_delivery_confirmation_v2 with order ID:', order.id, 'and user ID:', currentUser)
-          const { data: processResult, error: processError } = await supabase.rpc('process_delivery_confirmation_v2', {
-            p_order_id: order.id,
-            p_user_id: currentUser
-          })
-
-          if (processError) {
-            console.error('Error processing delivery:', processError)
-            throw new Error(`Không thể cập nhật kho: ${processError.message}`)
-          }
-
-          inventoryUpdateResult = processResult
-        }
-
-        console.log('Inventory update result:', inventoryUpdateResult)
-
-        // Show detailed debug information
-        if (inventoryUpdateResult && inventoryUpdateResult.debug) {
-          console.log('Debug info:', JSON.stringify(inventoryUpdateResult.debug, null, 2))
-        }
-
-      } catch (inventoryError: any) {
-        console.error('Inventory update error:', inventoryError)
-        // Don't fail the entire operation, but show warning
-        message.warning(`Đã cập nhật bằng chứng nhưng không thể cập nhật kho: ${inventoryError.message}`)
-        console.log('Full error details:', inventoryError)
+    // For SELL orders: Don't update proofs here - let the backend function handle it
+    // For PURCHASE orders: Update proofs normally
+    if (order.order_type !== 'SALE') {
+      // Upload proofs first
+      const updateData: any = {
+        proofs: newProofs,
+        updated_at: new Date().toISOString()
       }
-    }
 
-    // Update local data
-    if (selectedItem.value) {
-      selectedItem.value.proofs = newProofs
-      if (statusChanged) {
-        selectedItem.value.status = 'delivered'
+      const { error: proofUpdateError } = await supabase
+        .from('currency_orders')
+        .update(updateData)
+        .eq('id', order.id)
+
+      if (proofUpdateError) {
+        console.error('Error updating order with proofs:', proofUpdateError)
+        throw proofUpdateError
       }
+
+      // Update local data
+      if (selectedItem.value) {
+        selectedItem.value.proofs = newProofs
+      }
+
+      const successMessage = `✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber} thành công!`
+      message.success(successMessage)
+
+      // Emit event to refresh parent data
+      emit('proof-uploaded', { orderId: order.id, proofs: newProofs })
     }
 
-    // Reset files
+    // Reset files (for all order types)
     selectedProofFiles.value = []
 
-    let successMessage = `✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber} thành công!`
+    // Step 2: Process inventory BEFORE changing status (only for purchase orders)
+    if (order.order_type === 'PURCHASE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
+      // Emit a special event for inventory processing
+      emit('process-inventory', {
+        order: { ...order, proofs: newProofs },
+        currentStatus: order.status,
+        targetStatus: 'delivered'
+      })
 
-    // Add status change notification if applicable
-    if (statusChanged) {
-      const statusText = order.order_type === 'PURCHASE' ? 'Đã nhận hàng' : 'Đã giao hàng'
-      successMessage += ` Trạng thái đã được cập nhật thành "${statusText}".`
-
-      // Add inventory update info if available
-      if (inventoryUpdateResult && inventoryUpdateResult.success) {
-        const transactionTypeText = order.order_type === 'PURCHASE' ? 'nhập kho' : 'xuất kho'
-        const newQuantity = inventoryUpdateResult.data?.new_quantity || 0
-        const avgCost = inventoryUpdateResult.data?.new_average_cost || 0
-
-        successMessage += ` Đã ${transactionTypeText} ${order.quantity} currency (Tồn kho: ${newQuantity}, Giá TB: ${avgCost.toFixed(2)} ${order.cost_currency_code || 'VND'}).`
-      }
+      // Close modal after processing
+      showDetailModal.value = false
+      return
     }
 
-    message.success(successMessage)
+    // For SELL orders: Use delivery processing with profit calculation
+    if (order.order_type === 'SALE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
+      try {
+        // Get current user profile ID using existing function
+        const { data: profileId, error: profileError } = await supabase.rpc('get_current_profile_id')
 
-    // Emit event to refresh parent data
-    emit('proof-uploaded', { orderId: order.id, proofs: newProofs })
+        if (profileError || !profileId) {
+          throw new Error('Unable to get current user profile')
+        }
 
-    // Also emit status update if status changed
-    if (statusChanged) {
-      emit('update-status', order, 'delivered')
+        // Get delivery proof URL from new proofs
+        const deliveryProof = newProofFiles.find(proof => proof.type === 'delivery')
+        const deliveryProofUrl = deliveryProof?.url || newProofFiles[newProofFiles.length - 1]?.url
+
+        if (!deliveryProofUrl) {
+          throw new Error('Vui lòng tải lên bằng chứng giao hàng (bắt buộc)')
+        }
+
+        // Call the delivery processing function
+        const { data: processResult, error: processError } = await supabase.rpc(
+          'process_sell_order_delivery',
+          {
+            p_order_id: order.id,
+            p_delivery_proof_url: deliveryProofUrl,
+            p_user_id: profileId
+          }
+        )
+
+        if (processError) {
+          throw new Error(processError.message || 'Failed to process delivery')
+        }
+
+        if (!processResult[0]?.success) {
+          throw new Error(processResult[0]?.message || 'Delivery processing failed')
+        }
+
+        // Show profit information if available
+        const profitInfo = processResult[0]
+        let successMessage = `✅ Đã xử lý giao hàng đơn ${orderNumber} thành công`
+
+        if (profitInfo.profit_amount) {
+          successMessage += `\n💰 Lợi nhuận: $${Number(profitInfo.profit_amount).toFixed(2)} USD`
+        }
+
+        // Show fees breakdown if available
+        if (profitInfo.fees_breakdown && Array.isArray(profitInfo.fees_breakdown)) {
+          successMessage += `\n📊 Phí áp dụng: ${profitInfo.fees_breakdown.length} khoản phí`
+        }
+
+        message.success(successMessage)
+
+        // Update local status
+        if (selectedItem.value) {
+          selectedItem.value.status = 'delivered'
+          selectedItem.value.delivery_at = new Date().toISOString()
+          selectedItem.value.profit_amount = profitInfo.profit_amount
+          selectedItem.value.profit_currency_code = 'USD'
+        }
+
+        // Emit status update
+        emit('update-status', { ...order, status: 'delivered' }, 'delivered')
+
+        // Close modal after successful delivery processing
+        showDetailModal.value = false
+
+      } catch (deliveryError: any) {
+        console.error('Error processing delivery:', deliveryError)
+        throw new Error(`Lỗi xử lý giao hàng: ${deliveryError.message}`)
+      }
+    }
+    // For non-purchase orders or orders not eligible for inventory processing
+    // Just update status normally
+    else if (['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
+
+      const { error: statusUpdateError } = await supabase
+        .from('currency_orders')
+        .update({
+          status: 'delivered',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      if (statusUpdateError) {
+        console.error('Error updating order status:', statusUpdateError)
+        throw statusUpdateError
+      }
+
+      // Update local status
+      if (selectedItem.value) {
+        selectedItem.value.status = 'delivered'
+      }
+
+      // Emit status update
+      emit('update-status', { ...order, status: 'delivered' }, 'delivered')
     }
 
     // Close detail modal after successful confirmation
@@ -1505,6 +2225,182 @@ const handleConfirmDelivery = async () => {
     message.error(error.message || 'Không thể xác nhận giao/nhận hàng. Vui lòng thử lại.')
   } finally {
     uploading.value = false
+  }
+}
+
+// Cancel order functions
+const handleCancelOrder = (item: any) => {
+  selectedOrderToCancel.value = item
+  cancelReason.value = ''
+  cancelProofFiles.value = []
+  cancelConfirmed.value = false
+  showCancelModal.value = true
+}
+
+const handleConfirmCancel = async () => {
+  if (!selectedOrderToCancel.value || !cancelReason.value.trim()) {
+    message.error('Vui lòng nhập lý do hủy đơn hàng')
+    return
+  }
+
+  try {
+    cancellingOrder.value = true
+    const order = selectedOrderToCancel.value
+    const orderNumber = order.order_number || `#${order.id?.slice(0, 8)}`
+
+  
+    // Step 1: Upload proof files if any
+    let newProofsData: any[] = []
+    if (cancelProofFiles.value.length > 0) {
+      const uploadPath = order.order_type === 'PURCHASE'
+        ? `currency/purchase/${order.order_number}/cancel`
+        : `currency/sale/${order.order_number}/cancel`
+
+      // Import uploadFile function
+      const { uploadFile } = await import('@/lib/supabase')
+
+      // Upload all cancel proof files
+      const uploadPromises = cancelProofFiles.value.map(async (f) => {
+        if (!f.file) {
+          throw new Error(`File ${f.name} không có dữ liệu`)
+        }
+
+        // Create unique filename
+        const timestamp = Date.now()
+        const randomString = Math.random().toString(36).substring(2, 8)
+        const filename = `${timestamp}-${randomString}-${f.file.name}`
+        const filePath = `${uploadPath}/${filename}`
+
+  
+        const uploadResult = await uploadFile(
+          f.file,
+          filePath,
+          'work-proofs'
+        )
+
+        if (!uploadResult.success) {
+          throw new Error(`Lỗi upload file ${f.name}: ${uploadResult.error}`)
+        }
+
+        // Return proof object in correct format for JSONB storage
+        return {
+          url: uploadResult.publicUrl,
+          path: uploadResult.path,
+          type: 'cancel',
+          filename: f.file.name,
+          uploaded_at: new Date().toISOString()
+        }
+      })
+
+      newProofsData = await Promise.all(uploadPromises)
+    }
+
+    // Step 2: Combine all updates in a single query
+    const cancelNote = `HỦY ĐƠN: ${cancelReason.value.trim()}`
+
+    // Get existing proofs and add new cancel proofs
+    const existingProofs = Array.isArray(order.proofs) ? order.proofs : []
+    const updatedProofs = [...existingProofs, ...newProofsData]
+
+    // Update order in a single query
+    const { error: orderError } = await supabase
+      .from('currency_orders')
+      .update({
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        notes: order.notes ? `${order.notes}\n\n${cancelNote}` : cancelNote,
+        proofs: updatedProofs,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+
+    if (orderError) {
+      throw new Error(`Lỗi cập nhật trạng thái đơn: ${orderError.message}`)
+    }
+
+    // Step 3: Emit refresh event to parent (no status processing needed)
+    emit('refresh-data')
+
+    // Show success message
+    message.success(`Đã hủy đơn hàng ${orderNumber} thành công`)
+
+    // Close cancel modal
+    showCancelModal.value = false
+
+    // Reset form
+    cancelReason.value = ''
+    cancelProofFiles.value = []
+    cancelConfirmed.value = false
+    selectedOrderToCancel.value = null
+
+  } catch (error: any) {
+    console.error('Error cancelling order:', error)
+    message.error(error.message || 'Không thể hủy đơn hàng. Vui lòng thử lại.')
+  } finally {
+    cancellingOrder.value = false
+  }
+}
+
+// Helper function to get exchange type label
+const getExchangeTypeLabel = (exchangeType: string) => {
+  const labels: { [key: string]: string } = {
+    none: 'Không trao đổi',
+    buy_to_sell: 'Mua → Bán',
+    sell_to_buy: 'Bán → Mua',
+    deposit: 'Nạp tiền',
+    withdraw: 'Rút tiền',
+    exchange: 'Trao đổi'
+  }
+  return labels[exchangeType] || exchangeType
+}
+
+// File handling functions for proof display
+const isImageFile = (url: string) => {
+  if (!url) return false
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+  const extension = url.split('.').pop()?.toLowerCase()
+  return imageExtensions.includes('.' + (extension || ''))
+}
+
+const getFileName = (url: string) => {
+  if (!url) return 'Unknown file'
+  return url.split('/').pop() || url.split('\\').pop() || 'Unknown file'
+}
+
+const getImageUrl = (url: string) => {
+  if (!url) return ''
+  // If it's a full URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // If it's a Supabase storage path, get public URL
+  if (url.startsWith('currency/')) {
+    const { data: { publicUrl } } = supabase.storage
+      .from('currency')
+      .getPublicUrl(url)
+    return publicUrl
+  }
+  // Otherwise, return as is
+  return url
+}
+
+const viewImage = (url: string) => {
+  const imageUrl = getImageUrl(url)
+  if (imageUrl) {
+    window.open(imageUrl, '_blank')
+  }
+}
+
+const downloadFile = (url: string) => {
+  const fileUrl = getImageUrl(url)
+  if (fileUrl) {
+    const link = document.createElement('a')
+    link.href = fileUrl
+    link.download = getFileName(url)
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 }
 

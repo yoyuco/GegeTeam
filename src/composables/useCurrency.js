@@ -425,30 +425,7 @@ export function useCurrency() {
     }
   }
 
-  // Create currency sell order
-  const createSellOrder = async (orderData) => {
-    try {
-      const { data, error: rpcError } = await supabase.rpc('create_currency_sell_order_v1', {
-        p_game_account_id: orderData.gameAccountId,
-        p_currency_attribute_id: orderData.currencyId,
-        p_quantity: orderData.quantity,
-        p_unit_price_vnd: orderData.unitPriceVnd || 0,
-        p_unit_price_usd: orderData.unitPriceUsd || 0,
-        p_exchange_rate_vnd_per_usd: orderData.exchangeRate || 25700,
-        p_customer_name: orderData.customerName || '',
-        p_customer_contact: orderData.customerContact || '',
-        p_notes: orderData.notes || '',
-      })
-
-      if (rpcError) throw rpcError
-
-      return data
-    } catch (err) {
-      console.error('Error creating sell order:', err)
-      throw err
-    }
-  }
-
+  
   // Fulfill currency order
   const fulfillOrder = async (orderId, fulfillmentData) => {
     try {
@@ -679,7 +656,6 @@ export function useCurrency() {
     // RPC Functions
     getInventorySummary,
     recordPurchase,
-    createSellOrder,
     fulfillOrder,
     exchangeCurrency,
     payoutFarmer,

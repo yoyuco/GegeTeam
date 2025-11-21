@@ -4,10 +4,8 @@
   <div class="bg-white rounded-xl shadow-sm border border-gray-200">
       <!-- Tab Content -->
     <div class="p-6">
-      <!-- Customer Tab -->
       <div v-if="formMode === 'customer' || (!formMode && activeTab === 'customer')" class="space-y-6">
 
-        <!-- Channel Selection -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-pink-100 rounded flex items-center justify-center">
@@ -34,7 +32,6 @@
           />
         </div>
 
-        <!-- Customer Name -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-orange-100 rounded flex items-center justify-center">
@@ -51,7 +48,7 @@
             <span class="text-red-500">*</span>
           </div>
           <n-auto-complete
-            v-model:value="customerFormData.customerName"
+            v-model:value="customerNameValue"
             :options="customerOptions.map(opt => ({ label: opt.label, value: opt.label }))"
             :loading="customerLoading"
             placeholder="Nhập hoặc chọn khách hàng"
@@ -60,24 +57,28 @@
             clearable
             @update:value="(value) => {
               customerSearchText = value || ''
-              // Also update the customer data when selecting from dropdown
+
               const selected = customerOptions.find(opt => opt.label === value)
+
               if (selected) {
-                // Pre-fill contact info if available
-                if (selected.data.contact_info?.contact) {
-                  customerFormData.deliveryInfo = selected.data.contact_info.contact
+                const current = props.customerModelValue as any || { channelId: null, customerName: '', gameTag: '', deliveryInfo: '' }
+                const updated = {
+                  ...current,
+                  customerName: value,
+                  deliveryInfo: selected.data.contact_info?.deliveryInfo || current?.deliveryInfo || '',
+                  gameTag: selected.data.contact_info?.gameTag || current?.gameTag || ''
                 }
-                // Pre-fill game tag from parties contact_info (not customer_accounts)
-                const gameTag = getCustomerGameTag(selected.data, props.gameCode)
-                if (gameTag) {
-                  customerFormData.gameTag = gameTag
+                if (!current?.channelId) {
+                  updated.channelId = null
                 }
+                emit('update:customerModelValue', updated)
+              } else if (value && value.trim()) {
+                loadCustomerData(value.trim())
               }
             }"
           />
         </div>
 
-        <!-- Game Tag -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
@@ -94,14 +95,13 @@
             <span class="text-red-500">*</span>
           </div>
           <n-input
-            v-model:value="customerFormData.gameTag"
+            v-model:value="customerGameTagValue"
             :placeholder="gameCustomerInfoPlaceholder"
             size="large"
             class="w-full"
           />
         </div>
 
-        <!-- Delivery Info -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
@@ -117,7 +117,7 @@
             <label class="text-sm font-medium text-gray-700">Thông tin giao hàng</label>
           </div>
           <n-input
-            v-model:value="customerFormData.deliveryInfo"
+            v-model:value="customerDeliveryInfoValue"
             placeholder="Email, Discord, hoặc thông tin liên hệ khác"
             size="large"
             class="w-full"
@@ -125,10 +125,8 @@
         </div>
       </div>
 
-      <!-- Supplier Tab -->
       <div v-if="formMode === 'supplier' || (!formMode && activeTab === 'supplier')" class="space-y-6">
 
-        <!-- Channel Selection -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-pink-100 rounded flex items-center justify-center">
@@ -145,7 +143,7 @@
               <span class="text-red-500">*</span>
           </div>
           <n-select
-            v-model:value="supplierFormData.channelId"
+            v-model:value="supplierChannelIdValue"
             :options="supplierChannelOptions"
             placeholder="Chọn kênh mua (Facebook, Zalo...)"
             filterable
@@ -155,7 +153,6 @@
           />
         </div>
 
-        <!-- Supplier Name -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-orange-100 rounded flex items-center justify-center">
@@ -172,7 +169,7 @@
             <span class="text-red-500">*</span>
           </div>
           <n-auto-complete
-            v-model:value="supplierFormData.customerName"
+            v-model:value="supplierNameValue"
             :options="supplierOptions.map(opt => ({ label: opt.label, value: opt.label }))"
             :loading="supplierLoading"
             placeholder="Nhập hoặc chọn nhà cung cấp"
@@ -181,19 +178,28 @@
             clearable
             @update:value="(value) => {
               supplierSearchText = value || ''
-              // Also update the supplier data when selecting from dropdown
+
               const selected = supplierOptions.find(opt => opt.label === value)
+
               if (selected) {
-                // Pre-fill contact info if available
-                if (selected.data.contact_info?.contact) {
-                  supplierFormData.deliveryInfo = selected.data.contact_info.contact
+                const current = props.supplierModelValue as any || { channelId: null, supplierName: '', supplierContact: '', deliveryLocation: '' }
+                const updated = {
+                  ...current,
+                  supplierName: value,
+                  supplierContact: selected.data.contact_info?.contact || current?.supplierContact || '',
+                  deliveryLocation: selected.data.contact_info?.gameTag || current?.deliveryLocation || ''
                 }
+                if (!current?.channelId) {
+                  updated.channelId = null
+                }
+                emit('update:supplierModelValue', updated)
+              } else if (value && value.trim()) {
+                loadSupplierData(value.trim())
               }
             }"
           />
         </div>
 
-        <!-- Game Tag -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
@@ -210,14 +216,13 @@
             <span class="text-red-500">*</span>
           </div>
           <n-input
-            v-model:value="supplierFormData.gameTag"
+            v-model:value="supplierGameTagValue"
             :placeholder="gameCustomerInfoPlaceholder"
             size="large"
             class="w-full"
           />
         </div>
 
-        <!-- Contact Info -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
@@ -233,7 +238,7 @@
             <label class="text-sm font-medium text-gray-700">Thông tin liên hệ</label>
           </div>
           <n-input
-            v-model:value="supplierFormData.deliveryInfo"
+            v-model:value="supplierDeliveryInfoValue"
             placeholder="Email, SĐT, Zalo, hoặc thông tin liên hệ khác"
             size="large"
             class="w-full"
@@ -253,6 +258,7 @@ import {
   searchSuppliersOrCustomers,
   createSupplierOrCustomer,
   getCustomerGameTag,
+  loadPartyByNameType,
   type SupplierCustomerOption
 } from '@/composables/useSupplierCustomer'
 
@@ -272,9 +278,9 @@ interface Props {
   }
   supplierModelValue?: {
     channelId: string | null
-    customerName: string
-    gameTag: string
-    deliveryInfo: string
+    supplierName: string
+    supplierContact: string
+    deliveryLocation: string
   }
   channels?: Channel[]
   loading?: boolean
@@ -291,16 +297,16 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Emits
-const emit = defineEmits<{
-  'update:modelValue': [value: Props['modelValue']]
-  'update:customerModelValue': [value: Props['customerModelValue']]
-  'update:supplierModelValue': [value: Props['supplierModelValue']]
-  'update:activeTab': [value: 'customer' | 'supplier']
-  'customer-changed': [customer: { name: string } | null]
-  'game-tag-changed': [gameTag: string]
-  'supplier-changed': [supplier: { name: string } | null]
-  'supplier-game-tag-changed': [gameTag: string]
-}>()
+const emit = defineEmits([
+  'update:modelValue',
+  'update:customerModelValue',
+  'update:supplierModelValue',
+  'update:activeTab',
+  'customer-changed',
+  'game-tag-changed',
+  'supplier-changed',
+  'supplier-game-tag-changed'
+])
 
 // Reactive state
 const activeTab = ref<'customer' | 'supplier'>(props.activeTab)
@@ -318,43 +324,147 @@ const customerSearchText = ref('')
 // Form data
 const customerFormData = computed({
   get: () => {
-    // Use different props based on form mode
-    if (props.formMode === 'supplier') {
-      return props.supplierModelValue || props.modelValue || {
-        channelId: null,
-        customerName: '',
-        gameTag: '',
-        deliveryInfo: ''
-      }
-    }
-    return props.customerModelValue || props.modelValue || {
+        return props.customerModelValue || props.modelValue || {
       channelId: null,
       customerName: '',
       gameTag: '',
       deliveryInfo: ''
     }
   },
-  set: (value) => {
-    if (props.formMode === 'supplier') {
-      emit('update:supplierModelValue', value)
-    } else {
-      emit('update:customerModelValue', value)
-    }
+  set: (value: any) => {
+    emit('update:customerModelValue', value)
   },
 })
 
 const supplierFormData = computed({
-  get: () => props.supplierModelValue || props.modelValue || {
-    channelId: null,
-    customerName: '',
-    gameTag: '',
-    deliveryInfo: ''
+  get: () => {
+    const defaultValue = {
+      channelId: null,
+      supplierName: '',
+      supplierContact: '',
+      deliveryLocation: ''
+    }
+
+    const data = props.supplierModelValue || props.modelValue || defaultValue
+
+    // Handle both old field names and new field names for backward compatibility
+    if ('supplierName' in data) {
+      // New field names - use directly
+      return {
+        channelId: data.channelId,
+        supplierName: data.supplierName || '',
+        supplierContact: data.supplierContact || '',
+        deliveryLocation: data.deliveryLocation || ''
+      }
+    } else {
+      // Old field names (backward compatibility) - map to new field names
+      return {
+        channelId: data.channelId,
+        supplierName: data.customerName || '',
+        supplierContact: data.deliveryInfo || '',
+        deliveryLocation: data.gameTag || ''
+      }
+    }
   },
-  set: (value) => emit('update:supplierModelValue', value),
+  set: (value: any) => {
+    // Use the new field names directly when updating
+    const updatedValue = {
+      channelId: value.channelId,
+      supplierName: value.supplierName || '',
+      supplierContact: value.supplierContact || '',
+      deliveryLocation: value.deliveryLocation || ''
+    }
+    emit('update:supplierModelValue', updatedValue)
+  },
 })
 
 // Computed properties
 const loading = computed(() => props.loading)
+
+// Template-safe computed properties to avoid TypeScript union type issues
+const customerNameValue = computed({
+  get: () => {
+    const data = customerFormData.value as any
+    return data?.customerName || ''
+  },
+  set: (value: string) => {
+    const current = customerFormData.value as any
+    const updated = { ...current, customerName: value }
+    emit('update:customerModelValue', updated)
+  }
+})
+
+const customerGameTagValue = computed({
+  get: () => {
+    const data = customerFormData.value as any
+    return data?.gameTag || ''
+  },
+  set: (value: string) => {
+    const current = customerFormData.value as any
+    const updated = { ...current, gameTag: value }
+    emit('update:customerModelValue', updated)
+  }
+})
+
+const customerDeliveryInfoValue = computed({
+  get: () => {
+    const data = customerFormData.value as any
+    return data?.deliveryInfo || ''
+  },
+  set: (value: string) => {
+    const current = customerFormData.value as any
+    const updated = { ...current, deliveryInfo: value }
+    emit('update:customerModelValue', updated)
+  }
+})
+
+const supplierNameValue = computed({
+  get: () => {
+    const data = supplierFormData.value as any
+    return data?.supplierName || ''
+  },
+  set: (value: string) => {
+    const current = supplierFormData.value as any
+    const updated = { ...current, supplierName: value }
+    emit('update:supplierModelValue', updated)
+  }
+})
+
+const supplierGameTagValue = computed({
+  get: () => {
+    const data = supplierFormData.value as any
+    return data?.deliveryLocation || ''
+  },
+  set: (value: string) => {
+    const current = supplierFormData.value as any
+    const updated = { ...current, deliveryLocation: value }
+    emit('update:supplierModelValue', updated)
+  }
+})
+
+const supplierDeliveryInfoValue = computed({
+  get: () => {
+    const data = supplierFormData.value as any
+    return data?.supplierContact || ''
+  },
+  set: (value: string) => {
+    const current = supplierFormData.value as any
+    const updated = { ...current, supplierContact: value }
+    emit('update:supplierModelValue', updated)
+  }
+})
+
+const supplierChannelIdValue = computed({
+  get: () => {
+    const data = supplierFormData.value as any
+    return data?.channelId || null
+  },
+  set: (value: string | null) => {
+    const current = supplierFormData.value as any
+    const updated = { ...current, channelId: value }
+    emit('update:supplierModelValue', updated)
+  }
+})
 
 const customerChannelOptions = computed(() => {
   return (props.channels || [])
@@ -419,14 +529,14 @@ watch(activeTab, (newTab) => {
 
 // Watch for customer form changes and emit events
 watch(
-  () => customerFormData.value?.customerName,
+  () => customerNameValue.value,
   (newName: string) => {
     emit('customer-changed', newName ? { name: newName } : null)
   }
 )
 
 watch(
-  () => customerFormData.value?.gameTag,
+  () => customerGameTagValue.value,
   (newGameTag: string) => {
     emit('game-tag-changed', newGameTag || '')
   }
@@ -434,14 +544,14 @@ watch(
 
 // Watch for supplier form changes and emit events
 watch(
-  () => supplierFormData.value?.customerName,
+  () => supplierNameValue.value,
   (newName: string) => {
     emit('supplier-changed', newName ? { name: newName } : null)
   }
 )
 
 watch(
-  () => supplierFormData.value?.gameTag,
+  () => supplierGameTagValue.value,
   (newGameTag: string) => {
     emit('supplier-game-tag-changed', newGameTag || '')
   }
@@ -494,14 +604,58 @@ const createNewSupplier = async (name: string) => {
       name,
       'supplier',
       channelId,
-      supplierFormData.value?.deliveryInfo,
+      supplierFormData.value?.supplierContact,
       undefined,
-      props.gameCode
+      props.gameCode,
+      supplierFormData.value?.deliveryLocation, // Add gameTag (deliveryLocation = character name)
+      supplierFormData.value?.supplierContact // Add deliveryInfo (supplierContact = delivery info)
     )
     return newSupplier
   } catch (error) {
     console.error('Error creating supplier:', error)
     return null
+  }
+}
+
+// Function to load supplier data from database for form pre-filling
+const loadSupplierData = async (supplierName: string) => {
+  try {
+    const supplierData = await loadPartyByNameType(supplierName, 'supplier')
+    if (supplierData) {
+      // Auto-fill form with supplier data - using correct field mapping
+      const current = props.supplierModelValue as any || {}
+      const updated = {
+        ...current,
+        supplierName: supplierData.name,
+        supplierContact: supplierData.contact_info?.contact || current?.supplierContact || '',
+        deliveryLocation: supplierData.contact_info?.gameTag || current?.deliveryLocation || '', // Load gameTag from parties.contact_info
+        channelId: supplierData.channel_id || current?.channelId
+      }
+      emit('update:supplierModelValue', updated)
+    }
+  } catch (error) {
+    console.error('Error loading supplier data:', error)
+  }
+}
+
+// Function to load customer data from database for form pre-filling
+const loadCustomerData = async (customerName: string) => {
+  try {
+    const customerData = await loadPartyByNameType(customerName, 'customer')
+    if (customerData) {
+      // Auto-fill form with customer data - using correct field mapping
+      const current = props.customerModelValue as any || {}
+      const updated = {
+        ...current,
+        customerName: customerData.name,
+        deliveryInfo: customerData.contact_info?.deliveryInfo || current?.deliveryInfo || '',
+        gameTag: customerData.contact_info?.gameTag || current?.gameTag || '',
+        channelId: customerData.channel_id || current?.channelId
+      }
+      emit('update:customerModelValue', updated)
+    }
+  } catch (error) {
+    console.error('Error loading customer data:', error)
   }
 }
 
@@ -548,6 +702,17 @@ watch(
   () => supplierFormData.value?.channelId,
   async (newChannelId: string | null) => {
     if (newChannelId && (props.formMode === 'supplier' || activeTab.value === 'supplier')) {
+      await loadSuppliers(newChannelId)
+    }
+  },
+  { immediate: true }
+)
+
+// Watch for direct props channel changes in supplier mode
+watch(
+  () => (props.supplierModelValue as any)?.channelId,
+  async (newChannelId: string | null) => {
+    if (newChannelId && props.formMode === 'supplier') {
       await loadSuppliers(newChannelId)
     }
   },

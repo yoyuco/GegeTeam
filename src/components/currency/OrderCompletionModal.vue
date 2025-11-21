@@ -8,20 +8,7 @@
     class="w-full max-w-5xl"
     @close="handleClose"
   >
-    <template #header-extra>
-      <n-button
-        size="small"
-        quaternary
-        @click="handleClose"
-      >
-        <template #icon>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </template>
-      </n-button>
-    </template>
-
+  
     <div class="max-h-[75vh] overflow-y-auto space-y-4">
       <!-- Order Information -->
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
@@ -193,7 +180,7 @@
           </div>
         </div>
 
-        <!-- Sale Order Proofs -->
+          <!-- Sale Order Proofs -->
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Exchange Proof Section -->
           <div class="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
@@ -277,32 +264,7 @@
           </div>
         </div>
 
-        <!-- Payment Status Toggle (Full width for sale orders) -->
-        <div v-if="order?.order_type === 'SALE'" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h4 class="font-medium text-gray-800 text-sm">Trạng thái thanh toán</h4>
-                <p class="text-xs text-gray-500">Đánh dấu khi khách đã thanh toán</p>
-              </div>
-            </div>
-            <n-switch
-              v-model:value="isPaymentCompleted"
-              :checked-value="true"
-              :unchecked-value="false"
-              size="medium"
-            >
-              <template #checked>✅ Đã thanh toán</template>
-              <template #unchecked>⏳ Chưa thanh toán</template>
-            </n-switch>
-          </div>
         </div>
-      </div>
     </div>
 
     <template #footer>
@@ -315,7 +277,10 @@
           </template>
           Hủy
         </n-button>
+
+        <!-- Show complete button for purchase orders -->
         <n-button
+          v-if="order?.order_type === 'PURCHASE'"
           type="primary"
           size="large"
           :loading="loading"
@@ -328,6 +293,27 @@
           </template>
           Hoàn tất đơn hàng
         </n-button>
+
+        <!-- Show complete button for sale orders -->
+        <n-button
+          v-else-if="order?.order_type === 'SALE'"
+          type="primary"
+          size="large"
+          :loading="loading"
+          @click="handleCompleteSaleOrder"
+        >
+          <template #icon>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </template>
+          Hoàn tất đơn bán
+        </n-button>
+
+        <!-- Hide complete button for other cases -->
+        <span v-else class="text-sm text-gray-500 italic">
+          Đơn hàng chưa ở trạng thái phù hợp để hoàn tất
+        </span>
       </div>
     </template>
   </n-modal>
@@ -339,14 +325,12 @@ import {
   NModal,
   NButton,
   NTag,
-  NFormItem,
-  NInput,
-  NSwitch,
   useMessage
 } from 'naive-ui'
 import { supabase } from '@/lib/supabase'
 import ProofGridDisplay from '@/components/ProofGridDisplay.vue'
 import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
+import { useCurrencyOps } from '@/composables/useCurrencyOps.js'
 
 interface Props {
   show: boolean
@@ -371,8 +355,8 @@ const visible = computed({
 
 // Form data
 const loading = ref(false)
-const isPaymentCompleted = ref(false)
 const newPaymentProofs = ref<any[]>([])
+const completionNotes = ref('')
 
 // Computed properties for proofs
 const allProofs = computed(() => {
@@ -405,7 +389,6 @@ const hasExchangeProof = computed(() => exchangeProofs.value.length > 0)
 // Initialize data when order changes
 watch(() => props.order, (newOrder) => {
   if (newOrder) {
-    isPaymentCompleted.value = false
     newPaymentProofs.value = []
   }
 }, { immediate: true })
@@ -449,24 +432,41 @@ const handleClose = () => {
 const handleCompleteOrder = async () => {
   if (!props.order) return
 
-  // Validate requirements
-  if (props.order.order_type === 'PURCHASE') {
-    if (!hasNegotiationProof.value) {
-      message.error('Vui lòng tải lên bằng chứng đàm phán (bắt buộc)')
-      return
-    }
+  // Validation logic based on order type and status
+  if (props.order.order_type === 'SALE') {
+    // For SALE orders: must have delivery proof
     if (!hasDeliveryProof.value) {
-      message.error('Vui lòng tải lên bằng chứng nhận hàng (bắt buộc)')
+      message.error('Đơn bán cần có bằng chứng giao hàng để hoàn tất')
       return
     }
-    if (!hasPaymentProof.value && newPaymentProofs.value.length === 0) {
-      message.error('Vui lòng tải lên bằng chứng thanh toán (bắt buộc)')
+
+    // Check if sale order is in correct status for completion
+    if (props.order.status !== 'delivered') {
+      message.error('Đơn bán phải ở trạng thái "đã giao hàng" để hoàn tất')
       return
     }
-  } else {
-    if (!hasDeliveryProof.value) {
-      message.error('Vui lòng tải lên bằng chứng giao hàng (bắt buộc)')
-      return
+  } else if (props.order.order_type === 'PURCHASE') {
+    // For PURCHASE orders: standard validation
+    if (props.order.status === 'delivered') {
+      // Already delivered, only need payment proof
+      if (!hasPaymentProof.value && newPaymentProofs.value.length === 0) {
+        message.error('Vui lòng tải lên bằng chứng thanh toán để hoàn tất đơn hàng')
+        return
+      }
+    } else {
+      // Standard validation for non-delivered purchase orders
+      if (!hasNegotiationProof.value) {
+        message.error('Vui lòng tải lên bằng chứng đàm phán (bắt buộc)')
+        return
+      }
+      if (!hasDeliveryProof.value) {
+        message.error('Vui lòng tải lên bằng chứng nhận hàng (bắt buộc)')
+        return
+      }
+      if (!hasPaymentProof.value && newPaymentProofs.value.length === 0) {
+        message.error('Vui lòng tải lên bằng chứng thanh toán (bắt buộc)')
+        return
+      }
     }
   }
 
@@ -476,11 +476,12 @@ const handleCompleteOrder = async () => {
     // Import uploadFile function
     const { uploadFile } = await import('@/lib/supabase')
 
-    // Combine existing proofs with new payment proofs
+    // Start with existing proofs
     let finalProofs = [...allProofs.value]
 
-    // Upload new payment proofs
+    // Upload new payment proofs only if there are new files
     if (newPaymentProofs.value.length > 0) {
+
       for (const fileInfo of newPaymentProofs.value) {
         if (fileInfo.file) {
           // Create unique filename
@@ -493,7 +494,7 @@ const handleCompleteOrder = async () => {
           const uploadResult = await uploadFile(fileInfo.file, filePath, 'work-proofs')
 
           if (uploadResult.success) {
-            // Add uploaded file to final proofs
+            // Add uploaded file to final proofs with proper structure
             finalProofs.push({
               url: uploadResult.publicUrl,
               path: uploadResult.path,
@@ -506,26 +507,106 @@ const handleCompleteOrder = async () => {
       }
     }
 
-    // Update order with proofs and status
-    const { error: updateError } = await supabase
-      .from('currency_orders')
-      .update({
-        proofs: finalProofs,
-        status: 'completed'
+    // Handle different scenarios based on order status
+    if (props.order.status === 'delivered' && props.order.order_type === 'PURCHASE') {
+      // For delivered purchase orders: add payment proofs and complete the order
+      if (newPaymentProofs.value.length > 0) {
+        // Update order with new proofs and change status to completed
+        const { error: updateError } = await supabase
+          .from('currency_orders')
+          .update({
+            proofs: finalProofs,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', props.order.id)
+
+        if (updateError) {
+                    throw updateError
+        }
+
+                message.success(`✅ Đã hoàn tất đơn #${props.order.order_number} với ${newPaymentProofs.value.length} bằng chứng thanh toán`)
+        emit('completed')
+        handleClose()
+      } else {
+        message.info('Không có bằng chứng thanh toán mới để thêm')
+      }
+    } else {
+      // For non-delivered orders: use standard completion flow
+      const { completeCurrencyOrder: completeOrderFunction } = useCurrencyOps()
+
+
+      const result = await completeOrderFunction(props.order.id, {
+        notes: completionNotes.value || 'Đơn hàng đã hoàn thành',
+        proofUrls: finalProofs,
+        actualQuantity: props.order.quantity,
+        actualUnitPriceVnd: props.order.cost_amount / props.order.quantity
       })
-      .eq('id', props.order.id)
 
-    if (updateError) {
-      throw new Error(`Không thể cập nhật đơn hàng: ${updateError.message}`)
+      if (result && !result.success) {
+        throw new Error(result.error || 'Failed to complete order')
+      }
+
+      message.success(`✅ Đã hoàn tất đơn #${props.order.order_number} thành công`)
+      emit('completed')
+      handleClose()
     }
-
-    message.success(`✅ Đã hoàn tất đơn #${props.order.order_number} thành công`)
-    emit('completed')
-    handleClose()
 
   } catch (error: any) {
     console.error('Error completing order:', error)
     message.error(error.message || 'Có lỗi xảy ra khi hoàn tất đơn hàng')
+  } finally {
+    loading.value = false
+  }
+}
+
+// Handle sale order completion
+const handleCompleteSaleOrder = async () => {
+  if (!props.order) return
+
+  // Validation: must have delivery proof for sale orders
+  if (!hasDeliveryProof.value) {
+    message.error('Đơn bán cần có bằng chứng giao hàng để hoàn tất')
+    return
+  }
+
+  // Check if sale order is in correct status for completion
+  if (props.order.status !== 'delivered') {
+    message.error('Đơn bán phải ở trạng thái "đã giao hàng" để hoàn tất')
+    return
+  }
+
+  loading.value = true
+
+  try {
+    // Get current user profile ID
+    const { data: profileId, error: profileError } = await supabase.rpc('get_current_profile_id')
+    if (profileError || !profileId) {
+      throw new Error('Không thể xác định người dùng')
+    }
+
+    // Update order status to completed
+    const { error: updateError } = await supabase
+      .from('currency_orders')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', props.order.id)
+
+    if (updateError) {
+      throw updateError
+    }
+
+    message.success(`✅ Đã hoàn tất đơn bán #${props.order.order_number}`)
+    emit('completed')
+    handleClose()
+
+  } catch (error: any) {
+    console.error('Error completing sale order:', error)
+    message.error(error.message || 'Có lỗi xảy ra khi hoàn tất đơn bán')
   } finally {
     loading.value = false
   }
