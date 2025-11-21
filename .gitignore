@@ -77,3 +77,4 @@ data_insert.sql.claude/settings.local.json
 # MCP configuration and temp files
 /.serena/
 /WebGegeTeamtoolsmcp-vue-tools/
+tools/mcp-vue-tools/
