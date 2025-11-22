@@ -2,14 +2,15 @@ import { ref, computed, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { usePermissions } from '@/composables/usePermissions.js'
+import { useExchangeRates } from './useExchangeRates'
 
 export function useCurrency() {
   const { currentGame, currentServer, loadCurrencies } = useGameContext()
   const { canCreateTransactions } = usePermissions()
+  const { exchangeRates, loadExchangeRates, getExchangeRate: getExchangeRateFromDB, convertCurrency } = useExchangeRates()
 
   // Reactive state
   const currencies = ref([])
-  const exchangeRates = ref({})
   const channels = ref([])
   const loading = ref(false)
   const error = ref(null)
@@ -88,20 +89,22 @@ export function useCurrency() {
     return currenciesByCode.value[code] || null
   }
 
-  // Get exchange rate between two currencies
+  // Get exchange rate between two currencies (using new composable)
   const getExchangeRate = (fromCurrency, toCurrency) => {
+    // Use the new composable which handles conversion via VND as intermediate
     if (fromCurrency === toCurrency) return 1
 
-    const key = `${fromCurrency}_${toCurrency}`
-    return exchangeRates.value[key] || null
-  }
+    // For simplicity, convert through VND using the new composable
+    // The new composable focuses on VND conversion, so we adapt it for general use
+    if (toCurrency === 'VND') {
+      // The composable's getExchangeRate function expects the target currency
+      return exchangeRates.value[fromCurrency] || 1
+    }
 
-  // Convert amount between currencies
-  const convertCurrency = (amount, fromCurrency, toCurrency) => {
-    const rate = getExchangeRate(fromCurrency, toCurrency)
-    if (rate === null) return null
-
-    return amount * rate
+    // For other conversions, convert through VND as intermediate
+    const fromToVndRate = exchangeRates.value[fromCurrency] || 1
+    const toToVndRate = exchangeRates.value[toCurrency] || 1
+    return fromToVndRate / toToVndRate
   }
 
   // Load currencies for current game using attribute_relationships
@@ -229,26 +232,7 @@ export function useCurrency() {
     }
   }
 
-  // Load exchange rates
-  const loadExchangeRates = async () => {
-    try {
-      const { data, error: fetchError } = await supabase.from('exchange_rates').select('*')
-
-      if (fetchError) throw fetchError
-
-      // Convert to key-value format
-      const rates = {}
-      data.forEach((rate) => {
-        rates[`${rate.source_currency}_${rate.target_currency}`] = rate.rate
-      })
-
-      exchangeRates.value = rates
-    } catch (err) {
-      console.error('Error loading exchange rates:', err)
-      error.value = err.message
-    }
-  }
-
+  
   // Load channels (sources)
   const loadChannels = async () => {
         try {

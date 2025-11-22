@@ -2,12 +2,12 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { usePermissions } from '@/composables/usePermissions.js'
-// import { useCurrency } from '@/composables/useCurrency.js' // Unused for now
+import { useCurrency } from '@/composables/useCurrency.js'
 
 export function useInventory() {
   const { currentGame, currentServer, loadGameAccounts } = useGameContext()
   const { canViewInventory, canManageGameAccounts } = usePermissions()
-  // const { getCurrencyByCode, formatCurrencyAmount } = useCurrency() // Unused for now
+  const { getExchangeRate, initialize: initializeCurrency } = useCurrency()
 
   // Reactive state
   const inventory = ref([])
@@ -28,7 +28,6 @@ export function useInventory() {
         return total
       }, 0)
     } catch (error) {
-      console.error('Error in totalInventoryValue computed:', error)
       return 0
     }
   })
@@ -69,7 +68,6 @@ export function useInventory() {
 
     return Object.values(map)
     } catch (error) {
-      console.error('Error in inventoryByCurrency computed:', error)
       return []
     }
   })
@@ -78,7 +76,6 @@ export function useInventory() {
     try {
       return (inventoryByCurrency.value || []).filter((item) => item && item.totalQuantity > 0)
     } catch (error) {
-      console.error('Error in availableInventory computed:', error)
       return []
     }
   })
@@ -89,7 +86,6 @@ export function useInventory() {
         (item) => item && item.totalQuantity <= 10 && item.totalQuantity > 0
       )
     } catch (error) {
-      console.error('Error in lowStockItems computed:', error)
       return []
     }
   })
@@ -98,7 +94,6 @@ export function useInventory() {
     try {
       return (inventoryByCurrency.value || []).filter((item) => item && item.totalQuantity === 0)
     } catch (error) {
-      console.error('Error in emptyInventory computed:', error)
       return []
     }
   })
@@ -113,26 +108,18 @@ export function useInventory() {
     try {
       gameAccounts.value = await loadGameAccounts('INVENTORY')
     } catch (err) {
-      console.error('Error loading game accounts:', err)
       error.value = err.message
     }
   }
 
-  // Load inventory data
+  // Load inventory data from inventory_pools table
   const loadInventory = async (accountId = null) => {
-    console.log('Loading inventory...', {
-      accountId,
-      game: currentGame.value,
-      server: currentServer.value,
-    })
     if (!currentGame.value || !currentServer.value) {
-      console.log('No game context, returning empty inventory')
       inventory.value = []
       return
     }
 
     if (!canViewInventory(currentGame.value)) {
-      console.warn('No permission to view inventory')
       return
     }
 
@@ -140,28 +127,99 @@ export function useInventory() {
     error.value = null
 
     try {
-      const accountIds = accountId ? [accountId] : gameAccounts.value.map((acc) => acc.id)
-      console.log('Loading inventory for accounts:', accountIds)
-
       let query = supabase
-        .from('currency_inventory')
-        .select(
-          `
-          *,
-          game_account:game_accounts(id, account_name, purpose)
-        `
-        )
-        .in('game_account_id', accountIds)
+        .from('inventory_pools')
+        .select(`
+          game_code,
+          server_attribute_code,
+          currency_attribute_id,
+          quantity,
+          reserved_quantity,
+          average_cost,
+          cost_currency,
+          last_updated_at,
+          last_updated_by,
+          game_accounts!game_account_id!left (
+            id,
+            account_name,
+            purpose
+          ),
+          channels!channel_id!left (
+            id,
+            name
+          ),
+          attributes!inventory_pools_currency_attribute_id_fkey!left (
+            id,
+            name,
+            code
+          )
+        `)
+        .eq('game_code', currentGame.value)
+        .eq('server_attribute_code', currentServer.value)
+
+      // Filter by specific account if provided
+      if (accountId) {
+        query = query.eq('game_account_id', accountId)
+      }
 
       const { data, error: fetchError } = await query
 
       if (fetchError) throw fetchError
 
-      inventory.value = data || []
-      console.log('Inventory loaded:', inventory.value.length, inventory.value)
+      // Transform the data to match the expected structure
+      const transformedData = (data || []).map(item => {
+        const avgCost = parseFloat(item.average_cost) || 0
+
+        // Use real exchange rates for conversions
+        let avgPriceVnd = avgCost
+        let avgPriceUsd = avgCost
+
+        if (item.cost_currency === 'VND') {
+          avgPriceVnd = avgCost
+          const vndToUsdRate = getExchangeRate('VND', 'USD')
+          avgPriceUsd = vndToUsdRate ? avgCost * vndToUsdRate : avgCost / 25700 // Fallback
+        } else if (item.cost_currency === 'USD') {
+          avgPriceUsd = avgCost
+          const usdToVndRate = getExchangeRate('USD', 'VND')
+          avgPriceVnd = usdToVndRate ? avgCost * usdToVndRate : avgCost * 25700 // Fallback
+        } else if (item.cost_currency === 'CNY') {
+          avgPriceVnd = avgCost
+          const cnyToVndRate = getExchangeRate('CNY', 'VND')
+          avgPriceVnd = cnyToVndRate ? avgCost * cnyToVndRate : avgCost * 3500 // Fallback
+
+          const cnyToUsdRate = getExchangeRate('CNY', 'USD')
+          avgPriceUsd = cnyToUsdRate ? avgCost * cnyToUsdRate : avgCost / 3500 // Fallback
+        }
+
+        return {
+          id: item.currency_attribute_id, // Use currency_attribute_id as id for compatibility
+          currency_attribute_id: item.currency_attribute_id,
+          currency: item.attributes?.name || 'Unknown Currency', // Map to expected field names
+          quantity: parseFloat(item.quantity) || 0,
+          reserved_quantity: parseFloat(item.reserved_quantity) || 0,
+          avg_buy_price_vnd: avgPriceVnd,
+          avg_buy_price_usd: avgPriceUsd,
+          cost_currency: item.cost_currency,
+          game_account_id: item.game_accounts?.id,
+          game_account: {
+            id: item.game_accounts?.id,
+            account_name: item.game_accounts?.account_name,
+            purpose: item.game_accounts?.purpose
+          },
+          channel_name: item.channels?.name || 'Unknown Channel',
+          last_updated_at: item.last_updated_at,
+          last_updated_by: item.last_updated_by,
+          // Additional fields for new UI structure
+          currency_name: item.attributes?.name || 'Unknown Currency',
+          currency_code: item.attributes?.code || 'UNKNOWN',
+          average_cost: parseFloat(item.average_cost) || 0
+        }
+      })
+
+      inventory.value = transformedData
     } catch (err) {
-      console.error('Error loading inventory:', err)
       error.value = err.message
+      inventory.value = []
     } finally {
       loading.value = false
     }
@@ -242,7 +300,6 @@ export function useInventory() {
 
       return data
     } catch (err) {
-      console.error('Error creating game account:', err)
       throw err
     }
   }
@@ -269,7 +326,6 @@ export function useInventory() {
 
       return data
     } catch (err) {
-      console.error('Error updating game account:', err)
       throw err
     }
   }
@@ -298,12 +354,11 @@ export function useInventory() {
 
       return data
     } catch (err) {
-      console.error('Error adjusting inventory:', err)
       throw err
     }
   }
 
-  // Set up real-time subscription
+  // Set up real-time subscription for inventory_pools
   const setupRealtimeSubscription = () => {
     if (inventorySubscription) {
       inventorySubscription.unsubscribe()
@@ -311,32 +366,23 @@ export function useInventory() {
 
     if (!currentGame.value || !currentServer.value) return
 
-    // Subscribe to inventory changes
+    // Subscribe to inventory_pools changes
     inventorySubscription = supabase
-      .channel('inventory_changes')
+      .channel('inventory_pools_changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'currency_inventory',
-          filter: `game_account_id=in.(${gameAccounts.value.map((acc) => acc.id).join(',')})`,
+          table: 'inventory_pools',
+          filter: `game_code=eq.${currentGame.value}&server_attribute_code=eq.${currentServer.value}`,
         },
-        (payload) => {
-          console.log('Inventory change:', payload)
-
-          if (payload.eventType === 'INSERT') {
-            inventory.value.push(payload.new)
-          } else if (payload.eventType === 'UPDATE') {
-            const index = inventory.value.findIndex((item) => item.id === payload.new.id)
-            if (index !== -1) {
-              inventory.value[index] = payload.new
-            }
-          } else if (payload.eventType === 'DELETE') {
-            const index = inventory.value.findIndex((item) => item.id === payload.old.id)
-            if (index !== -1) {
-              inventory.value.splice(index, 1)
-            }
+        async (payload) => {
+          
+          // Reload inventory when changes occur to maintain data consistency
+          try {
+            await loadInventory()
+          } catch (err) {
           }
         }
       )
@@ -356,12 +402,14 @@ export function useInventory() {
     loading.value = true
 
     try {
+      // Initialize currency system to load exchange rates
+      await initializeCurrency()
+
       await Promise.all([loadAccounts(), loadInventory()])
 
       // Setup real-time subscription
       setupRealtimeSubscription()
     } catch (err) {
-      console.error('Error initializing inventory composable:', err)
       error.value = err.message
     } finally {
       loading.value = false
@@ -385,6 +433,189 @@ export function useInventory() {
     cleanupSubscription()
   })
 
+  // Format functions for the new UI
+  const formatCurrency = (amount, currencyCode = 'VND') => {
+    if (!amount && amount !== 0) return '0'
+
+    // Format based on currency type
+    if (currencyCode === 'VND') {
+      // VND: No decimal places, round to whole number
+      return new Intl.NumberFormat('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(Math.round(amount))
+    } else {
+      // CNY, USD: Show up to 5 decimal places for precision, but don't force trailing zeros
+      return new Intl.NumberFormat('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 5
+      }).format(amount)
+    }
+  }
+
+  const formatQuantity = (amount) => {
+    return new Intl.NumberFormat('vi-VN').format(amount)
+  }
+
+  // Get display names for games and servers
+  const getGameDisplayName = (gameCode) => {
+    const gameNames = {
+      'POE_2': 'Path of Exile 2',
+      'POE_1': 'Path of Exile 1',
+      'DIABLO_4': 'Diablo 4'
+    }
+    return gameNames[gameCode] || gameCode
+  }
+
+  const getServerDisplayName = (serverCode) => {
+    const serverNames = {
+      'STANDARD_ROTA_POE2': 'Rise of the Abyssal Standard',
+      'HARDCORE_ROTA_POE2': 'Hardcore Rise of the Abyssal',
+      'STANDARD_ROTA_POE1': 'Standard League',
+      'STANDARD_D4': 'Standard Server'
+    }
+    return serverNames[serverCode] || serverCode
+  }
+
+  // Load inventory data for specific game and server (for external use) - NEW VERSION for CurrencyInventoryPanel
+  const loadInventoryForGameServer = async (gameCode, serverCode) => {
+    if (!gameCode || !serverCode) {
+      return []
+    }
+
+    loading.value = true
+    error.value = null
+
+    try {
+      // Ensure exchange rates are loaded for accurate conversion
+      await initializeCurrency()
+      let query = supabase
+        .from('inventory_pools')
+        .select(`
+          game_code,
+          server_attribute_code,
+          currency_attribute_id,
+          quantity,
+          reserved_quantity,
+          average_cost,
+          cost_currency,
+          last_updated_at,
+          last_updated_by,
+          game_accounts!game_account_id!left (
+            id,
+            account_name,
+            purpose
+          ),
+          channels!channel_id!left (
+            id,
+            name
+          ),
+          attributes!inventory_pools_currency_attribute_id_fkey!left (
+            id,
+            name,
+            code
+          )
+        `)
+        .eq('game_code', gameCode)
+        .eq('server_attribute_code', serverCode)
+
+      const { data, error: fetchError } = await query
+
+      if (fetchError) throw fetchError
+
+      // Group data by currency and cost currency
+      const groupedData = {}
+
+      ;(data || []).forEach(item => {
+        const key = `${item.attributes?.code || 'UNKNOWN'}`
+
+        if (!groupedData[key]) {
+          groupedData[key] = {
+            game_code: item.game_code,
+            server_attribute_code: item.server_attribute_code,
+            currency_name: item.attributes?.name || 'Unknown Currency',
+            currency_code: item.attributes?.code || 'UNKNOWN',
+            costCurrencies: {},
+            totalQuantity: 0,
+            totalReserved: 0,
+            totalValueVND: 0
+          }
+        }
+
+        const costKey = item.cost_currency
+        const accountName = item.game_accounts?.account_name || 'Unknown Account'
+
+        if (!groupedData[key].costCurrencies[costKey]) {
+          groupedData[key].costCurrencies[costKey] = {}
+        }
+
+        if (!groupedData[key].costCurrencies[costKey][accountName]) {
+          groupedData[key].costCurrencies[costKey][accountName] = {
+            totalQuantity: 0,
+            totalReserved: 0,
+            totalCost: 0,
+            totalValue: 0
+          }
+        }
+
+        // Update account totals (aggregate by cost currency and account)
+        const quantity = parseFloat(item.quantity) || 0
+        const reserved = parseFloat(item.reserved_quantity) || 0
+        const avgCost = parseFloat(item.average_cost) || 0
+        const cost = quantity * avgCost
+
+        // Use real exchange rates to convert to VND
+        let vndValue = cost
+        if (item.cost_currency !== 'VND') {
+          const exchangeRate = getExchangeRate(item.cost_currency, 'VND')
+          if (exchangeRate) {
+            vndValue = cost * exchangeRate
+          } else {
+            vndValue = cost // Fallback to 1:1 if no rate available
+          }
+        }
+
+        const accountData = groupedData[key].costCurrencies[costKey][accountName]
+        accountData.totalQuantity += quantity
+        accountData.totalReserved += reserved
+        accountData.totalCost += cost
+        accountData.totalValue += vndValue
+
+        // Update currency totals
+        groupedData[key].totalQuantity += quantity
+        groupedData[key].totalReserved += reserved
+        groupedData[key].totalValueVND += vndValue
+      })
+
+      // Transform to expected structure with calculated average costs
+      Object.keys(groupedData).forEach(key => {
+        const currencyData = groupedData[key]
+        Object.keys(currencyData.costCurrencies).forEach(costKey => {
+          const accounts = Object.entries(currencyData.costCurrencies[costKey]).map(([accountName, data]) => ({
+            name: accountName,
+            quantity: data.totalQuantity,
+            reserved: data.totalReserved,
+            avgCost: data.totalQuantity > 0 ? data.totalCost / data.totalQuantity : 0,
+            totalValue: data.totalValue
+          }))
+          currencyData.costCurrencies[costKey] = {
+            avgCost: accounts.reduce((sum, acc) => sum + acc.avgCost * acc.quantity, 0) / accounts.reduce((sum, acc) => sum + acc.quantity, 0) || 0,
+            totalQuantity: accounts.reduce((sum, acc) => sum + acc.quantity, 0),
+            totalReserved: accounts.reduce((sum, acc) => sum + acc.reserved, 0),
+            accounts: accounts
+          }
+        })
+      })
+
+      return Object.values(groupedData)
+    } catch (err) {
+      error.value = err.message
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     inventory,
@@ -403,6 +634,7 @@ export function useInventory() {
     // Methods
     loadAccounts,
     loadInventory,
+    loadInventoryForGameServer, // NEW: For external use (CurrencyInventoryPanel)
     getInventoryByAccount,
     getAvailableQuantity,
     getReservedQuantity,
@@ -413,5 +645,11 @@ export function useInventory() {
     setupRealtimeSubscription,
     cleanupSubscription,
     initialize,
+
+    // NEW: Utility functions for new UI
+    formatCurrency,
+    formatQuantity,
+    getGameDisplayName,
+    getServerDisplayName
   }
 }

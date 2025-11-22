@@ -22,18 +22,21 @@ const corsHeaders = {
 
 // Parse Fawazahmed0 API response
 function parseFawazahmed0(data: any) {
-  if (!data?.usd) {
+  if (!data?.date || !data?.usd) {
     throw new Error('Invalid Fawazahmed0 API response format')
   }
 
   const rates = []
-  const baseCurrency = 'USD'
   const timestamp = new Date().toISOString()
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
 
-  // Convert to all currency pairs
-  for (const [toCurrency, rate] of Object.entries(data.usd)) {
-    if (typeof rate === 'number') {
+  // Get USD base rates
+  const usdRates = data.usd
+  const baseCurrency = 'USD'
+
+  // Process all currencies from USD base
+  for (const [toCurrency, rate] of Object.entries(usdRates)) {
+    if (typeof rate === 'number' && rate > 0) {
       // Direct pair: USD -> XXX
       rates.push({
         from_currency: baseCurrency,
@@ -44,18 +47,17 @@ function parseFawazahmed0(data: any) {
       })
 
       // Reverse pair: XXX -> USD
-      if (rate !== 0) {
-        rates.push({
-          from_currency: toCurrency.toUpperCase(),
-          to_currency: baseCurrency,
-          rate: 1 / rate,
-          effective_date: timestamp,
-          expires_at: expiresAt
-        })
-      }
+      rates.push({
+        from_currency: toCurrency.toUpperCase(),
+        to_currency: baseCurrency,
+        rate: 1 / rate,
+        effective_date: timestamp,
+        expires_at: expiresAt
+      })
     }
   }
 
+  console.log(`Parsed ${rates.length} rates from Fawazahmed0 API`)
   return rates
 }
 
@@ -165,6 +167,8 @@ async function getActiveCurrencies(supabase: any) {
 // Filter rates for active currencies only and add cross rates
 function filterRatesForActiveCurrencies(rates: any[], activeCurrencies: string[]) {
   const currencySet = new Set(activeCurrencies.map(c => c.toUpperCase()))
+  console.log(`Active currencies: ${Array.from(currencySet).join(', ')}`)
+  console.log(`Total rates received: ${rates.length}`)
 
   // Filter direct rates
   const directRates = rates.filter(rate =>
@@ -172,6 +176,8 @@ function filterRatesForActiveCurrencies(rates: any[], activeCurrencies: string[]
     currencySet.has(rate.to_currency) &&
     rate.from_currency !== rate.to_currency
   )
+
+  console.log(`Direct rates after filtering: ${directRates.length}`)
 
   // Calculate cross rates (e.g., VND/CNY using USD as base)
   const crossRates = []
@@ -185,6 +191,8 @@ function filterRatesForActiveCurrencies(rates: any[], activeCurrencies: string[]
       usdRateMap.set(rate.from_currency, 1 / rate.rate)
     }
   }
+
+  console.log(`USD rate map entries: ${usdRateMap.size}`)
 
   // Calculate cross rates for all combinations
   const currencies = Array.from(currencySet)
@@ -213,7 +221,10 @@ function filterRatesForActiveCurrencies(rates: any[], activeCurrencies: string[]
     }
   }
 
-  return [...directRates, ...crossRates]
+  const totalRates = [...directRates, ...crossRates]
+  console.log(`Final rates after cross rate calculation: ${totalRates.length}`)
+
+  return totalRates
 }
 
 // Update exchange rates in database

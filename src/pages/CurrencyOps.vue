@@ -256,7 +256,8 @@
   <CurrencyInventoryPanel
     v-if="isInventoryOpen"
     :is-open="isInventoryOpen"
-    :inventory-data="inventoryByCurrency"
+    :game-code="currentGame"
+    :server-code="currentServer"
     @close="isInventoryOpen = false"
   />
 
