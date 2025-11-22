@@ -59,12 +59,12 @@
       </div>
 
       <!-- Game Server Info Display (No Selector - Panel is too small) -->
-      <div v-if="activeGame && activeServer" class="bg-gray-50 border-b border-gray-200 p-3">
+      <div v-if="activeGame" class="bg-gray-50 border-b border-gray-200 p-3">
         <div class="flex items-center gap-2 text-sm">
           <span class="font-medium text-gray-700">Bối cảnh:</span>
           <n-tag type="info" size="small">{{ getGameDisplayName(activeGame) }}</n-tag>
-          <span class="text-gray-400">•</span>
-          <n-tag type="default" size="small">{{ getServerDisplayName(activeServer) }}</n-tag>
+          <span v-if="activeServer" class="text-gray-400">•</span>
+          <n-tag v-if="activeServer" type="default" size="small">{{ getServerDisplayName(activeServer) }}</n-tag>
         </div>
       </div>
       <div v-else class="bg-yellow-50 border-b border-yellow-200 p-3">
