@@ -3,11 +3,13 @@ import { supabase } from '@/lib/supabase'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { usePermissions } from '@/composables/usePermissions.js'
 import { useCurrency } from '@/composables/useCurrency.js'
+import { useExchangeRates } from '@/composables/useExchangeRates.js'
 
 export function useInventory() {
   const { currentGame, currentServer, loadGameAccounts } = useGameContext()
   const { canViewInventory, canManageGameAccounts } = usePermissions()
   const { getExchangeRate, initialize: initializeCurrency } = useCurrency()
+  const { loadExchangeRates, convertToVND } = useExchangeRates()
 
   // Reactive state
   const inventory = ref([])
@@ -439,6 +441,9 @@ export function useInventory() {
     loading.value = true
 
     try {
+      // Load exchange rates first
+      await loadExchangeRates()
+
       // Initialize currency system to load exchange rates
       await initializeCurrency()
 
@@ -518,6 +523,7 @@ export function useInventory() {
 
     try {
       // Ensure exchange rates are loaded for accurate conversion
+      await loadExchangeRates()
       await initializeCurrency()
       let query = supabase
         .from('inventory_pools')
@@ -595,15 +601,7 @@ export function useInventory() {
         const cost = quantity * avgCost
 
         // Use real exchange rates to convert to VND
-        let vndValue = cost
-        if (item.cost_currency !== 'VND') {
-          const exchangeRate = getExchangeRate(item.cost_currency, 'VND')
-          if (exchangeRate) {
-            vndValue = cost * exchangeRate
-          } else {
-            vndValue = cost // Fallback to 1:1 if no rate available
-          }
-        }
+        const vndValue = convertToVND(cost, item.cost_currency || 'VND')
 
         const accountData = groupedData[key].costCurrencies[costKey][accountName]
         accountData.totalQuantity += quantity
