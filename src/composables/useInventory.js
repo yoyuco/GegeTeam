@@ -503,6 +503,7 @@ export function useInventory() {
   }
 
   const getServerDisplayName = (serverCode) => {
+    if (!serverCode) return 'Global'
     return serverAttributes.value.get(serverCode) || serverCode
   }
 
