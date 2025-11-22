@@ -18,6 +18,43 @@ export function useInventory() {
   // Real-time subscription
   let inventorySubscription = null
 
+  // Cache for attributes
+  const gameAttributes = ref(new Map())
+  const serverAttributes = ref(new Map())
+
+  // Load attributes from database
+  const loadAttributes = async () => {
+    try {
+      // Load game attributes
+      const { data: gameData, error: gameError } = await supabase
+        .from('attributes')
+        .select('code, name')
+        .eq('type', 'GAME')
+        .eq('is_active', true)
+
+      if (!gameError && gameData) {
+        gameData.forEach(item => {
+          gameAttributes.value.set(item.code, item.name || item.code)
+        })
+      }
+
+      // Load server attributes
+      const { data: serverData, error: serverError } = await supabase
+        .from('attributes')
+        .select('code, name')
+        .eq('type', 'GAME_SERVER')
+        .eq('is_active', true)
+
+      if (!serverError && serverData) {
+        serverData.forEach(item => {
+          serverAttributes.value.set(item.code, item.name || item.code)
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load attributes:', error)
+    }
+  }
+
   // Computed properties
   const totalInventoryValue = computed(() => {
     try {
@@ -405,6 +442,9 @@ export function useInventory() {
       // Initialize currency system to load exchange rates
       await initializeCurrency()
 
+      // Load attributes for display names
+      await loadAttributes()
+
       await Promise.all([loadAccounts(), loadInventory()])
 
       // Setup real-time subscription
@@ -459,22 +499,11 @@ export function useInventory() {
 
   // Get display names for games and servers
   const getGameDisplayName = (gameCode) => {
-    const gameNames = {
-      'POE_2': 'Path of Exile 2',
-      'POE_1': 'Path of Exile 1',
-      'DIABLO_4': 'Diablo 4'
-    }
-    return gameNames[gameCode] || gameCode
+    return gameAttributes.value.get(gameCode) || gameCode
   }
 
   const getServerDisplayName = (serverCode) => {
-    const serverNames = {
-      'STANDARD_ROTA_POE2': 'Rise of the Abyssal Standard',
-      'HARDCORE_ROTA_POE2': 'Hardcore Rise of the Abyssal',
-      'STANDARD_ROTA_POE1': 'Standard League',
-      'STANDARD_D4': 'Standard Server'
-    }
-    return serverNames[serverCode] || serverCode
+    return serverAttributes.value.get(serverCode) || serverCode
   }
 
   // Load inventory data for specific game and server (for external use) - NEW VERSION for CurrencyInventoryPanel
@@ -650,6 +679,7 @@ export function useInventory() {
     formatCurrency,
     formatQuantity,
     getGameDisplayName,
-    getServerDisplayName
+    getServerDisplayName,
+    loadAttributes
   }
 }
