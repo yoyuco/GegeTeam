@@ -53,7 +53,7 @@
               <div class="w-4 h-4 bg-green-400 rounded-full shadow-md"></div>
               <div>
                 <p class="text-xs text-white/70 font-medium">Tổng Currency</p>
-                <p class="text-lg font-bold text-white">{{ uniqueCurrencies.length }}</p>
+                <p class="text-lg font-bold text-white">{{ uniqueCurrencies }}</p>
               </div>
             </div>
           </div>
@@ -457,15 +457,15 @@ const uniqueGames = computed(() => {
 })
 
 const uniqueCurrencies = computed(() => {
-  const currencies = new Set<string>()
+  let totalCount = 0
   inventoryData.forEach((game: any) => {
     game.servers.forEach((server: any) => {
       server.currencies.forEach((currency: any) => {
-        currencies.add(currency.currency_name)
+        totalCount++
       })
     })
   })
-  return Array.from(currencies)
+  return totalCount
 })
 
 // Methods
