@@ -27,30 +27,42 @@ export function useExchangeRates() {
       // Build exchange rate map for conversion to VND
       const rates: ExchangeRates = {}
 
-      // First, collect all direct rates to VND
+      // First, collect all direct rates to VND (e.g., USD->VND, CNY->VND)
       data.forEach((rate: any) => {
         if (rate.to_currency === 'VND') {
           rates[rate.from_currency] = parseFloat(rate.rate)
         }
       })
 
-      // If no direct rates found, try to build from any available rates
+
+      // Also collect reverse rates from VND (e.g., VND->USD) and convert them
+      data.forEach((rate: any) => {
+        if (rate.from_currency === 'VND' && !rates[rate.to_currency]) {
+          rates[rate.to_currency] = 1 / parseFloat(rate.rate)
+        }
+      })
+
+      // If still no direct rates found, try to build from any available rates using USD as base
       if (Object.keys(rates).length === 0) {
-        // Find a base currency to convert through
-        const allCurrencies = new Set<string>()
+        // Find USD as base currency
+        const usdRates: { [key: string]: number } = {}
         data.forEach((rate: any) => {
-          allCurrencies.add(rate.from_currency)
-          allCurrencies.add(rate.to_currency)
+          if (rate.from_currency === 'USD') {
+            usdRates[rate.to_currency] = parseFloat(rate.rate)
+          } else if (rate.to_currency === 'USD') {
+            usdRates[rate.from_currency] = 1 / parseFloat(rate.rate)
+          }
         })
 
-        // Try to use VND as base if available, otherwise use first currency
-        const baseCurrency = allCurrencies.has('VND') ? 'VND' : Array.from(allCurrencies)[0]
+        // If we have USD->VND rate, use it to build other rates
+        if (usdRates['VND']) {
+          rates['USD'] = usdRates['VND']
+          rates['VND'] = 1
 
-        if (baseCurrency === 'VND') {
-          // Build VND rates from reverse conversions
-          data.forEach((rate: any) => {
-            if (rate.from_currency === 'VND') {
-              rates[rate.to_currency] = 1 / parseFloat(rate.rate)
+          // Build other currency rates through USD
+          Object.keys(usdRates).forEach(currency => {
+            if (currency !== 'VND' && currency !== 'USD') {
+              rates[currency] = usdRates[currency] * usdRates['VND']
             }
           })
         }
@@ -65,16 +77,11 @@ export function useExchangeRates() {
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load exchange rates'
 
-      // Fallback rates
-      const fallbackRates: ExchangeRates = {
-        'VND': 1,
-        'USD': 25000,
-        'CNY': 3500,
-        'EUR': 27000
-      }
+      console.error('Failed to load exchange rates from database:', err)
 
-      exchangeRates.value = fallbackRates
-      return fallbackRates
+      // Don't use fallback - return empty rates to indicate error
+      exchangeRates.value = {}
+      throw new Error(`Không thể tải tỷ giá hối đoái từ database. Lỗi: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       loading.value = false
     }
@@ -82,13 +89,29 @@ export function useExchangeRates() {
 
   // Convert amount from cost currency to VND
   const convertToVND = (amount: number, costCurrency: string): number => {
-    const rate = exchangeRates.value[costCurrency] || 1
+    if (costCurrency === 'VND') {
+      return amount
+    }
+
+    const rate = exchangeRates.value[costCurrency]
+    if (!rate || rate === 0) {
+      throw new Error(`Không tìm thấy tỷ giá hối đoái cho ${costCurrency} -> VND. Vui lòng kiểm tra lại dữ liệu exchange rates.`)
+    }
+
     return amount * rate
   }
 
   // Convert amount from VND to target currency
   const convertFromVND = (amount: number, targetCurrency: string): number => {
-    const rate = exchangeRates.value[targetCurrency] || 1
+    if (targetCurrency === 'VND') {
+      return amount
+    }
+
+    const rate = exchangeRates.value[targetCurrency]
+    if (!rate || rate === 0) {
+      throw new Error(`Không tìm thấy tỷ giá hối đoái cho VND -> ${targetCurrency}. Vui lòng kiểm tra lại dữ liệu exchange rates.`)
+    }
+
     return amount / rate
   }
 
@@ -103,7 +126,11 @@ export function useExchangeRates() {
 
   // Get current exchange rate for a currency
   const getExchangeRate = (currency: string): number => {
-    return exchangeRates.value[currency] || 1
+    const rate = exchangeRates.value[currency]
+    if (!rate || rate === 0) {
+      throw new Error(`Không tìm thấy tỷ giá hối đoái cho ${currency}. Vui lòng kiểm tra lại dữ liệu exchange rates.`)
+    }
+    return rate
   }
 
   // Format amount with currency conversion

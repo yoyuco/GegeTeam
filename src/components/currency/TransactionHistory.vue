@@ -68,24 +68,26 @@ const transactions = ref<
 const searchText = ref('')
 const filterType = ref<string | null>(null)
 
-// ransaction type options
+// Transaction type options
 const typeOptions = [
   { label: 'Mua vào', value: 'purchase' },
   { label: 'Bán ra', value: 'sale_delivery' },
   { label: 'Đổi tiền', value: 'exchange_out' },
-  { label: 'Chuyển khoản', value: 'transfer' },
+  { label: 'Chuyển ra', value: 'transfer_out' },
+  { label: 'Chuyển vào', value: 'transfer_in' },
   { label: 'Điều chỉnh', value: 'manual_adjustment' },
   { label: 'Farm vào', value: 'farm_in' },
   { label: 'Farm trả', value: 'farm_payout' },
 ]
 
-// ransaction type display mapping
+// Transaction type display mapping
 const typeDisplayMap: Record<string, { label: string; type: string }> = {
   purchase: { label: 'Mua vào', type: 'info' },
   sale_delivery: { label: 'Bán ra', type: 'success' },
   exchange_out: { label: 'Đổi tiền', type: 'warning' },
   exchange_in: { label: 'Nhận đổi', type: 'success' },
-  transfer: { label: 'Chuyển khoản', type: 'default' },
+  transfer_out: { label: 'Chuyển ra', type: 'default' },
+  transfer_in: { label: 'Chuyển vào', type: 'default' },
   manual_adjustment: { label: 'Điều chỉnh', type: 'error' },
   farm_in: { label: 'Farm vào', type: 'info' },
   farm_payout: { label: 'Farm trả', type: 'warning' },
@@ -116,7 +118,7 @@ const filteredTransactions = computed(() => {
   return filtered
 })
 
-// able columns
+// Table columns
 const columns: DataTableColumns<{
   id: string
   created_at: string

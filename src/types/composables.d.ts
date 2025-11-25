@@ -56,10 +56,10 @@ export interface UseGameContext {
 
 export interface GameAccount {
   id: string
-  name: string
+  account_name: string
   game_code: string
-  manager_id: string
-  description?: string
+  purpose: string
+  server_attribute_code?: string
   is_active: boolean
   created_at: string
   updated_at: string
@@ -234,6 +234,49 @@ export interface UseInventory {
   refreshInventory: () => Promise<void>
 }
 
+export interface UseCurrencyTransfer {
+  // State
+  loading: Ref<boolean>
+  error: Ref<string | null>
+
+  // Methods
+  transferCurrency: (transferData: {
+    sourceAccountId: string
+    targetAccountId: string
+    currencyId: string
+    quantity: number
+    gameCode: string
+    serverCode: string
+    notes?: string
+  }) => Promise<{
+      target: any
+      transferredQuantity: number
+      transferredValue: number
+      poolsUsed: Array<{
+        poolId: string
+        quantityTaken: number
+        averageCost: number
+        costCurrency: string
+        channelId: string
+      }>
+      weightedAverageCost: number
+    }>
+  getTransferHistory: (filters?: {
+    gameCode?: string
+    serverCode?: string
+    sourceAccountId?: string
+    targetAccountId?: string
+    currencyId?: string
+    transactionType?: string
+    limit?: number
+  }) => Promise<CurrencyTransfer[]>
+  validateTransfer: (sourceAccountId: string, currencyId: string, quantity: number) => Promise<{
+    valid: boolean
+    availableQuantity?: number
+    reason?: string
+  }>
+}
+
 export interface FeeStep {
   step_number: number
   from_amount: number
@@ -245,4 +288,36 @@ export interface FeeStep {
   fee_currency: string
   description: string
   cumulative_amount: number
+}
+
+export interface CurrencyTransfer {
+  id: string
+  game_account_id: string
+  game_code: string
+  server_attribute_code: string
+  source_account_id?: string
+  target_account_id?: string
+  transaction_type: string
+  currency_attribute_id: string
+  quantity: number
+  transfer_value?: number
+  source_avg_cost?: number
+  target_new_avg_cost?: number
+  unit_price: number
+  currency_code: string
+  notes?: string
+  transferred_by?: string
+  proofs?: any
+  created_at: string
+  game_account?: {
+    account_name: string
+  }
+  currency?: {
+    name: string
+    code: string
+  }
+  transferred_by_user?: {
+    id: string
+    display_name: string
+  }
 }

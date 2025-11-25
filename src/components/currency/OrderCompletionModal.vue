@@ -358,10 +358,29 @@ const loading = ref(false)
 const newPaymentProofs = ref<any[]>([])
 const completionNotes = ref('')
 
+// Helper function to handle both object and array proof formats (same as DataListCurrency)
+const getProofsArray = (proofs: any) => {
+  if (!proofs) return []
+
+  // If it's already an array, return as is
+  if (Array.isArray(proofs)) return proofs
+
+  // If it's an object with url property, convert to array
+  if (typeof proofs === 'object' && proofs.url) {
+    return [proofs]
+  }
+
+  // If it's any other object, try to convert to array
+  if (typeof proofs === 'object') {
+    return [proofs]
+  }
+
+  return []
+}
+
 // Computed properties for proofs
 const allProofs = computed(() => {
-  if (!props.order?.proofs) return []
-  return Array.isArray(props.order.proofs) ? props.order.proofs : []
+  return getProofsArray(props.order?.proofs)
 })
 
 const negotiationProofs = computed(() => {
@@ -475,6 +494,7 @@ const handleCompleteOrder = async () => {
   try {
     // Import uploadFile function
     const { uploadFile } = await import('@/lib/supabase')
+    const { createUniqueFilename } = await import('@/utils/filenameUtils')
 
     // Start with existing proofs
     let finalProofs = [...allProofs.value]

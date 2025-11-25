@@ -3,13 +3,13 @@ import { supabase } from '@/lib/supabase'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { usePermissions } from '@/composables/usePermissions.js'
 import { useCurrency } from '@/composables/useCurrency.js'
-import { useExchangeRates } from '@/composables/useExchangeRates.js'
+import { useExchangeRates } from '@/composables/useExchangeRates'
 
 export function useInventory() {
   const { currentGame, currentServer, loadGameAccounts } = useGameContext()
   const { canViewInventory, canManageGameAccounts } = usePermissions()
   const { getExchangeRate, initialize: initializeCurrency } = useCurrency()
-  const { loadExchangeRates, convertToVND } = useExchangeRates()
+  const { exchangeRates, loadExchangeRates, convertToVND } = useExchangeRates()
 
   // Reactive state
   const inventory = ref([])
@@ -139,21 +139,54 @@ export function useInventory() {
 
   // Load game accounts
   const loadAccounts = async () => {
-    if (!currentGame.value || !currentServer.value) {
+    if (!currentGame.value) {
       gameAccounts.value = []
       return
     }
 
     try {
-      gameAccounts.value = await loadGameAccounts('INVENTORY')
+      // Load both server-specific accounts and global accounts
+      const [serverAccounts, globalAccounts] = await Promise.all([
+        // Load server-specific accounts (if server is selected)
+        currentServer.value ? loadGameAccounts('INVENTORY') : Promise.resolve([]),
+        // Load global accounts (server_attribute_code IS NULL)
+        loadGlobalAccounts()
+      ])
+
+      // Combine and deduplicate accounts
+      const allAccounts = [...serverAccounts, ...globalAccounts]
+      const uniqueAccounts = allAccounts.filter((account, index, self) =>
+        index === self.findIndex(acc => acc.id === account.id)
+      )
+
+      gameAccounts.value = uniqueAccounts
     } catch (err) {
       error.value = err.message
     }
   }
 
+  // Load global game accounts (server_attribute_code IS NULL)
+  const loadGlobalAccounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('game_accounts')
+        .select('*')
+        .eq('game_code', currentGame.value.code)
+        .eq('is_active', true)
+        .is('server_attribute_code', null)
+        .order('account_name')
+
+      if (error) throw error
+      return data || []
+    } catch (err) {
+      console.error('Failed to load global accounts:', err)
+      return []
+    }
+  }
+
   // Load inventory data from inventory_pools table
   const loadInventory = async (accountId = null) => {
-    if (!currentGame.value || !currentServer.value) {
+    if (!currentGame.value) {
       inventory.value = []
       return
     }
@@ -194,7 +227,15 @@ export function useInventory() {
           )
         `)
         .eq('game_code', currentGame.value)
-        .eq('server_attribute_code', currentServer.value)
+
+      // Filter by server: load both server-specific and global (NULL) pools
+      if (currentServer.value && currentServer.value !== 'NULL') {
+        // Load server-specific pools for selected server
+        query = query.eq('server_attribute_code', currentServer.value)
+      } else {
+        // Load global pools (server_attribute_code IS NULL)
+        query = query.is('server_attribute_code', null)
+      }
 
       // Filter by specific account if provided
       if (accountId) {
@@ -442,7 +483,14 @@ export function useInventory() {
 
     try {
       // Load exchange rates first
-      await loadExchangeRates()
+      try {
+        await loadExchangeRates()
+      } catch (exchangeRateError) {
+        console.error('Failed to load exchange rates:', exchangeRateError)
+        // Set error state but continue with other initialization
+        const errorMessage = exchangeRateError instanceof Error ? exchangeRateError.message : 'Unknown error'
+        error.value = `Không thể tải tỷ giá hối đoái: ${errorMessage}`
+      }
 
       // Initialize currency system to load exchange rates
       await initializeCurrency()
@@ -465,7 +513,7 @@ export function useInventory() {
   watch(
     [currentGame, currentServer],
     () => {
-      if (currentGame.value && currentServer.value) {
+      if (currentGame.value) {
         cleanupSubscription()
         initialize()
       }
@@ -514,7 +562,7 @@ export function useInventory() {
 
   // Load inventory data for specific game and server (for external use) - NEW VERSION for CurrencyInventoryPanel
   const loadInventoryForGameServer = async (gameCode, serverCode) => {
-    if (!gameCode || !serverCode) {
+    if (!gameCode) {
       return []
     }
 
@@ -523,7 +571,14 @@ export function useInventory() {
 
     try {
       // Ensure exchange rates are loaded for accurate conversion
-      await loadExchangeRates()
+      try {
+        await loadExchangeRates()
+      } catch (exchangeRateError) {
+        console.error('Failed to load exchange rates for game/server inventory:', exchangeRateError)
+        // Set error state but continue with loading inventory (values will be 0)
+        const errorMessage = exchangeRateError instanceof Error ? exchangeRateError.message : 'Unknown error'
+        error.value = `Không thể tải tỷ giá hối đoái: ${errorMessage}`
+      }
       await initializeCurrency()
       let query = supabase
         .from('inventory_pools')
@@ -553,7 +608,15 @@ export function useInventory() {
           )
         `)
         .eq('game_code', gameCode)
-        .eq('server_attribute_code', serverCode)
+
+      // Filter by server: handle both server-specific and global (NULL) pools
+      if (serverCode && serverCode !== 'NULL') {
+        // Load server-specific pools
+        query = query.eq('server_attribute_code', serverCode)
+      } else {
+        // Load global pools (server_attribute_code IS NULL)
+        query = query.is('server_attribute_code', null)
+      }
 
       const { data, error: fetchError } = await query
 
@@ -601,7 +664,16 @@ export function useInventory() {
         const cost = quantity * avgCost
 
         // Use real exchange rates to convert to VND
-        const vndValue = convertToVND(cost, item.cost_currency || 'VND')
+        const costCurrency = item.cost_currency || 'VND'
+        let vndValue = 0
+
+        try {
+          vndValue = convertToVND(cost, costCurrency)
+        } catch (conversionError) {
+          console.error('Currency conversion error:', conversionError)
+          // Skip this item or set value to 0 if conversion fails
+          vndValue = 0
+        }
 
         const accountData = groupedData[key].costCurrencies[costKey][accountName]
         accountData.totalQuantity += quantity
@@ -661,6 +733,7 @@ export function useInventory() {
 
     // Methods
     loadAccounts,
+    loadGlobalAccounts, // NEW: Load global accounts (server_attribute_code IS NULL)
     loadInventory,
     loadInventoryForGameServer, // NEW: For external use (CurrencyInventoryPanel)
     getInventoryByAccount,

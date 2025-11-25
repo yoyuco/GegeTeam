@@ -206,27 +206,46 @@
 
             <div v-else class="space-y-3">
               <!-- Group data by currency (unique currency names) -->
-              <template v-for="currency in groupedCurrencies" :key="(currency as any).currencyName">
+              <template v-for="currency in groupedCurrencies" :key="(currency as any).currency_name">
               <div
-                v-if="currency && currency.currencyName"
+                v-if="currency && currency.currency_name"
                 class="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200"
               >
-                <!-- Currency Header -->
-                <div :class="getCurrencyColorClass((currency as any).currencyName)" class="p-4 text-white">
+                <!-- Currency Header (Clickable) -->
+                <div
+                  :class="getCurrencyColorClass((currency as any).currency_name)"
+                  class="p-4 text-white cursor-pointer hover:opacity-90 transition-opacity"
+                  @click="toggleCurrencyExpanded((currency as any).currency_name)"
+                >
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                       <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur">
-                        <span class="text-white font-bold text-lg">{{ ((currency as any).currencyName || '').charAt(0) }}</span>
+                        <span class="text-white font-bold text-lg">{{ ((currency as any).currency_name || '').charAt(0) }}</span>
                       </div>
                       <div>
-                        <h4 class="font-bold text-lg">{{ (currency as any).currencyName || 'Unknown Currency' }}</h4>
+                        <h4 class="font-bold text-lg">{{ (currency as any).currency_name || 'Unknown Currency' }}</h4>
+                        <!-- Average Price Display -->
+                        <div v-if="currencyAveragePrices[(currency as any).currency_name]?.hasPoolData && currencyAveragePrices[(currency as any).currency_name]?.averagePriceVND > 0"
+                             class="text-xs font-bold text-white mt-1">
+                          Giá TB: {{ formatCurrency(currencyAveragePrices[(currency as any).currency_name]?.averagePriceVND) }} VND
+                        </div>
                       </div>
                     </div>
-                    <div class="text-right">
-                      <p class="text-white font-bold">{{ formatQuantity((currency as any).totalQuantity) }}</p>
-                      <p v-if="(currency as any).totalReserved > 0" class="text-indigo-200 text-xs">
-                        Ordered: {{ formatQuantity((currency as any).totalReserved) }}
-                      </p>
+                    <div class="flex items-center gap-4">
+                      <div class="text-right">
+                        <div class="bg-blue-100 text-blue-700 text-sm px-2 py-1 rounded-full font-medium inline-block mb-1">
+                          {{ formatQuantity((currency as any).totalQuantity) }}
+                        </div>
+                        <p v-if="(currency as any).totalReserved > 0" class="text-indigo-200 text-xs">
+                          Ordered: {{ formatQuantity((currency as any).totalReserved) }}
+                        </p>
+                      </div>
+                      <!-- Expand/Collapse Icon -->
+                      <div class="transition-transform duration-200" :class="{ 'rotate-180': isCurrencyExpanded((currency as any).currency_name) }">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                   <!-- Total Value Bar -->
@@ -238,8 +257,8 @@
                   </div>
                 </div>
 
-                <!-- Cost Currency Sections (Kho VND/CNY) -->
-                <div class="p-4 space-y-3">
+                <!-- Cost Currency Sections (Kho VND/CNY) - Only show when expanded -->
+                <div v-show="isCurrencyExpanded((currency as any).currency_name)" class="p-4 space-y-3">
                   <div
                     v-for="costCurrency in ['VND', 'CNY']"
                     :key="costCurrency"
@@ -320,10 +339,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted, onMounted } from 'vue'
 import { NScrollbar, NTag } from 'naive-ui'
+import { supabase } from '@/lib/supabase'
 import { useInventory } from '@/composables/useInventory.js'
 import { useGameContext } from '@/composables/useGameContext.js'
+import { useExchangeRates } from '@/composables/useExchangeRates'
 import TransferCurrencyTab from './TransferCurrencyTab.vue'
 import InventoryOverviewModal from './InventoryOverviewModal.vue'
 
@@ -353,9 +374,16 @@ defineEmits<{
 const activeTab = ref('inventory')
 const showInventoryOverview = ref(false)
 
+// Track expanded state for currencies
+const expandedCurrencies = ref<Set<string>>(new Set())
+
+// Average prices for currencies (cached)
+const currencyAveragePrices = ref<{ [key: string]: { averagePriceVND: number; hasPoolData: boolean } }>({})
+
 
 // Use composables
 const { currentGame, currentServer } = useGameContext()
+const { loadExchangeRates, convertToVND } = useExchangeRates()
 const {
   loadInventoryForGameServer,
   formatCurrency,
@@ -387,6 +415,104 @@ const totalReserved = computed(() => {
 const handleTransferCompleted = async () => {
   await loadInventoryData()
 }
+
+// Toggle expanded state for a currency
+const toggleCurrencyExpanded = (currencyName: string) => {
+  const newSet = new Set(expandedCurrencies.value)
+  if (newSet.has(currencyName)) {
+    newSet.delete(currencyName)
+  } else {
+    newSet.add(currencyName)
+  }
+  expandedCurrencies.value = newSet
+}
+
+// Check if a currency is expanded
+const isCurrencyExpanded = (currencyName: string) => {
+  return expandedCurrencies.value.has(currencyName)
+}
+
+// Calculate average price for a specific currency across all pools
+const calculateCurrencyAveragePrice = async (currencyName: string) => {
+  if (!activeGame.value || !activeServer.value || !currencyName) {
+    return
+  }
+  try {
+    // First, find the currency attribute ID for the given currency name
+    const { data: currencyData, error: currencyError } = await supabase
+      .from('attributes')
+      .select('id')
+      .eq('name', currencyName)
+      .eq('is_active', true)
+      .limit(1)
+
+    if (currencyError) throw currencyError
+    if (!currencyData || currencyData.length === 0) {
+      return
+    }
+
+    const currencyAttributeId = currencyData[0].id
+
+    // Query all pools for this currency
+    const { data, error } = await supabase
+      .from('inventory_pools')
+      .select('average_cost, cost_currency, quantity')
+      .eq('game_code', activeGame.value)
+      .eq('server_attribute_code', activeServer.value || '')
+      .eq('currency_attribute_id', currencyAttributeId)
+      .gt('quantity', 0)
+
+    if (error) throw error
+
+    if (data && data.length > 0) {
+      // Calculate weighted average price in VND
+      let totalValueVND = 0
+      let totalQuantity = 0
+
+      for (const pool of data) {
+        const quantity = parseFloat(pool.quantity) || 0
+        const avgCost = parseFloat(pool.average_cost) || 0
+        const costCurrency = pool.cost_currency || 'VND'
+
+        try {
+          const valueInVND = convertToVND(avgCost * quantity, costCurrency)
+          totalValueVND += valueInVND
+          totalQuantity += quantity
+        } catch (conversionError) {
+          console.error('Currency conversion error in calculateCurrencyAveragePrice:', conversionError)
+        }
+      }
+
+      const averagePriceVND = totalQuantity > 0 ? totalValueVND / totalQuantity : 0
+
+      currencyAveragePrices.value[currencyName] = {
+        averagePriceVND,
+        hasPoolData: true
+      }
+    } else {
+      // No pool data found
+      currencyAveragePrices.value[currencyName] = {
+        averagePriceVND: 0,
+        hasPoolData: false
+      }
+    }
+  } catch (err) {
+    console.error('Error calculating currency average price:', err)
+    currencyAveragePrices.value[currencyName] = {
+      averagePriceVND: 0,
+      hasPoolData: false
+    }
+  }
+}
+
+// Ensure exchange rates are loaded on mount
+onMounted(async () => {
+  try {
+    await loadExchangeRates()
+  } catch (error) {
+    console.error('CurrencyInventoryPanel: Failed to load exchange rates:', error)
+  }
+})
 
 // Generate different colors for different currencies
 const getCurrencyColorClass = (currencyName: string) => {
@@ -433,9 +559,25 @@ const getCurrencyColorClass = (currencyName: string) => {
 const loadInventoryData = async () => {
   if (activeGame.value && activeServer.value) {
     try {
+      // Load exchange rates first
+      await loadExchangeRates()
+
       const data = await loadInventoryForGameServer(activeGame.value, activeServer.value)
       localGameData.value = data || []
+
+      // Calculate average prices directly from inventory data
+      for (const item of data || []) {
+        if (item.currency_name && item.totalQuantity > 0) {
+          const averagePriceVND = item.totalValueVND / item.totalQuantity
+
+          currencyAveragePrices.value[item.currency_name] = {
+            averagePriceVND,
+            hasPoolData: true
+          }
+        }
+      }
     } catch (err) {
+      console.error('CurrencyInventoryPanel: Failed to load inventory data:', err)
       localGameData.value = []
     }
   } else {
@@ -453,9 +595,7 @@ watch(
   { immediate: true }
 )
 
-// Override processedInventoryData để sử dụng local data
 const displayInventoryData = computed(() => {
-  // Luôn ưu tiên sử dụng local data được tải từ inventory_pools
   return localGameData.value
 })
 
@@ -464,13 +604,13 @@ const groupedCurrencies = computed(() => {
   const currencyMap: Record<string, any> = {}
 
   displayInventoryData.value.forEach((item: any) => {
-    if (!item || !item.currency_name) return // Skip invalid items
+    if (!item || !item.currency_name) return
 
     const currencyName = item.currency_name
 
     if (!currencyMap[currencyName]) {
       currencyMap[currencyName] = {
-        currencyName: currencyName,
+        currency_name: currencyName,
         totalQuantity: 0,
         totalReserved: 0,
         totalValueVND: 0,
@@ -506,12 +646,11 @@ const groupedCurrencies = computed(() => {
         const totalCost = costCurrencyGroup.avgCost * oldQuantity + (costData.avgCost || 0) * (costData.totalQuantity || 0)
         costCurrencyGroup.avgCost = costCurrencyGroup.totalQuantity > 0 ? totalCost / costCurrencyGroup.totalQuantity : (costData.avgCost || 0)
 
-        // Add accounts safely
         if (Array.isArray(costData.accounts)) {
           costCurrencyGroup.accounts.push(...costData.accounts)
         }
       })
-    } // End of costCurrencies check
+    }
   })
 
   return Object.values(currencyMap)

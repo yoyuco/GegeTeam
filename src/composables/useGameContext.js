@@ -245,26 +245,57 @@ export function useGameContext() {
 
   // Load game accounts for current game and server
   const loadGameAccounts = async (purpose = null) => {
-    if (!currentGame.value || !currentServer.value) return []
+    if (!currentGame.value) return []
 
     loading.value = true
 
     try {
-      let query = supabase
-        .from('game_accounts')
-        .select('*')
-        .eq('game_code', currentGame.value)
-        .eq('server_attribute_code', currentServer.value)
+      // Load both server-specific accounts AND global accounts
+      const queries = []
 
-      if (purpose) {
-        query = query.eq('purpose', purpose)
+      // Query 1: Server-specific accounts (if server is selected)
+      if (currentServer.value) {
+        queries.push(
+          supabase
+            .from('game_accounts')
+            .select('*')
+            .eq('game_code', currentGame.value)
+            .eq('server_attribute_code', currentServer.value)
+        )
       }
 
-      const { data, error: fetchError } = await query
+      // Query 2: Global accounts (server IS NULL) - always included
+      queries.push(
+        supabase
+          .from('game_accounts')
+          .select('*')
+          .eq('game_code', currentGame.value)
+          .is('server_attribute_code', null)
+      )
 
-      if (fetchError) throw fetchError
+      // Apply purpose filter to all queries if specified
+      if (purpose) {
+        queries.forEach(query => query.eq('purpose', purpose))
+      }
 
-      return data || []
+      const results = await Promise.all(queries)
+
+      // Combine results and remove duplicates
+      const allAccounts = []
+      const seenIds = new Set()
+
+      results.forEach((result) => {
+        if (result.data) {
+          result.data.forEach(acc => {
+            if (!seenIds.has(acc.id)) {
+              seenIds.add(acc.id)
+              allAccounts.push(acc)
+            }
+          })
+        }
+      })
+
+      return allAccounts
     } catch (err) {
       console.error('Error loading game accounts:', err)
       error.value = err.message

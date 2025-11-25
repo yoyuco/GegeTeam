@@ -214,10 +214,18 @@
             </div>
             <label class="text-sm font-medium text-gray-700">Tổng tiền</label>
             <span class="text-red-500">*</span>
-            <!-- Exchange Rate Display -->
-            <div v-if="sellFormData.currencyId && sellFormData.quantity && sellFormData.totalPrice"
-                 class="ml-auto bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-200 font-medium">
-              1 {{ getCurrencyName(sellFormData.currencyId) }} = {{ formatCurrency(sellFormData.totalPrice / sellFormData.quantity) }}/{{ sellFormData.currencyCode }}
+            <!-- Exchange Rate Display + Average Price Label -->
+            <div class="ml-auto flex items-center gap-2">
+              <!-- Average Price Display -->
+              <div v-if="averageSellPriceData.hasPoolData && averageSellPriceData.averagePriceVND > 0"
+                   class="text-xs font-bold text-white bg-purple-600 px-2 py-1 rounded">
+                Giá TB: {{ formatCurrency(averageSellPriceData.averagePriceVND) }} VND
+              </div>
+              <!-- Current Exchange Rate Display -->
+              <div v-if="sellFormData.currencyId && sellFormData.quantity && sellFormData.totalPrice"
+                   class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
+                1 {{ getCurrencyName(sellFormData.currencyId) }} = {{ formatCurrency(sellFormData.totalPrice / sellFormData.quantity) }}/{{ sellFormData.currencyCode }}
+              </div>
             </div>
           </div>
           <div class="flex gap-2">
@@ -267,9 +275,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue'
+import { computed, watch, ref, nextTick } from 'vue'
 import { NSelect, NInputNumber, NInput } from 'naive-ui'
 import { supabase } from '@/lib/supabase'
+import { useExchangeRates } from '@/composables/useExchangeRates'
+
+// Use exchange rates for conversion
+const { convertToVND, loadExchangeRates, loading: exchangeRatesLoading, error: exchangeRatesError, exchangeRates } = useExchangeRates()
+
+// Average sell price data for sell tab
+const averageSellPriceData = ref({
+  averagePriceVND: 0,
+  hasPoolData: false
+})
 
 // Helper functions for exchange rate display
 const getCurrencyName = (currencyId: string) => {
@@ -323,7 +341,7 @@ const validatePurchasePrice = async () => {
 
   const unitPrice = buyFormData.value.totalPrice / buyFormData.value.quantity
 
-  if (!props.gameCode || !props.channelId) {
+  if (!props.gameCode) {
     return
   }
 
@@ -363,6 +381,81 @@ const validatePurchasePrice = async () => {
       price_difference_percent: 0,
       warning_level: 'no_data',
       comparison_message: ''
+    }
+  }
+}
+
+// Calculate average sell price from all pools
+const calculateAverageSellPrice = async () => {
+  if (props.transactionType !== 'sale') {
+    return
+  }
+
+  if (!props.gameCode || !sellFormData.value.currencyId) {
+    averageSellPriceData.value = {
+      averagePriceVND: 0,
+      hasPoolData: false
+    }
+    return
+  }
+
+  // Wait for exchange rates to be loaded before proceeding
+  if (exchangeRatesLoading.value || Object.keys(exchangeRates.value).length === 0) {
+    return
+  }
+
+  // Don't proceed if there's an error with exchange rates
+  if (exchangeRatesError.value) {
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('inventory_pools')
+      .select('average_cost, cost_currency, quantity')
+      .eq('game_code', props.gameCode)
+      .eq('server_attribute_code', props.serverCode || '')
+      .eq('currency_attribute_id', sellFormData.value.currencyId)
+      .gt('quantity', 0)
+
+    if (error) throw error
+
+    if (data && data.length > 0) {
+      // Calculate weighted average price in VND
+      let totalValueVND = 0
+      let totalQuantity = 0
+
+      for (const pool of data) {
+        const quantity = parseFloat(pool.quantity) || 0
+        const avgCost = parseFloat(pool.average_cost) || 0
+        const costCurrency = pool.cost_currency || 'VND'
+
+        try {
+          const valueInVND = convertToVND(avgCost * quantity, costCurrency)
+          totalValueVND += valueInVND
+          totalQuantity += quantity
+        } catch (conversionError) {
+          console.error('Currency conversion error in calculateAverageSellPrice:', conversionError)
+        }
+      }
+
+      const averagePriceVND = totalQuantity > 0 ? totalValueVND / totalQuantity : 0
+
+      averageSellPriceData.value = {
+        averagePriceVND,
+        hasPoolData: true
+      }
+    } else {
+      averageSellPriceData.value = {
+        averagePriceVND: 0,
+        hasPoolData: false
+      }
+    }
+  } catch (err) {
+    console.error('Error calculating average sell price:', err)
+    averageSellPriceData.value = {
+      averagePriceVND: 0,
+      hasPoolData: false
     }
   }
 }
@@ -614,6 +707,8 @@ watch(
   () => sellFormData.value.currencyId,
   (newCurrencyId: string | null) => {
     emit('currency-changed', newCurrencyId)
+    // Calculate average sell price when currency changes
+    calculateAverageSellPrice()
   }
 )
 
@@ -621,6 +716,16 @@ watch(
   () => sellFormData.value.quantity,
   (newQuantity: number | null) => {
     emit('quantity-changed', newQuantity)
+  }
+)
+
+// Watch for exchange rates to be loaded, then trigger average sell price calculation
+watch(
+  [exchangeRatesLoading, exchangeRates],
+  ([loading, rates]) => {
+    if (!loading && Object.keys(rates).length > 0 && props.transactionType === 'sale' && sellFormData.value.currencyId) {
+      calculateAverageSellPrice()
+    }
   }
 )
 
@@ -661,9 +766,40 @@ watch(
         warning_level: 'no_data',
         comparison_message: ''
       }
+      // Reset average sell price data
+      averageSellPriceData.value = {
+        averagePriceVND: 0,
+        hasPoolData: false
+      }
     }
   },
   { immediate: false }
+)
+
+// Initialize exchange rates on mount
+watch(
+  () => [props.loading, props.currencies],
+  async ([isLoading, currencies]) => {
+    if (!isLoading && Array.isArray(currencies) && currencies.length > 0) {
+      // Load exchange rates for currency conversion
+      try {
+        await loadExchangeRates()
+
+        // Wait for next tick to ensure reactive data is updated
+        await nextTick()
+
+        // Calculate initial prices based on transaction type
+        if (props.transactionType === 'sale' && sellFormData.value.currencyId) {
+          calculateAverageSellPrice()
+        } else if (props.transactionType === 'purchase' && buyFormData.value.currencyId) {
+          validatePurchasePrice()
+        }
+      } catch (error) {
+        console.error('Failed to load exchange rates:', error)
+      }
+    }
+  },
+  { immediate: true }
 )
 
 

@@ -402,7 +402,7 @@
                 <!-- Game Tag/Delivery Info -->
                 <div v-if="selectedItem?.delivery_info">
                   <div class="flex justify-between items-center mb-1">
-                    <span class="text-sm text-gray-600">{{ selectedItem.order_type === 'PURCHASE' ? 'ID Game mua:' : 'ID Game bán:' }}</span>
+                    <span class="text-sm text-gray-600">{{ selectedItem.order_type === 'PURCHASE' ? 'ID Game:' : 'ID Game bán:' }}</span>
                     <n-button
                       v-if="selectedItem.delivery_info && selectedItem.delivery_info !== '-'"
                       size="tiny"
@@ -640,14 +640,21 @@
                 <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                By chứng đính kèm
+                Bằng chứng đính kèm
               </h3>
 
-              <!-- Show all proofs from the JSONB array -->
+              <!-- Show all proofs (handle both array and object formats) -->
               <div class="space-y-3">
-                <div v-if="Array.isArray(selectedItem.proofs)" class="grid grid-cols-2 gap-3">
+                <div v-if="getProofsArray(selectedItem.proofs).length > 0">
+                  <!-- Debug: Print first proof URL to console -->
+                  <div class="mb-2 p-2 bg-yellow-100 rounded text-xs">
+                    <strong>Debug:</strong> {{ getProofsArray(selectedItem.proofs).length }} proofs found
+                    <br>First URL: {{ getProofsArray(selectedItem.proofs)[0]?.url }}
+                    <br>First Filename: {{ getProofsArray(selectedItem.proofs)[0]?.filename }}
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
                   <div
-                    v-for="(proof, index) in selectedItem.proofs"
+                    v-for="(proof, index) in getProofsArray(selectedItem.proofs)"
                     :key="index"
                     class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
                   >
@@ -691,15 +698,15 @@
                     <div v-if="proof.uploaded_by" class="text-xs text-gray-500 mt-2">
                       Người tải: {{ proof.uploaded_by }}
                     </div>
+                    <div v-else class="text-sm text-gray-500 italic">
+                      Không có bằng chứng nào được tải lên
+                    </div>
                   </div>
-                </div>
-
-                <div v-else class="text-sm text-gray-500 italic">
-                  Không có bằng chứng nào được tải lên
                 </div>
               </div>
             </div>
           </div>
+        </div>
         </div>
 
         <!-- Proof Upload Section for Delivery Tab -->
@@ -747,8 +754,7 @@
               {{ selectedItem?.order_type === 'PURCHASE' ? 'Xác nhận đã nhận hàng' : 'Xác nhận đã giao hàng' }}
             </n-button>
           </div>
-
-          </div>
+        </div>
       </div>
     </n-modal>
 
@@ -857,8 +863,7 @@
         </div>
       </div>
     </n-modal>
-
-    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -2007,6 +2012,7 @@ const handleConfirmDelivery = async () => {
 
     // Import uploadFile function
     const { uploadFile } = await import('@/lib/supabase')
+    const { createUniqueFilename } = await import('@/utils/filenameUtils')
 
     // Upload all files
     const uploadPromises = selectedProofFiles.value.map(async (f, index) => {
@@ -2014,10 +2020,8 @@ const handleConfirmDelivery = async () => {
         throw new Error(`File ${f.name} không có dữ liệu`)
       }
 
-      // Create unique filename
-      const timestamp = Date.now()
-      const randomString = Math.random().toString(36).substring(2, 8)
-      const filename = `${timestamp}-${randomString}-${f.file.name}`
+      // Create unique filename with sanitization
+      const filename = createUniqueFilename(f.file.name)
       const filePath = `${uploadPath}/${filename}`
 
       const uploadResult = await uploadFile(f.file, filePath, 'work-proofs')
@@ -2258,6 +2262,7 @@ const handleConfirmCancel = async () => {
 
       // Import uploadFile function
       const { uploadFile } = await import('@/lib/supabase')
+      const { createUniqueFilename } = await import('@/utils/filenameUtils')
 
       // Upload all cancel proof files
       const uploadPromises = cancelProofFiles.value.map(async (f) => {
@@ -2265,10 +2270,8 @@ const handleConfirmCancel = async () => {
           throw new Error(`File ${f.name} không có dữ liệu`)
         }
 
-        // Create unique filename
-        const timestamp = Date.now()
-        const randomString = Math.random().toString(36).substring(2, 8)
-        const filename = `${timestamp}-${randomString}-${f.file.name}`
+        // Create unique filename with sanitization
+        const filename = createUniqueFilename(f.file.name)
         const filePath = `${uploadPath}/${filename}`
 
   
@@ -2384,10 +2387,85 @@ const getImageUrl = (url: string) => {
   return url
 }
 
+// Helper function to handle both object and array proof formats
+const getProofsArray = (proofs: any) => {
+  if (!proofs) return []
+
+  // If it's already an array, return as is
+  if (Array.isArray(proofs)) return proofs
+
+  // If it's an object with url property, convert to array
+  if (typeof proofs === 'object' && proofs.url) {
+    return [proofs]
+  }
+
+  // If it's any other object, try to convert to array
+  if (typeof proofs === 'object') {
+    return [proofs]
+  }
+
+  return []
+}
+
 const viewImage = (url: string) => {
   const imageUrl = getImageUrl(url)
   if (imageUrl) {
-    window.open(imageUrl, '_blank')
+    // Create a temporary link to test if URL is accessible
+    const testLink = document.createElement('a')
+    testLink.href = imageUrl
+    testLink.target = '_blank'
+
+    // Try to fetch first to verify it's an image
+    fetch(imageUrl, { method: 'GET' })
+      .then(async response => {
+        if (response.ok && response.headers.get('content-type')?.startsWith('image/')) {
+          // It's a valid image, open it
+          window.open(imageUrl, '_blank')
+        } else {
+          // Not an image or error, get the actual response content
+          const responseText = await response.text()
+          let errorDetails = {
+            url: imageUrl,
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+            response: responseText
+          }
+
+          console.error('Invalid image response:', errorDetails)
+
+          // Check if response is empty - file likely doesn't exist in storage
+          if (!responseText || responseText.trim() === '') {
+            message.error('File bằng chứng không tồn tại trong storage. Cần upload lại bằng chứng cho đơn hàng này.')
+            console.error('File not found in storage. The upload may have failed but URL was saved to database.')
+          } else {
+            // Try to parse as JSON to get meaningful error message
+            try {
+              const jsonResponse = JSON.parse(responseText)
+
+              // Check if it's SimpleProofUpload component data
+              if (jsonResponse.id && jsonResponse.name && jsonResponse.status === 'pending' && jsonResponse.url === null) {
+                message.error('URL đang trỏ đến component data thay vì image file. Có thể có routing hoặc CORS issue.')
+                console.error('URL routing issue - getting SimpleProofUpload data instead of image:', {
+                  url: imageUrl,
+                  componentData: jsonResponse
+                })
+              } else {
+                const errorMessage = jsonResponse?.error?.message || jsonResponse?.message || 'Lỗi không xác định'
+                message.error(`Không thể tải hình ảnh: ${errorMessage}`)
+              }
+            } catch {
+              // Not JSON, show generic error
+              message.error(`Không thể tải hình ảnh: Server trả về ${response.headers.get('content-type')} thay vì image`)
+            }
+          }
+        }
+      })
+      .catch(error => {
+        message.error(`Lỗi khi tải hình ảnh: ${error.message}`)
+        console.error('Error fetching image:', error)
+      })
+  } else {
+    message.error('URL hình ảnh không hợp lệ')
   }
 }
 

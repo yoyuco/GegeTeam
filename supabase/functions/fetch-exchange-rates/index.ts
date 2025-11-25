@@ -205,10 +205,12 @@ function filterRatesForActiveCurrencies(rates: any[], activeCurrencies: string[]
           !directRates.some(r => r.from_currency === from && r.to_currency === to) &&
           usdRateMap.has(from) && usdRateMap.has(to)) {
 
-        // Calculate cross rate: from/to = (from/USD) / (to/USD)
-        const fromToUSD = usdRateMap.get(from)
-        const toToUSD = usdRateMap.get(to)
-        const crossRate = fromToUSD / toToUSD
+        // Calculate cross rate: from/to = (USD/to) / (USD/from)  using USD as base
+        const usdToFrom = usdRateMap.get(from)  // USD -> from rate
+        const usdToTo = usdRateMap.get(to)      // USD -> to rate
+        const crossRate = usdToTo / usdToFrom    // (USD/to) / (USD/from) = from/to
+
+        console.log(`Cross rate ${from} -> ${to}: ${usdToTo} / ${usdToFrom} = ${crossRate}`)
 
         crossRates.push({
           from_currency: from,
