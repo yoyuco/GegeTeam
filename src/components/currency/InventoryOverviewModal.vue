@@ -37,8 +37,21 @@
           Đang tải dữ liệu...
         </div>
 
+        <!-- Error Message -->
+        <div v-if="error" class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p class="text-sm font-medium text-red-800">Lỗi tỷ giá hối đoái</p>
+              <p class="text-sm text-red-700 mt-1">{{ error }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Summary Stats -->
-        <div v-if="!loading && inventoryData.length > 0" class="mt-4 grid grid-cols-3 gap-4">
+        <div v-if="!loading && inventoryData.length > 0 && !error" class="mt-4 grid grid-cols-3 gap-4">
           <div class="bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
             <div class="flex items-center gap-3">
               <div class="w-4 h-4 bg-blue-400 rounded-full shadow-md"></div>
@@ -74,6 +87,22 @@
       <div class="h-full overflow-y-auto p-4">
         <div v-if="loading" class="flex items-center justify-center h-64">
           <div class="text-center">
+            <div class="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p class="text-white/80">Đang tải dữ liệu inventory...</p>
+          </div>
+        </div>
+
+        <div v-else-if="error" class="flex items-center justify-center h-64">
+          <div class="text-center">
+            <svg class="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-white/80">Không thể tải dữ liệu do lỗi tỷ giá hối đoái</p>
+          </div>
+        </div>
+
+        <div v-else-if="inventoryData.length === 0" class="flex items-center justify-center h-64">
+          <div class="text-center">
             <svg class="animate-spin h-8 w-8 mx-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="none" stroke="currentColor" stroke-width="4" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -82,14 +111,7 @@
           </div>
         </div>
 
-        <div v-else-if="inventoryData.length === 0" class="text-center py-12">
-          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-          </svg>
-          <h3 class="mt-2 text-sm font-medium text-gray-900">Không có dữ liệu inventory</h3>
-          <p class="mt-1 text-sm text-gray-500">Chưa có pool nào được tìm thấy</p>
-        </div>
-
+        
         <!-- Tree View Layout -->
         <div v-else class="h-full overflow-y-auto">
           <div class="flex gap-6 h-full">
@@ -225,10 +247,14 @@
 
                           <!-- Cost Currency Content (Account Details) -->
                           <div v-show="isCostCurrencyExpanded(game, server, currency.id, costCurrency)" class="bg-white divide-y divide-gray-50">
+                            <!-- Debug info -->
+                            <div v-if="getPoolsForServerCurrency(game, server, currency.name, costCurrency).length === 0" class="px-10 py-2 text-gray-500 text-sm">
+                              Không có dữ liệu pools cho {{ currency.name }} - {{ costCurrency }}
+                            </div>
                             <!-- Account Rows -->
                             <div
                               v-for="pool in getPoolsForServerCurrency(game, server, currency.name, costCurrency)"
-                              :key="pool.id"
+                              :key="pool.id || `${pool.account_name}-${costCurrency}`"
                               v-show="pool.quantity > 0 || pool.reserved_quantity > 0"
                               class="px-10 py-2 hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0"
                             >
@@ -280,13 +306,14 @@ const emit = defineEmits<{
 
 // State
 const loading = ref(false)
+const error = ref<string | null>(null)
 const inventoryData = reactive<any[]>([])
 
 // Tree state management
 const treeState = reactive<{ [key: string]: any }>({})
 
 // Use exchange rates composable
-const { exchangeRates, loadExchangeRates, convertToVND, convertFromVND, convertCurrency } = useExchangeRates()
+const { loadExchangeRates, convertToVND } = useExchangeRates()
 
 // Initialize tree state
 const initializeTreeState = () => {
@@ -397,7 +424,16 @@ const getGameTotalValue = (gameCode: string) => {
       return currencyTotal + currency.cost_currencies.reduce((costCurrencyTotal: number, costCurrency: any) => {
         return costCurrencyTotal + costCurrency.pools.reduce((poolTotal: number, pool: any) => {
           const valueInCostCurrency = pool.quantity * pool.average_cost
-          return poolTotal + convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+          let convertedValue = 0
+
+          try {
+            convertedValue = convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+          } catch (conversionError) {
+            console.error('Currency conversion error in getGameTotalValue:', conversionError)
+            convertedValue = 0
+          }
+
+          return poolTotal + convertedValue
         }, 0)
       }, 0)
     }, 0)
@@ -415,7 +451,16 @@ const getServerTotalValue = (gameCode: string, serverCode: string) => {
     return total + currency.cost_currencies.reduce((currencyTotal: number, costCurrency: any) => {
       return currencyTotal + costCurrency.pools.reduce((poolTotal: number, pool: any) => {
         const valueInCostCurrency = pool.quantity * pool.average_cost
-        return poolTotal + convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+        let convertedValue = 0
+
+        try {
+          convertedValue = convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+        } catch (conversionError) {
+          console.error('Currency conversion error in getServerTotalValue:', conversionError)
+          convertedValue = 0
+        }
+
+        return poolTotal + convertedValue
       }, 0)
     }, 0)
   }, 0)
@@ -434,7 +479,16 @@ const getCurrencyTotalValue = (gameCode: string, serverCode: string, currencyId:
   return currency.cost_currencies.reduce((total: number, costCurrency: any) => {
     return total + costCurrency.pools.reduce((poolTotal: number, pool: any) => {
       const valueInCostCurrency = pool.quantity * pool.average_cost
-      return poolTotal + convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+      let convertedValue = 0
+
+      try {
+        convertedValue = convertToVND(valueInCostCurrency, costCurrency.cost_currency)
+      } catch (conversionError) {
+        console.error('Currency conversion error in getCurrencyTotalValue:', conversionError)
+        convertedValue = 0
+      }
+
+      return poolTotal + convertedValue
     }, 0)
   }, 0)
 }
@@ -730,19 +784,27 @@ const getPoolsForServerCurrency = (gameCode: string, serverCode: string, currenc
 
 const loadInventoryData = async () => {
   loading.value = true
+  error.value = null
 
   try {
     // Load exchange rates first
-    await loadExchangeRates()
+    try {
+      await loadExchangeRates()
+    } catch (exchangeRateError) {
+      console.error('Failed to load exchange rates for inventory overview:', exchangeRateError)
+      // Set error state but continue loading inventory (values will be 0)
+      const errorMessage = exchangeRateError instanceof Error ? exchangeRateError.message : 'Unknown error'
+      error.value = `Không thể tải tỷ giá hối đoái: ${errorMessage}. Giá trị tổng sẽ được hiển thị là 0.`
+    }
 
     // Load attribute names for games and servers
     await loadAttributeNames()
 
     // Use RPC function to ensure proper authentication
-    const { data, error } = await supabase.rpc('get_all_inventory_pools')
+    const { data, error: supabaseError } = await supabase.rpc('get_all_inventory_pools')
 
-    if (error) {
-      throw error
+    if (supabaseError) {
+      throw supabaseError
     }
 
     // Transform data to hierarchical structure

@@ -222,8 +222,8 @@
         <!-- Proof Upload Section -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div class="flex items-center gap-2 mb-4">
-            <div class="w-5 h-5 bg-purple-100 rounded flex items-center justify-center">
-              <svg class="w-2.5 h-2.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center">
+              <svg class="w-2.5 h-2.5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -232,10 +232,13 @@
                 />
               </svg>
             </div>
-            <label class="text-sm font-medium text-gray-700">Tải lên bằng chứng giao dịch</label>
+            <label class="text-sm font-medium text-gray-700 flex items-center gap-1">
+              Tải lên bằng chứng giao dịch
+              <span class="text-red-500">*</span>
+            </label>
           </div>
-          <SimpleProofUpload
-            v-model:files="proofFiles"
+                    <SimpleProofUpload
+            v-model="proofFiles"
             :max-files="5"
           />
         </div>
@@ -368,12 +371,16 @@ const exchangeRate = computed(() => {
 })
 
 const isFormValid = computed(() => {
+  const rateNumeric = exchangeRate.value ? parseFloat(exchangeRate.value) : NaN;
+
   return (
     sourceCurrencyId.value &&
     sourceAccountId.value &&
     destCurrencyId.value &&
     sourceAmount.value && sourceAmount.value > 0 &&
-    destAmount.value && destAmount.value > 0
+    !isNaN(rateNumeric) && rateNumeric > 0 &&
+    destAmount.value && destAmount.value > 0 &&
+    proofFiles.value && proofFiles.value.length > 0
   )
 })
 
@@ -387,7 +394,9 @@ const onDestCurrencyChange = () => {
 }
 
 const onSubmit = () => {
-  if (!isFormValid.value) return
+  if (!isFormValid.value) {
+    return
+  }
 
   const data: ExchangeData = {
     sourceCurrency: {
@@ -489,6 +498,7 @@ watch(() => props.currencies, (newCurrencies, oldCurrencies) => {
     }
   }
 }, { immediate: true })
+
 
 
 </script>

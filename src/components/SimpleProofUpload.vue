@@ -80,6 +80,7 @@
 import { ref, watch, computed } from 'vue'
 import { NUpload, useMessage, type UploadFileInfo, type UploadCustomRequestOptions } from 'naive-ui'
 import { uploadFile } from '@/lib/supabase'
+import { sanitizeFilename } from '@/utils/filenameUtils'
 
 interface FileInfo {
   id: string
@@ -251,10 +252,11 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
 
     const actualFile = file.file as File
 
-    // Create unique filename with timestamp
+    // Create unique filename with timestamp and sanitized original filename
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 8)
-    const filename = `${timestamp}-${randomString}-${actualFile.name}`
+    const sanitizedOriginalName = sanitizeFilename(actualFile.name)
+    const filename = `${timestamp}-${randomString}-${sanitizedOriginalName}`
 
     // Dynamic file path based on orderId availability
     let filePath = `${props.uploadPath}/${filename}`
@@ -377,9 +379,21 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
   }
 }
 
-const handleFileChange = (_options: any) => {
-  // Disabled - do not trigger upload on file change when autoUpload=false
-  // Files are processed only when uploadFiles() is called explicitly
+const handleFileChange = (options: any) => {
+  // When autoUpload=false, we still need to add files to fileList
+  // But we don't automatically upload them
+  if (options.file && options.fileList) {
+    // Convert n-upload files to our FileInfo format
+    const newFiles = options.fileList.map((item: any) => ({
+      id: item.id || generateId(),
+      name: item.name,
+      url: item.url,
+      file: item.file,
+      status: 'pending' as const
+    }))
+
+    fileList.value = newFiles
+  }
 }
 
 
@@ -441,10 +455,11 @@ const uploadFiles = async () => {
           message: `Đang upload ${fileInfo.name}...`,
         }
 
-        // Create unique filename
+        // Create unique filename with sanitized original filename
         const timestamp = Date.now()
         const randomString = Math.random().toString(36).substring(2, 8)
-        const filename = `${timestamp}-${randomString}-${fileInfo.file.name}`
+        const sanitizedOriginalName = sanitizeFilename(fileInfo.file.name)
+        const filename = `${timestamp}-${randomString}-${sanitizedOriginalName}`
 
         // Dynamic file path based on orderId availability
         let filePath = `${props.uploadPath}/${filename}`

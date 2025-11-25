@@ -136,8 +136,8 @@
       </div>
     </div>
 
-    <!-- Tab Content -->
-    <div class="flex-1">
+      <!-- Tab Content -->
+      <div class="flex-1">
       <!-- Tab Đổi Currency -->
       <div v-if="activeTab === 'exchange'" class="tab-pane">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -345,7 +345,7 @@ const {
   initialize: initializeCurrency,
 } = useCurrency()
 
-const { inventoryByCurrency, gameAccounts, loadAccounts } = useInventory()
+const { inventoryByCurrency, gameAccounts, loadAccounts, loadInventory, getAvailableQuantity } = useInventory()
 
 // Manual currency loading function using attribute_relationships
 const loadCurrenciesForCurrentGame = async () => {
@@ -363,7 +363,6 @@ const loadCurrenciesForCurrentGame = async () => {
       .single()
 
     if (gameError || !gameData) {
-      console.error('❌ Game not found:', gameError)
       throw new Error(`Game ${currentGame.value} not found`)
     }
 
@@ -377,7 +376,6 @@ const loadCurrenciesForCurrentGame = async () => {
       .eq('parent_attribute_id', gameData.id)
 
     if (relationshipError) {
-      console.error('❌ Error loading attribute relationships:', relationshipError)
       throw relationshipError
     }
 
@@ -399,14 +397,11 @@ const loadCurrenciesForCurrentGame = async () => {
       .order('sort_order', { ascending: true })
 
     if (error) {
-      console.error('❌ Error loading currencies via attribute_relationships:', error)
-
       // Fallback to previous method
       const gameInfo = currentGame.value === 'POE_2' ? { currencyPrefix: 'CURRENCY_POE2' } :
                        currentGame.value === 'POE_1' ? { currencyPrefix: 'CURRENCY_POE1' } :
                        currentGame.value === 'DIABLO_4' ? { currencyPrefix: 'CURRENCY_D4' } : null
       if (!gameInfo) {
-        console.error('❌ Unknown game, cannot load currencies')
         return
       }
 
@@ -418,7 +413,6 @@ const loadCurrenciesForCurrentGame = async () => {
         .order('sort_order', { ascending: true })
 
       if (fallbackError) {
-        console.error('❌ Error in fallback currency loading:', fallbackError)
         throw fallbackError
       }
     }
@@ -427,7 +421,6 @@ const loadCurrenciesForCurrentGame = async () => {
     // We need to ensure they're properly loaded
 
   } catch (err) {
-    console.error('❌ Error in manual currency loading:', err)
     throw err
   }
 }
@@ -484,11 +477,14 @@ const filteredCurrencies = computed(() => {
 
 const accountOptions = computed(() => {
   try {
-    return (gameAccounts.value || [])
-      .filter((acc: GameAccount) => acc && acc.name && acc.id)
-      .map((acc: GameAccount) => ({ label: acc.name, value: acc.id }))
+    const filtered = (gameAccounts.value || [])
+      .filter((acc: GameAccount) => acc && acc.account_name && acc.id)
+
+    return filtered.map((acc: GameAccount) => ({
+      label: acc.account_name,
+      value: acc.id
+    }))
   } catch (error) {
-    console.error('Error in accountOptions computed:', error)
     return []
   }
 })
@@ -517,7 +513,6 @@ const loadData = async () => {
         retries++
       }
       if (!currentGame.value || !currentServer.value) {
-        console.error('❌ Game context not available after retries')
         throw new Error('Game context not available')
       }
 
@@ -551,7 +546,6 @@ const initializeComponent = async () => {
     await loadData()
   } catch (error) {
     message.error('Không thể khởi tạo dữ liệu')
-    console.error(error)
   }
 }
 
@@ -559,13 +553,149 @@ const initializeComponent = async () => {
 const handleExchangeSubmit = async (data: any) => {
   submittingExchange.value = true
   try {
-    // TODO: Implement exchange API call
-    message.success('Đổi currency thành công!')
-  } catch (error) {
-    message.error('Lỗi khi đổi currency.')
-    console.error(error)
+    // Validate game context first
+    if (!currentGame.value) {
+      throw new Error('Vui lòng chọn game trước khi thực hiện đổi currency')
+    }
+
+    // Get current profile ID first (rule from memory.md)
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    if (profileError) {
+      throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
+    }
+
+  
+    // Validate inventory quantity before creating order
+    const availableQuantity = getAvailableQuantity(
+      data.sourceCurrency?.id,
+      data.sourceCurrency?.accountId
+    )
+
+    if (availableQuantity < data.sourceCurrency?.amount) {
+      throw new Error(`Không đủ số lượng currency nguồn. Có sẵn: ${availableQuantity}, Yêu cầu: ${data.sourceCurrency?.amount}`)
+    }
+
+    // Prepare parameters for the exchange function (match new function signature)
+    const params = {
+      p_user_id: profileData,  // profiles.id as per memory.md rule
+      p_game_account_id: data.sourceCurrency?.accountId,
+      p_source_currency_id: data.sourceCurrency?.id,
+      p_source_quantity: Number(data.sourceCurrency?.amount || 0),
+      p_target_currency_id: data.destCurrency?.id,
+      p_target_quantity: Number(data.destCurrency?.amount || 0),
+      p_server_attribute_code: currentServer.value  // Server from GameServerSelector
+    }
+
+    
+    // Call step 1 exchange function with reduced parameters
+    const { data: exchangeOrderData, error: exchangeError } = await supabase.rpc('create_exchange_currency_order', params)
+
+    if (exchangeError) {
+      throw new Error(`Không thể tạo đơn đổi currency: ${exchangeError.message}`)
+    }
+
+    // Handle both array and object responses
+    const orderResult = Array.isArray(exchangeOrderData) ? exchangeOrderData[0] : exchangeOrderData
+    if (!orderResult || !orderResult.order_id) {
+      throw new Error((orderResult as any)?.message || 'Tạo đơn đổi currency thất bại')
+    }
+    const orderId = orderResult.order_id
+    const orderNumber = orderResult.order_number
+
+    message.success(`✅ Tạo đơn draft thành công: ${orderNumber}`)
+
+    // Step 2: Upload proofs if any
+    let proofsData = null
+    if (data.proofFiles && data.proofFiles.length > 0) {
+      proofsData = await uploadExchangeProofs(orderId, orderNumber, data.proofFiles)
+    }
+
+    // Step 3: Complete the exchange order
+    message.info(`Đang hoàn thành đơn exchange ${orderNumber}...`)
+    const { data: completeData, error: completeError } = await supabase.rpc('complete_exchange_currency_order', {
+      p_order_id: orderId,
+      p_proofs: proofsData,
+      p_completed_by_id: profileData  // Pass profile ID following memory.md pattern
+    })
+
+    if (completeError) {
+      throw new Error(`Không thể hoàn thành đơn exchange: ${completeError.message}`)
+    }
+
+    if (!completeData || !completeData[0]?.success) {
+      throw new Error(completeData?.[0]?.message || 'Hoàn thành exchange thất bại')
+    }
+
+    message.success(`✅ Exchange currency hoàn thành: ${orderNumber}`)
+
+    // Reset the form
+    handleExchangeReset()
+    return
+
+  } catch (error: any) {
+    message.error(error.message || 'Có lỗi xảy ra khi đổi currency')
   } finally {
     submittingExchange.value = false
+  }
+}
+
+const uploadExchangeProofs = async (orderId: string, orderNumber: string, files: (File | { file: File })[]) => {
+  try {
+    message.info(`Đang upload ${files.length} file proof cho đơn ${orderNumber}...`)
+
+    // Create folder path for exchange order proofs (use correct exchange folder)
+    const folderPath = `currency/exchange/${orderNumber}/exchange`
+    const proofsArray: any[] = []
+
+    for (const file of files) {
+      // Extract actual File object from SimpleProofUpload structure
+      let actualFile: File
+
+      // Type guard to check if file has .file property (SimpleProofUpload structure)
+      if ('file' in file && file.file instanceof File) {
+        actualFile = file.file
+      } else if (file instanceof File) {
+        // Direct File object
+        actualFile = file
+      } else {
+        continue // Skip invalid files
+      }
+
+      if (!actualFile) {
+        continue // Skip invalid files
+      }
+
+      // Use original filename to avoid corruption
+      const fileName = actualFile.name
+      const filePath = `${folderPath}/${fileName}`
+
+      // Upload file using the same utility as purchase upload
+      const { uploadFile } = await import('@/lib/supabase')
+      const uploadResult = await uploadFile(actualFile, filePath, 'work-proofs')
+
+      if (!uploadResult.success) {
+        throw new Error(`Không thể upload file ${actualFile.name}: ${uploadResult.error}`)
+      }
+
+      // Use original Supabase storage URL (no file processing corruption)
+      proofsArray.push({
+        url: uploadResult.publicUrl,
+        path: uploadResult.path,
+        type: 'exchange',
+        filename: actualFile.name,
+        uploaded_at: new Date().toISOString()
+      })
+    }
+
+    message.success(`✅ Upload thành công ${files.length} file proof`)
+
+    // Return proofs data for step 3
+    return proofsArray
+
+  } catch (error: any) {
+    message.error(`Upload proof thất bại: ${error.message}`)
+    throw error
   }
 }
 
@@ -581,7 +711,7 @@ const loadDeliveryOrders = async () => {
     const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
 
     if (profileError || !profileData) {
-      console.error('Authentication required:', profileError?.message || 'No profile data')
+
       message.error('Bạn cần đăng nhập để xem danh sách đơn hàng')
       return  // Dừng lại - không gọi RPC nếu không có auth
     }
@@ -595,7 +725,7 @@ const loadDeliveryOrders = async () => {
       })
 
     if (error) {
-      console.error('Error loading delivery orders via RPC:', error)
+
       message.error('Không thể tải danh sách đơn hàng: ' + error.message)
       return
     }
@@ -649,7 +779,7 @@ const loadDeliveryOrders = async () => {
     deliveryOrders.value = formattedOrders
 
   } catch (error) {
-    console.error('Error in loadDeliveryOrders:', error)
+
     message.error('Có lỗi xảy ra khi tải đơn hàng')
   } finally {
     loadingDelivery.value = false
@@ -677,7 +807,7 @@ const handleDeliveryViewDetail = async (order: any) => {
         .eq('id', order.id)
 
       if (error) {
-        console.error('Error updating order status:', error)
+
         message.warning(`Xem chi tiết đơn #${order.order_number} nhưng không thể cập nhật trạng thái`)
       } else {
         message.success(`✅ Đã xem chi tiết và chuyển đơn #${order.order_number} sang trạng thái "Đang chuẩn bị"`)
@@ -692,7 +822,7 @@ const handleDeliveryViewDetail = async (order: any) => {
     // TODO: Implement view detail modal here
 
   } catch (error) {
-    console.error('Error in handleDeliveryViewDetail:', error)
+
     message.error(`Có lỗi xảy ra khi xem chi tiết đơn #${order.order_number}`)
   }
 }
@@ -867,7 +997,7 @@ const handleDeliveryUpdateStatus = async (order: any, newStatus: string) => {
     // Reload data
     await loadDeliveryOrders()
   } catch (error: any) {
-    console.error('Error updating order status:', error)
+
     message.error(error.message || 'Có lỗi xảy ra khi cập nhật trạng thái')
   }
 }
@@ -883,16 +1013,10 @@ const handleOrderCompletionCompleted = async () => {
 }
 
 // Process inventory for purchase orders before status change
-const handleProcessInventory = async (data: { order: any; currentStatus: string; targetStatus: string }) => {
-  const { order, currentStatus, targetStatus } = data
+const handleProcessInventory = async (data: { order: any; targetStatus: string }) => {
+  const { order, targetStatus } = data
 
   // Processing inventory for order
-  console.log('🔄 Processing inventory for order:', {
-    orderNumber: order.order_number,
-    currentStatus,
-    targetStatus,
-    orderType: order.order_type
-  })
 
   try {
     // Only process inventory for purchase orders
@@ -918,11 +1042,11 @@ const handleProcessInventory = async (data: { order: any; currentStatus: string;
     })
 
     if (rpcError) {
-      console.error('❌ RPC confirm_purchase_order_receiving_v2 failed:', rpcError)
+
 
       // Check for specific database schema errors
       if (rpcError.message && rpcError.message.includes('relation "channels" does not exist')) {
-        console.error('🔴 DATABASE SCHEMA ERROR: channels table missing')
+
         throw new Error('Lỗi schema database: Bảng "channels" không tồn tại. Vui lòng liên hệ admin để fix cấu trúc database.')
       }
 
@@ -934,7 +1058,7 @@ const handleProcessInventory = async (data: { order: any; currentStatus: string;
       // Inventory processed successfully
       message.success(`✅ Xử lý inventory thành công! Chi phí trung bình: ${dataInfo.new_average_cost || 0}, Tồn kho: ${dataInfo.new_quantity || 0}`)
     } else {
-      console.error('❌ RPC returned error:', rpcData)
+
       throw new Error(rpcData?.[0]?.message || 'Xử lý inventory thất bại')
     }
 
@@ -942,7 +1066,7 @@ const handleProcessInventory = async (data: { order: any; currentStatus: string;
     await updateOrderStatus(order.id, targetStatus)
 
   } catch (error: any) {
-    console.error('❌ Error processing inventory:', error)
+
     message.error(`Lỗi xử lý inventory: ${error.message}`)
 
     // Fallback: update status despite inventory processing error
@@ -1024,7 +1148,7 @@ const loadTransactionHistory = async () => {
       .limit(100) // Increase limit since we're showing all games
 
     if (error) {
-      console.error('Error loading transaction history:', error)
+
       message.error('Không thể tải lịch sử giao dịch')
       return
     }
@@ -1114,7 +1238,7 @@ const loadTransactionHistory = async () => {
 
     transactionHistory.value = ordersWithData
   } catch (error) {
-    console.error('Error in loadTransactionHistory:', error)
+
     message.error('Có lỗi xảy ra khi tải lịch sử giao dịch')
   } finally {
     loadingHistory.value = false

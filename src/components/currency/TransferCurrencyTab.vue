@@ -60,8 +60,8 @@
                 v-model="transferForm.sourceAccountId"
                 @change="onSourceAccountChange"
                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none bg-white text-sm"
+                :placeholder="'Chọn account nguồn'"
               >
-                <option value="">Chọn account nguồn</option>
                 <option
                   v-for="account in availableAccounts"
                   :key="account.id"
@@ -110,8 +110,8 @@
                 v-model="transferForm.targetAccountId"
                 :disabled="!transferForm.sourceAccountId"
                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-50 disabled:text-gray-500 transition-colors appearance-none bg-white text-sm"
+                :placeholder="'Chọn account đích'"
               >
-                <option value="">Chọn account đích</option>
                 <option
                   v-for="account in availableAccounts"
                   :key="account.id"
@@ -185,8 +185,8 @@
                   v-model="transferForm.currencyId"
                   @change="onCurrencyChange"
                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none bg-white text-sm"
+                  :placeholder="'Chọn currency'"
                 >
-                  <option value="">Chọn currency</option>
                   <optgroup
                     v-for="(currencies, costCurrency) in groupedCurrencies"
                     :key="costCurrency"
@@ -447,22 +447,25 @@
               <svg
                 v-if="messageType === 'success'"
                 class="w-5 h-5 text-green-600 mt-0.5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 4 0-8-8-4 0-4 0 0 0 0 8z" clip-rule="evenodd"/>
-                <path d="m10.344 15.97a.568.568 0 00.936-.06.568.568 0 00.631-.34.568.568 0 00.631-.34.568.568 0 00.845.254.568.568 0 00.845.254c.215.215.459.498.945.498.0 0 .332-.188.668-.188.338 0 0 .062.011.13.011.07.01.0zm-3.86-2.76a.75.75 0 00-.634-.634l-3.86 2.76z" clip-rule="evenodd"/>
-                <path d="M10 8a.568.568 0 01.342-.115.568.568 0 01.063.011.075.011.075.01l.412.33c-.4.422.426.906.906.485 0 .503.376.485.5zM14.06 40a.568.568 0 01.342-.115.568.568 0 01.063.011.075.011.075.01l.412.33c.4.422.426.906.906.485 0 .503.376.485.5z" clip-rule="evenodd"/>
                 <path
-                  d="M15.757 6.096a.568.568 0 01-.057.007.09.014.09.007.014zM16.834 15.803a.568.568 0 00-.07.007.053.053.053-.045.055.057-.045zm-.011.007l-3.488.15c-.424-.4-.417-.852.045-.084.067-.084.063.12.012zm-2.504-2.176c-.095.095-.195.195-.195 0 0 .02.01.011.015.016l3.5-.37c.424.415.661.50.661.50 0 .062-.011.12-.011.013-.025z"
-                  clip-rule="evenodd"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <div v-else class="w-5 h-5 text-red-600 mt-0.5">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 4 0-8-8-4 0 0 0 0 0zM8.707 7.293c1.251 1.252 1.252 3.275 0 4.527-3.277 4.527-4.527 0-.538-.014.537-.335.833.833 0 .531-.185.532.537.532 0 0 1.07.068zm1.06-1.06a.568.568 0 01-.718.071.718.071 0 .03.01.004.015.01.013.01.006l-3.012 2.692a.568.568 0 00-.01.635.635.635 0 0 1.082.15.108.15.013zm.613 2.244a.568.568 0 00-.701.088.701.088 0 0 .072.015.072.015.015zm-1.379 4.254a.568.568 0 00-.08.06.342.052.052.052 0 0 .04.001.012l-2.064-2.886a.568.568 0 00-.063-.011.445.445.445.445 0 0 .051.003.015.007.007l2.064 2.886z"/>
+              <svg v-else class="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
-              </div>
             </div>
             <div class="flex-1">
               <p class="font-medium" :class="messageType === 'success' ? 'text-green-900' : 'text-red-900'">
@@ -950,6 +953,9 @@ const loadAvailableCurrencies = async () => {
 
     if (availableCurrencies.value.length === 0) {
       showMessage('Account nguồn không có currency nào available để chuyển', 'error')
+    } else {
+      // Clear any previous error message when currencies are available
+      message.value = ''
     }
   } catch (err) {
     console.error('Error loading available currencies:', err)
@@ -965,12 +971,14 @@ const executeTransfer = async () => {
 
   try {
     // Parse the combined key: "currencyAttributeId_costCurrency"
-    const [currencyAttributeId] = transferForm.value.currencyId!.split('_')
+    const [currencyAttributeId, costCurrency] = transferForm.value.currencyId!.split('_')
 
+  
     const result = await transferCurrency({
       sourceAccountId: transferForm.value.sourceAccountId!,
       targetAccountId: transferForm.value.targetAccountId!,
       currencyId: currencyAttributeId, // Use only the currency attribute ID for the transfer
+      costCurrency: costCurrency, // Pass cost currency to filter pools
       quantity: transferForm.value.quantity,
       gameCode: props.gameCode,
       serverCode: props.serverCode,
