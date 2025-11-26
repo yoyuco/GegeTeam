@@ -287,6 +287,7 @@ import DataListCurrency from '@/components/currency/DataListCurrency.vue'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { useCurrency } from '@/composables/useCurrency.js'
 import { useInventory } from '@/composables/useInventory.js'
+import { useDataCache, useDebounce } from '@/composables/useDataCache'
 import type { Currency, GameAccount, Channel } from '@/types/composables'
 import { supabase } from '@/lib/supabase'
 
@@ -346,6 +347,24 @@ const {
 } = useCurrency()
 
 const { inventoryByCurrency, gameAccounts, loadAccounts, loadInventory, getAvailableQuantity } = useInventory()
+
+// Initialize data cache
+const {
+  getCachedCurrencies,
+  getCachedChannels,
+  getCachedProfiles,
+  getCachedGameAccounts,
+  getCachedGameNames,
+  getCachedServerNames,
+  setCachedCurrencies,
+  setCachedChannels,
+  setCachedProfiles,
+  setCachedGameAccounts,
+  setCachedGameNames,
+  setCachedServerNames,
+  preloadCommonData,
+  clearAllCaches
+} = useDataCache()
 
 // Manual currency loading function using attribute_relationships
 const loadCurrenciesForCurrentGame = async () => {
@@ -700,6 +719,10 @@ const uploadExchangeProofs = async (orderId: string, orderNumber: string, files:
 }
 
 const handleExchangeReset = () => {
+  // Call the onReset method from ExchangeCurrencyForm component
+  if (exchangeFormRef.value && exchangeFormRef.value.onReset) {
+    exchangeFormRef.value.onReset()
+  }
   message.info('Form đã được reset.')
 }
 
@@ -719,9 +742,9 @@ const loadDeliveryOrders = async () => {
     // Use the secure RPC function with role-based access
     const { data, error } = await supabase
       .rpc('get_currency_orders_v2_public', {
+        p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control (FIRST PARAM!)
         p_for_delivery: true,              // Filter for delivery-relevant statuses
-        p_limit: 100,                      // Get more orders for comprehensive view
-        p_current_profile_id: profileData   // REQUIRED: Valid profile ID for access control
+        p_limit: 100                      // Get more orders for comprehensive view
       })
 
     if (error) {
@@ -731,6 +754,7 @@ const loadDeliveryOrders = async () => {
     }
 
     
+
     // Collect unique game and server codes for name lookup
     const gameCodes = [...new Set(data.map((order: any) => order.game_code).filter(Boolean))]
     const serverCodes = [...new Set(data.map((order: any) => order.server_attribute_code).filter(Boolean))]
@@ -1139,17 +1163,31 @@ const resetAllForms = () => {
 const loadTransactionHistory = async () => {
   loadingHistory.value = true
   try {
-    // Since some relationships don't exist in the schema, we'll use manual joins
+    // Get current user profile first - REQUIRED for security
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    
+    if (profileError || !profileData) {
+      message.error('Bạn cần đăng nhập để xem lịch sử giao dịch')
+      return
+    }
+
+    // Use the existing RPC function with caching and optimized performance
+    // Database indexes will provide significant performance improvements
     const { data, error } = await supabase
-      .from('currency_orders')
-      .select('*')
-      .in('status', ['completed', 'cancelled']) // Only show completed and cancelled orders
-      .order('created_at', { ascending: false })
-      .limit(100) // Increase limit since we're showing all games
+      .rpc('get_currency_orders_v2_public', {
+        p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control
+        p_for_delivery: false,             // History tab (not delivery)
+        p_limit: 100
+      })
+
+    // Filter history data to only show completed and cancelled orders
+    const historyData = data?.filter((order: any) =>
+      ['completed', 'cancelled'].includes(order.status)
+    ) || []
 
     if (error) {
-
-      message.error('Không thể tải lịch sử giao dịch')
+      message.error('Không thể tải lịch sử giao dịch: ' + error.message)
       return
     }
 
@@ -1157,15 +1195,15 @@ const loadTransactionHistory = async () => {
     const ordersWithData = []
     if (data && data.length > 0) {
       // Collect all unique IDs for batch queries
-      const currencyIds = [...new Set(data.map(order => order.currency_attribute_id).filter(Boolean))]
-      const channelIds = [...new Set(data.map(order => order.channel_id).filter(Boolean))]
-      const employeeIds = [...new Set(data.map(order => order.assigned_to).filter(Boolean))]
-      const gameAccountIds = [...new Set(data.map(order => order.game_account_id).filter(Boolean))]
-      const partyIds = [...new Set(data.map(order => order.party_id).filter(Boolean))]
+      const currencyIds = [...new Set(data.map((order: any) => order.currency_attribute_id).filter(Boolean))]
+      const channelIds = [...new Set(data.map((order: any) => order.channel_id).filter(Boolean))]
+      const employeeIds = [...new Set(data.map((order: any) => order.assigned_to).filter(Boolean))]
+      const gameAccountIds = [...new Set(data.map((order: any) => order.game_account_id).filter(Boolean))]
+      const partyIds = [...new Set(data.map((order: any) => order.party_id).filter(Boolean))]
 
       // Collect game and server codes for name lookup
-      const gameCodes = [...new Set(data.map(order => order.game_code).filter(Boolean))]
-      const serverCodes = [...new Set(data.map(order => order.server_attribute_code).filter(Boolean))]
+      const gameCodes = [...new Set(data.map((order: any) => order.game_code).filter(Boolean))]
+      const serverCodes = [...new Set(data.map((order: any) => order.server_attribute_code).filter(Boolean))]
 
       // Batch fetch related data
       const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
@@ -1236,7 +1274,8 @@ const loadTransactionHistory = async () => {
       }
     }
 
-    transactionHistory.value = ordersWithData
+    // Use filtered history data that only includes completed and cancelled orders
+    transactionHistory.value = historyData
   } catch (error) {
 
     message.error('Có lỗi xảy ra khi tải lịch sử giao dịch')

@@ -255,8 +255,8 @@
             <div :class="getStatusBadgeClass(selectedItem.status)" class="px-4 py-2 rounded-full font-semibold text-sm">
               {{ getStatusLabel(selectedItem.status, selectedItem.order_type) }}
             </div>
-            <div v-if="selectedItem.order_type" class="px-3 py-1 bg-white rounded-full text-sm font-medium text-gray-700 border">
-              {{ selectedItem.order_type === 'PURCHASE' ? '📥 Mua hàng' : '📤 Bán hàng' }}
+            <div v-if="selectedItem.order_type" :class="getOrderTypeBadgeClass(selectedItem.order_type)" class="px-3 py-1 rounded-full text-sm font-medium border">
+              {{ selectedItem.order_type === 'PURCHASE' ? '📥 Mua hàng' : selectedItem.order_type === 'SALE' ? '📤 Bán hàng' : '🔄 Trao đổi' }}
             </div>
           </div>
           <div class="text-right">
@@ -267,441 +267,222 @@
 
         <!-- Main Information Grid -->
         <div class="grid grid-cols-2 gap-6">
-          <!-- Left Column -->
-          <div class="space-y-4">
-            <!-- Order Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                Thông tin đơn hàng
-              </h3>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Mã đơn hàng:</span>
-                  <span class="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">{{ selectedItem?.order_number || '#' + selectedItem?.id?.slice(0, 8) }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Loại currency:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.currency_attribute?.name || selectedItem?.currencyName || selectedItem?.currency?.name || '-' }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Số lượng:</span>
-                  <span class="font-bold text-blue-600 text-lg">{{ selectedItem?.quantity || selectedItem?.amount || 0 }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Game:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ getGameDisplayName(selectedItem) }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Server:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ getServerDisplayName(selectedItem) }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Kênh:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.channel?.name || selectedItem?.channelName || '-' }}</span>
-                </div>
+          <!-- Order Information -->
+          <div class="bg-white rounded-lg border border-gray-200 p-5">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Thông tin đơn hàng
+            </h3>
+            <div class="space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Mã đơn hàng:</span>
+                <span class="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">{{ selectedItem?.order_number || '#' + selectedItem?.id?.slice(0, 8) }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Loại currency:</span>
+                <span class="text-sm font-medium text-gray-900">{{ selectedItem?.currency_attribute?.name || selectedItem?.currencyName || selectedItem?.currency?.name || '-' }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Số lượng:</span>
+                <span class="font-bold text-blue-600 text-lg">{{ selectedItem?.quantity || selectedItem?.amount || 0 }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Game:</span>
+                <span class="text-sm font-medium text-gray-900">{{ getGameDisplayName(selectedItem) }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Server:</span>
+                <span class="text-sm font-medium text-gray-900">{{ getServerDisplayName(selectedItem) }}</span>
+              </div>
+              <div v-if="selectedItem?.exchange_type && selectedItem.exchange_type !== 'none' && selectedItem?.order_type !== 'EXCHANGE'" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Loại trao đổi:</span>
+                <span class="text-sm font-medium text-gray-900">{{ getExchangeTypeLabel(selectedItem.exchange_type) }}</span>
+              </div>
+              </div>
+          </div>
+
+          <!-- Additional Information -->
+          <div class="bg-white rounded-lg border border-gray-200 p-5">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              {{ selectedItem?.order_type === 'EXCHANGE' ? 'Thông tin trao đổi' : 'Thông tin khách hàng' }}
+            </h3>
+
+            <!-- Exchange Order Specific Information -->
+            <div v-if="selectedItem?.order_type === 'EXCHANGE'" class="space-y-3">
+              <!-- Account -->
+              <div v-if="selectedItem?.game_account" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Account:</span>
+                <span class="text-sm font-medium text-gray-900">{{ selectedItem.game_account?.account_name || '-' }}</span>
+              </div>
+              <!-- Destination Currency -->
+              <div v-if="selectedItem?.exchange_details?.target_currency?.code || selectedItem?.foreign_currency_code" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Loại Currency Đích:</span>
+                <span class="text-sm font-medium text-gray-900">
+                  {{
+        (selectedItem?.foreign_currency_attribute?.name) ||
+        (selectedItem?.foreign_currency_name) ||
+        (selectedItem?.foreign_currency?.name) ||
+        (selectedItem?.exchange_details?.target_currency?.code || selectedItem?.foreign_currency_code || '-')
+      }}
+                </span>
+              </div>
+              <!-- Destination Amount -->
+              <div v-if="selectedItem?.foreign_amount || selectedItem?.exchange_details?.target_currency?.quantity" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Số lượng đích:</span>
+                <span class="font-bold text-blue-600 text-lg">
+                  {{ selectedItem?.exchange_details?.target_currency?.quantity || selectedItem?.foreign_amount || 0 }}
+                </span>
+              </div>
+              <!-- Performed By (Creator) -->
+              <div v-if="selectedItem?.created_by" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Người thực hiện:</span>
+                <span class="text-sm font-medium text-gray-900">
+                  {{ selectedItem?.created_by_profile?.display_name || 'Người dùng ' + (selectedItem?.created_by?.slice(0, 8) || '#') }}
+                </span>
               </div>
             </div>
 
-            <!-- Customer/Supplier Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Thông tin {{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp' : 'Khách hàng' }}
-              </h3>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">{{ selectedItem?.order_type === 'PURCHASE' ? 'Nhà cung cấp:' : 'Khách hàng:' }}</span>
-                  <span class="text-sm font-medium text-gray-900">{{
-                    selectedItem?.party?.name ||
-                    (selectedItem?.order_type === 'PURCHASE' ? selectedItem?.supplier_name || selectedItem?.customer_name : selectedItem?.customer_name || selectedItem?.customerName) ||
-                    '-'
-                  }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Game Account:</span>
-                  <span class="text-sm font-medium text-blue-600 font-mono">{{ selectedItem?.game_account?.account_name || selectedItem?.gameAccountName || '-' }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Nhân viên xử lý:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.assigned_employee?.display_name || selectedItem?.assignedEmployeeName || '-' }}</span>
-                </div>
+            <!-- Regular Customer/Supplier Information -->
+            <div v-else class="space-y-3">
+              <!-- Channel (moved to top) -->
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">Kênh:</span>
+                <span class="text-sm font-medium text-gray-900">{{ selectedItem?.channel?.name || selectedItem?.channelName || '-' }}</span>
               </div>
-            </div>
-
-            <!-- Financial Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Thông tin tài chính
-              </h3>
-              <div class="space-y-3">
-                <!-- Cost Information -->
-                <div v-if="selectedItem?.cost_amount" class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Chi phí:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.cost_amount, selectedItem.cost_currency_code || 'VND') }}</span>
-                </div>
-
-                <!-- Sale Information -->
-                <div v-if="selectedItem?.sale_amount" class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Giá bán:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.sale_amount, selectedItem.sale_currency_code || 'USD') }}</span>
-                </div>
-
-                <!-- Profit Information (for completed orders) -->
-                <div v-if="selectedItem?.profit_amount && selectedItem.status === 'completed'" class="border-t pt-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Lợi nhuận:</span>
-                    <span :class="selectedItem.profit_amount > 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'" class="text-sm">
-                      {{ formatCurrency(selectedItem.profit_amount, selectedItem.profit_currency_code || 'USD') }}
-                    </span>
-                  </div>
-                  <div v-if="selectedItem.profit_margin_percentage" class="flex justify-between items-center mt-2">
-                    <span class="text-sm text-gray-600">Biên lợi nhuận:</span>
-                    <span class="text-sm font-medium">{{ selectedItem.profit_margin_percentage.toFixed(2) }}%</span>
-                  </div>
-                </div>
-
-                <!-- Exchange Rate Information -->
-                <div v-if="selectedItem?.cost_to_sale_exchange_rate" class="border-t pt-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Tỷ giá (Cost→Sale):</span>
-                    <span class="text-sm font-medium text-gray-900">{{ selectedItem.cost_to_sale_exchange_rate.toFixed(4) }}</span>
-                  </div>
-                  <div class="flex justify-between items-center mt-1">
-                    <span class="text-xs text-gray-500">Ngày áp dụng:</span>
-                    <span class="text-xs text-gray-600">{{ selectedItem.exchange_rate_date || '-' }}</span>
-                  </div>
-                </div>
-
-                <!-- Foreign Currency Information (for exchange orders) -->
-                <div v-if="selectedItem?.exchange_type !== 'none' && selectedItem?.foreign_amount" class="border-t pt-3">
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Tiền tệ đối ứng:</span>
-                    <span class="text-sm font-medium text-gray-900">{{ formatCurrency(selectedItem.foreign_amount, selectedItem.foreign_currency_code || 'USD') }}</span>
-                  </div>
-                </div>
+              <!-- Customer/Supplier Name (conditional display) -->
+              <div v-if="selectedItem?.order_type !== 'EXCHANGE'" class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">{{ selectedItem?.order_type === 'SALE' ? 'Tên khách hàng:' : selectedItem?.order_type === 'PURCHASE' ? 'Tên nhà cung cấp:' : 'Tên khách hàng:' }}</span>
+                <span class="text-sm font-medium text-gray-900">
+                {{ selectedItem?.party?.name ||
+                  (selectedItem?.order_type === 'PURCHASE'
+                    ? selectedItem?.supplier_name || selectedItem?.customer_name || selectedItem?.customerName
+                    : selectedItem?.customer_name || selectedItem?.customerName) ||
+                  selectedItem?.customer?.name ||
+                  '-' }}
+              </span>
               </div>
-            </div>
-
-            <!-- Additional Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Thông tin bổ sung
-              </h3>
-              <div class="space-y-3">
-                <!-- Game Tag/Delivery Info -->
-                <div v-if="selectedItem?.delivery_info">
-                  <div class="flex justify-between items-center mb-1">
-                    <span class="text-sm text-gray-600">{{ selectedItem.order_type === 'PURCHASE' ? 'ID Game:' : 'ID Game bán:' }}</span>
-                    <n-button
-                      v-if="selectedItem.delivery_info && selectedItem.delivery_info !== '-'"
-                      size="tiny"
-                      type="primary"
-                      ghost
-                      @click="handleCopyGameTag"
-                      class="text-xs"
-                    >
-                      <template #icon>
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </template>
-                      Copy
-                    </n-button>
-                  </div>
-                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
-                    {{ selectedItem.delivery_info }}
-                  </p>
+              <!-- Game Tag/Delivery Info -->
+              <div v-if="selectedItem?.delivery_info">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-sm text-gray-600">{{ selectedItem.order_type === 'PURCHASE' ? 'ID Game:' : 'ID Game bán:' }}</span>
+                  <n-button
+                    v-if="selectedItem.delivery_info && selectedItem.delivery_info !== '-'"
+                    size="tiny"
+                    type="primary"
+                    ghost
+                    @click="handleCopyGameTag"
+                    class="text-xs"
+                  >
+                    <template #icon>
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </template>
+                    Copy
+                  </n-button>
                 </div>
+                <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
+                  {{ selectedItem.delivery_info }}
+                </p>
+              </div>
 
-                <!-- Notes -->
-                <div v-if="selectedItem?.notes">
-                  <div class="flex justify-between items-center mb-1">
-                    <span class="text-sm text-gray-600">Ghi chú:</span>
-                    <n-button
-                      v-if="selectedItem.notes && selectedItem.notes !== '-'"
-                      size="tiny"
-                      type="primary"
-                      ghost
-                      @click="handleCopyNotes"
-                      class="text-xs"
-                    >
-                      <template #icon>
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </template>
-                      Copy
-                    </n-button>
-                  </div>
-                  <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
-                    {{ selectedItem.notes }}
-                  </p>
+              <!-- Notes -->
+              <div v-if="selectedItem?.notes">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-sm text-gray-600">Thông tin bổ sung:</span>
+                  <n-button
+                    v-if="selectedItem.notes && selectedItem.notes !== '-'"
+                    size="tiny"
+                    type="primary"
+                    ghost
+                    @click="handleCopyNotes"
+                    class="text-xs"
+                  >
+                    <template #icon>
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </template>
+                    Copy
+                  </n-button>
                 </div>
+                <p class="text-sm font-medium text-gray-900 mt-1 bg-gray-50 p-2 rounded break-all">
+                  {{ selectedItem.notes }}
+                </p>
+              </div>
 
-                <!-- Priority and Deadline -->
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Độ ưu tiên:</span>
-                  <span :class="getPriorityBadgeClass(selectedItem?.priority_level)" class="px-2 py-1 rounded-full text-xs font-medium">
-                    {{ getPriorityLabel(selectedItem?.priority_level) }}
+  
+  
+  
+              </div>
+          </div>
+        </div>
+
+        <!-- Proof Information (for History Tab) - Full Width -->
+        <div v-if="props.modelType === 'history' && selectedItem?.proofs && Object.keys(selectedItem.proofs).length > 0" class="bg-white rounded-lg border border-gray-200 p-5">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Bằng chứng đính kèm
+          </h3>
+
+          <!-- Show all proofs (handle both array and object formats) -->
+          <div class="space-y-3">
+            <div v-if="getProofsArray(selectedItem.proofs).length > 0">
+              <div class="grid grid-cols-3 gap-3">
+              <div
+                v-for="(proof, index) in getProofsArray(selectedItem.proofs)"
+                :key="index"
+                class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-medium text-gray-700">
+                    {{ proof.type || 'Bằng chứng' }} {{ index + 1 }}
+                  </span>
+                  <span v-if="proof.uploaded_at" class="text-xs text-gray-500">
+                    {{ new Date(proof.uploaded_at).toLocaleDateString('vi-VN') }}
                   </span>
                 </div>
 
-                <div v-if="selectedItem?.deadline_at" class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Deadline:</span>
-                  <span class="text-sm font-medium text-red-600">{{ new Date(selectedItem.deadline_at).toLocaleString('vi-VN') }}</span>
-                </div>
-
-                <!-- Exchange Type -->
-                <div v-if="selectedItem?.exchange_type !== 'none'" class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Loại trao đổi:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ getExchangeTypeLabel(selectedItem.exchange_type) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Column -->
-          <div class="space-y-4">
-
-            <!-- Assignment Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Phân công xử lý
-              </h3>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Nhân viên:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.assigned_employee?.display_name || selectedItem?.assignedEmployeeName || '-' }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Game Account:</span>
-                  <span class="text-sm font-medium text-blue-600 font-mono">{{ selectedItem?.game_account?.account_name || selectedItem?.gameAccountName || '-' }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Kênh:</span>
-                  <span class="text-sm font-medium text-gray-900">{{ selectedItem?.channel?.name || selectedItem?.channelName || '-' }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-gray-600">Inventory Pool:</span>
-                  <span class="text-sm font-medium text-blue-600 font-mono">{{ selectedItem?.inventory_pool_id ? '#' + selectedItem.inventory_pool_id.slice(0, 8) : '-' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Timeline Information -->
-            <div class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Dòng thời gian
-              </h3>
-
-              <!-- Visual Timeline -->
-              <div class="relative">
-                <!-- Progress Segments between completed steps -->
-                <div class="absolute left-6 top-8 w-0.5">
-                  <!-- From start to center of first completed step -->
-                  <template v-if="selectedItem?.assigned_at">
-                    <div class="w-full bg-green-500" style="height: 24px; top: 0px;"></div>
-                  </template>
-
-                  <!-- Between centers of consecutive completed steps -->
-                  <template v-if="selectedItem?.assigned_at && selectedItem?.preparation_at">
-                    <!-- From center of Assignment (24px) to center of Preparation (96px) -->
-                    <div class="w-full bg-green-500" style="height: 72px; top: 24px;"></div>
-                  </template>
-
-                  <template v-if="selectedItem?.preparation_at && selectedItem?.delivery_at">
-                    <!-- From center of Preparation (96px) to center of Delivery (168px) -->
-                    <div class="w-full bg-green-500" style="height: 72px; top: 96px;"></div>
-                  </template>
-
-                  <template v-if="selectedItem?.delivery_at && selectedItem?.completed_at">
-                    <!-- From center of Delivery (168px) to center of Completion (240px) -->
-                    <div class="w-full bg-green-500" style="height: 72px; top: 168px;"></div>
-                  </template>
-
-                  <!-- Current status indicator (pulsing blue) - centered at next step -->
-                  <template v-if="selectedItem?.assigned_at && !selectedItem?.preparation_at">
-                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 48px;"></div>
-                  </template>
-                  <template v-else-if="selectedItem?.preparation_at && !selectedItem?.delivery_at">
-                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 120px;"></div>
-                  </template>
-                  <template v-else-if="selectedItem?.delivery_at && !selectedItem?.completed_at">
-                    <div class="w-full bg-blue-500 opacity-60 animate-pulse" style="height: 48px; top: 192px;"></div>
-                  </template>
-                </div>
-
-              <!-- Timeline Events -->
-                <div class="space-y-6">
-                  <!-- Assignment -->
-                  <div class="flex items-start gap-4">
-                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('assigned')">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <h4 class="text-sm font-medium text-gray-900">Phân công</h4>
-                        <span v-if="selectedItem?.assigned_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.assigned_at) }}</span>
-                      </div>
-                      <p v-if="selectedItem?.assigned_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.assigned_at) }}</p>
-                      <p v-if="getTimeDifference('created_at', 'assigned_at')" class="text-xs text-blue-600 mt-1">
-                        {{ getTimeDifference('created_at', 'assigned_at') }} sau khi tạo đơn
-                      </p>
-                    </div>
+                <div v-if="proof.url" class="space-y-2">
+                  <div v-if="isImageFile(proof.url)" class="cursor-pointer" @click="viewImage(proof.url)">
+                    <img
+                      :src="getImageUrl(proof.url)"
+                      :alt="proof.type || 'Proof image'"
+                      class="w-full h-24 object-cover rounded border border-gray-300 hover:border-blue-400 transition-colors"
+                    />
+                    <p class="text-xs text-blue-600 mt-1 text-center">Click để xem lớn</p>
                   </div>
 
-                  <!-- Preparation -->
-                  <div class="flex items-start gap-4">
-                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('preparation')">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                      </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <h4 class="text-sm font-medium text-gray-900">Chuẩn bị</h4>
-                        <span v-if="selectedItem?.preparation_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.preparation_at) }}</span>
-                      </div>
-                      <p v-if="selectedItem?.preparation_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.preparation_at) }}</p>
-                      <p v-if="getTimeDifference('assigned_at', 'preparation_at')" class="text-xs text-blue-600 mt-1">
-                        {{ getTimeDifference('assigned_at', 'preparation_at') }} sau khi phân công
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Delivery -->
-                  <div class="flex items-start gap-4">
-                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('delivery')">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-                      </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <h4 class="text-sm font-medium text-gray-900">{{ selectedItem?.order_type === 'PURCHASE' ? 'Nhận hàng' : 'Giao hàng' }}</h4>
-                        <span v-if="selectedItem?.delivery_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.delivery_at) }}</span>
-                      </div>
-                      <p v-if="selectedItem?.delivery_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.delivery_at) }}</p>
-                      <p v-if="getTimeDifference('preparation_at', 'delivery_at')" class="text-xs text-blue-600 mt-1">
-                        {{ getTimeDifference('preparation_at', 'delivery_at') }} sau khi chuẩn bị
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Completion -->
-                  <div class="flex items-start gap-4">
-                    <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center" :class="getTimelineStepClass('completed')">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <h4 class="text-sm font-medium text-gray-900">Hoàn thành</h4>
-                        <span v-if="selectedItem?.completed_at" class="text-xs text-gray-500">{{ formatTime(selectedItem.completed_at) }}</span>
-                      </div>
-                      <p v-if="selectedItem?.completed_at" class="text-xs text-gray-600">{{ formatDate(selectedItem.completed_at) }}</p>
-                      <p v-if="getTimeDifference('delivery_at', 'completed_at')" class="text-xs text-blue-600 mt-1">
-                        {{ getTimeDifference('delivery_at', 'completed_at') }} sau khi giao hàng
-                      </p>
-                      <div v-if="selectedItem?.completed_at && selectedItem?.assigned_at" class="mt-2 pt-2 border-t border-gray-100">
-                        <p class="text-xs font-medium text-green-600">
-                          ⏱️ Tổng thời gian xử lý: {{ getTimeDifference('assigned_at', 'completed_at') }}
-                        </p>
-                      </div>
-                    </div>
+                  <div v-else class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600 truncate flex-1 mr-2">{{ getFileName(proof.url) }}</span>
+                    <n-button
+                      size="tiny"
+                      type="primary"
+                      ghost
+                      @click="downloadFile(proof.url)"
+                    >
+                      <template #icon>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </template>
+                      Tải
+                    </n-button>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <!-- Proof Information (for History Tab) -->
-            <div v-if="props.modelType === 'history' && selectedItem?.proofs && Object.keys(selectedItem.proofs).length > 0" class="bg-white rounded-lg border border-gray-200 p-5">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Bằng chứng đính kèm
-              </h3>
-
-              <!-- Show all proofs (handle both array and object formats) -->
-              <div class="space-y-3">
-                <div v-if="getProofsArray(selectedItem.proofs).length > 0">
-                  <!-- Debug: Print first proof URL to console -->
-                  <div class="mb-2 p-2 bg-yellow-100 rounded text-xs">
-                    <strong>Debug:</strong> {{ getProofsArray(selectedItem.proofs).length }} proofs found
-                    <br>First URL: {{ getProofsArray(selectedItem.proofs)[0]?.url }}
-                    <br>First Filename: {{ getProofsArray(selectedItem.proofs)[0]?.filename }}
-                  </div>
-                  <div class="grid grid-cols-2 gap-3">
-                  <div
-                    v-for="(proof, index) in getProofsArray(selectedItem.proofs)"
-                    :key="index"
-                    class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50"
-                  >
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-xs font-medium text-gray-700">
-                        {{ proof.type || 'Bằng chứng' }} {{ index + 1 }}
-                      </span>
-                      <span v-if="proof.uploaded_at" class="text-xs text-gray-500">
-                        {{ new Date(proof.uploaded_at).toLocaleDateString('vi-VN') }}
-                      </span>
-                    </div>
-
-                    <div v-if="proof.url" class="space-y-2">
-                      <div v-if="isImageFile(proof.url)" class="cursor-pointer" @click="viewImage(proof.url)">
-                        <img
-                          :src="getImageUrl(proof.url)"
-                          :alt="proof.type || 'Proof image'"
-                          class="w-full h-24 object-cover rounded border border-gray-300 hover:border-blue-400 transition-colors"
-                        />
-                        <p class="text-xs text-blue-600 mt-1 text-center">Click để xem lớn</p>
-                      </div>
-
-                      <div v-else class="flex items-center justify-between">
-                        <span class="text-xs text-gray-600 truncate flex-1 mr-2">{{ getFileName(proof.url) }}</span>
-                        <n-button
-                          size="tiny"
-                          type="primary"
-                          ghost
-                          @click="downloadFile(proof.url)"
-                        >
-                          <template #icon>
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </template>
-                          Tải
-                        </n-button>
-                      </div>
-                    </div>
-
-                    <div v-if="proof.uploaded_by" class="text-xs text-gray-500 mt-2">
-                      Người tải: {{ proof.uploaded_by }}
-                    </div>
-                    <div v-else class="text-sm text-gray-500 italic">
-                      Không có bằng chứng nào được tải lên
-                    </div>
-                  </div>
+                <div v-if="proof.uploaded_by" class="text-xs text-gray-500 mt-2">
+                  Người tải: {{ proof.uploaded_by }}
+                </div>
+                <div v-else class="text-sm text-gray-500 italic">
+                  Không có bằng chứng nào được tải lên
                 </div>
               </div>
             </div>
@@ -832,7 +613,7 @@
             class="mt-1 w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
           />
           <label for="cancelConfirm" class="text-sm text-gray-700">
-            Tôi xác nhận muốn hủy đơn hàng này và chịu trách nhiệm về quyết định này.
+            Tôi xác nhận muốn hủy đơn hàng này.
           </label>
         </div>
 
@@ -870,7 +651,7 @@
 import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
 import { supabase } from '@/lib/supabase'
 import { NButton, NDataTable, NDatePicker, NInput, NModal, NSelect, useMessage } from 'naive-ui'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
 
 // Props
 interface Props {
@@ -1022,6 +803,7 @@ const tableColumns = computed(() => {
           const colors: { [key: string]: string } = {
             PURCHASE: 'green',
             SALE: 'red',
+            EXCHANGE: 'purple',
             purchase: 'green',
             sale: 'red',
             exchange: 'purple',
@@ -1031,6 +813,7 @@ const tableColumns = computed(() => {
           const labels: { [key: string]: string } = {
             PURCHASE: 'Mua',
             SALE: 'Bán',
+            EXCHANGE: 'Đổi',
             purchase: 'Mua',
             sale: 'Bán',
             exchange: 'Đổi',
@@ -1176,131 +959,100 @@ const tableColumns = computed(() => {
     return deliveryColumns
   }
 
-  // For other tabs (history), keep the original structure
-  const baseColumns = [
-    {
-      title: 'Mã đơn',
-      key: 'order_number',
-      width: 120,
-      render: (row: any) => row.order_number || `#${row.id?.slice(0, 8)}...`
-    },
-    {
-      title: 'Loại',
-      key: 'order_type',
-      width: 120,
-      render: (row: any) => {
-        const orderType = row.order_type || row.type
-        const colors: { [key: string]: string } = {
-          PURCHASE: 'green',
-          SALE: 'red',
-          purchase: 'green',
-          sale: 'red',
-          exchange: 'purple',
-          deposit: 'orange',
-          withdraw: 'red'
-        }
-        const labels: { [key: string]: string } = {
-          PURCHASE: 'Mua',
-          SALE: 'Bán',
-          purchase: 'Mua',
-          sale: 'Bán',
-          exchange: 'Đổi',
-          deposit: 'Nạp',
-          withdraw: 'Rút'
-        }
-        const colorKey = (orderType as string) in colors ? orderType as string : 'gray'
-        return h('span', {
-          class: `px-2 py-1 text-xs rounded-full bg-${colors[colorKey]}-100 text-${colors[colorKey]}-800`
-        }, labels[orderType as string] || orderType)
-      }
-    },
-    {
-      title: 'Khách hàng',
-      key: 'customer',
-      width: 150,
-      render: (row: any) => {
-        // For purchase orders, show supplier name, for sell orders show customer name
-        const partyName = row.party?.name ||
-          (row.order_type === 'PURCHASE'
-            ? row.supplier_name || row.customer_name || row.customerName
-            : row.customer_name || row.customerName) ||
-          row.customer?.name ||
-          '-'
-        return partyName
-      }
-    },
-    {
-      title: 'Currency',
-      key: 'currency',
-      width: 120,
-      render: (row: any) => {
-        const currencyName = row.currency_attribute?.name || row.currencyName || row.currency?.name || '-'
-        const currencyCode = row.currency_attribute?.code || row.currencyCode || row.currency?.code || 'Other'
-
-        if (currencyName === '-') return currencyName
-
-        return h('span', {
-          class: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getCurrencyTagClass(currencyCode)}`
-        }, currencyName)
-      }
-    },
-    {
-      title: 'Game Tag',
-      key: 'delivery_info',
-      width: 120,
-      render: (row: any) => {
-        const gameTag = row.delivery_info || row.deliveryInfo || '-'
-        return gameTag
-      }
-    },
-    {
-      title: 'Số lượng',
-      key: 'quantity',
-      width: 120,
-      render: (row: any) => {
-        const quantity = row.quantity || row.amount || 0
-        const currencyName = row.currency_attribute?.name || row.currencyName || ''
-        return `${quantity.toLocaleString()} ${currencyName || ''}`
-      }
-    },
-    {
-      title: 'Tổng giá',
-      key: 'total_price',
-      width: 120,
-      render: (row: any) => {
-        // Use cost_amount + cost_currency_code for purchase orders
-        // Use sale_amount + sale_currency_code for sale orders
-        if (row.order_type === 'PURCHASE') {
-          const amount = row.cost_amount || 0
-          const currency = row.cost_currency_code || 'VND'
-          return amount > 0 ? formatCurrency(amount, currency) : '-'
-        } else {
-          const amount = row.sale_amount || 0
-          const currency = row.sale_currency_code || 'USD'
-          return amount > 0 ? formatCurrency(amount, currency) : '-'
-        }
-      }
-    },
-    {
-      title: 'Kênh',
-      key: 'channel',
-      width: 120,
-      render: (row: any) => {
-        const channelName = row.channel?.name || row.channelName || '-'
-        const channelCode = row.channel?.code || row.channelCode || 'Other'
-
-        if (channelName === '-') return channelName
-
-        return h('span', {
-          class: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getChannelTagClass(channelCode)}`
-        }, channelName)
-      }
-    }
-  ]
-
-  // For history tab, add status and actions
+  // For other tabs (history), use only 8 columns as requested
   if (props.modelType === 'history') {
-    baseColumns.push(
+    return [
+      {
+        title: 'Mã đơn',
+        key: 'order_number',
+        width: 120,
+        render: (row: any) => row.order_number || `#${row.id?.slice(0, 8)}...`
+      },
+      {
+        title: 'Loại',
+        key: 'order_type',
+        width: 100,
+        render: (row: any) => {
+          const orderType = row.order_type || row.type
+          const colors: { [key: string]: string } = {
+            PURCHASE: 'green',
+            SALE: 'red',
+            EXCHANGE: 'purple',
+            purchase: 'green',
+            sale: 'red',
+            exchange: 'purple',
+            deposit: 'orange',
+            withdraw: 'red'
+          }
+          const labels: { [key: string]: string } = {
+            PURCHASE: 'Mua',
+            SALE: 'Bán',
+            EXCHANGE: 'Đổi',
+            purchase: 'Mua',
+            sale: 'Bán',
+            exchange: 'Đổi',
+            deposit: 'Gửi',
+            withdraw: 'Rút'
+          }
+          const statusKey = orderType && orderType.toString().toUpperCase() in colors ? orderType.toString().toUpperCase() : 'gray'
+          return h('span', {
+            class: `px-2 py-1 text-xs rounded-full bg-${colors[statusKey]}-100 text-${colors[statusKey]}-800`
+          }, labels[orderType] || orderType)
+        }
+      },
+      {
+        title: 'Kênh',
+        key: 'channel',
+        width: 120,
+        render: (row: any) => {
+          const channelName = row.channel?.name || row.channelName || '-'
+          const channelCode = row.channel?.code || row.channelCode || 'Other'
+
+          if (channelName === '-') return channelName
+
+          return h('span', {
+            class: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getChannelTagClass(channelCode)}`
+          }, channelName)
+        }
+      },
+      {
+        title: 'Khách hàng',
+        key: 'customer',
+        width: 150,
+        render: (row: any) => {
+          // For Exchange orders, show creator name
+          if (row.order_type === 'EXCHANGE') {
+            return row.created_by_profile?.display_name || 'Người dùng ' + (row?.created_by?.slice(0, 8) || '#')
+          }
+          // For purchase orders, show supplier, for sale orders show customer
+          const partyName = row.party?.name || (row.order_type === 'PURCHASE' ? row.supplier_name || row.customer_name : row.customer_name || row.customerName) || '-'
+          return partyName
+        }
+      },
+      {
+        title: 'Currency',
+        key: 'currency',
+        width: 120,
+        render: (row: any) => {
+          const currencyName = row.currency_attribute?.name || row.currencyName || row.currency?.name || '-'
+          const currencyCode = row.currency_attribute?.code || row.currencyCode || row.currency?.code || 'Other'
+
+          if (currencyName === '-') return currencyName
+
+          return h('span', {
+            class: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700'
+          }, currencyName)
+        }
+      },
+      {
+        title: 'Số lượng',
+        key: 'quantity',
+        width: 120,
+        render: (row: any) => {
+          const quantity = row.quantity || row.amount || 0
+          return quantity.toLocaleString()
+        }
+      },
       {
         title: 'Trạng thái',
         key: 'status',
@@ -1333,10 +1085,11 @@ const tableColumns = computed(() => {
           }, () => 'Xem')
         }
       }
-    )
+    ]
   }
 
-  return baseColumns
+  // Return empty array for other model types (shouldn't happen with current props)
+  return []
 })
 
 // Computed data
@@ -1538,7 +1291,7 @@ const getServerNameFromCode = async (serverCode: string): Promise<string> => {
       .from('attributes')
       .select('name')
       .eq('code', serverCode)
-      .eq('type', 'SERVER')
+      .in('type', ['SERVER', 'GAME_SERVER'])
       .single()
 
     if (error || !data) {
@@ -1651,6 +1404,19 @@ const getStatusBadgeClass = (status: string) => {
     failed: 'bg-red-100 text-red-800'
   }
   return statusClasses[status] || 'bg-gray-100 text-gray-800'
+}
+
+// Get order type badge class for modal header
+const getOrderTypeBadgeClass = (orderType: string) => {
+  const orderTypeClasses: { [key: string]: string } = {
+    PURCHASE: 'bg-green-100 text-green-800 border-green-200',
+    SALE: 'bg-red-100 text-red-800 border-red-200',
+    EXCHANGE: 'bg-purple-100 text-purple-800 border-purple-200',
+    purchase: 'bg-green-100 text-green-800 border-green-200',
+    sale: 'bg-red-100 text-red-800 border-red-200',
+    exchange: 'bg-purple-100 text-purple-800 border-purple-200'
+  }
+  return orderTypeClasses[orderType] || 'bg-gray-100 text-gray-800 border-gray-200'
 }
 
 const getPriorityBadgeClass = (level: number) => {
@@ -1920,6 +1686,18 @@ const onViewDetail = (item: any) => {
   selectedItem.value = item
   showDetailModal.value = true
   emit('view-detail', item)
+
+  // Fix aria-hidden warning by focusing modal content after it opens
+  nextTick(() => {
+    const modalElement = document.querySelector('[role="dialog"]')
+    if (modalElement) {
+      // Move focus to first focusable element in modal
+      const firstFocusable = modalElement.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') as HTMLElement
+      if (firstFocusable) {
+        firstFocusable.focus()
+      }
+    }
+  })
 }
 
 const onUpdateStatus = (item: any, status: string) => {
@@ -2491,6 +2269,7 @@ onMounted(() => {
 watch(() => props.data, () => {
   pagination.value.itemCount = props.data.length
 })
+
 </script>
 
 <style scoped>

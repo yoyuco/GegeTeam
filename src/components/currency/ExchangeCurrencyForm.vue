@@ -499,7 +499,10 @@ watch(() => props.currencies, (newCurrencies, oldCurrencies) => {
   }
 }, { immediate: true })
 
-
+// Expose methods to parent component
+defineExpose({
+  onReset
+})
 
 </script>
 
