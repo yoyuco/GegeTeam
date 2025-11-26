@@ -739,12 +739,17 @@ const loadDeliveryOrders = async () => {
       return  // Dừng lại - không gọi RPC nếu không có auth
     }
 
-    // Use the secure RPC function with role-based access
+    // Use the optimized RPC function with server-side filtering and caching
     const { data, error } = await supabase
-      .rpc('get_currency_orders_v2_public', {
+      .rpc('get_currency_orders_optimized', {
         p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control (FIRST PARAM!)
         p_for_delivery: true,              // Filter for delivery-relevant statuses
-        p_limit: 100                      // Get more orders for comprehensive view
+        p_limit: 100,                      // Get more orders for comprehensive view
+        p_offset: 0,
+        p_search_query: null,             // Can be used for future search functionality
+        p_status_filter: null,             // Use built-in delivery filtering
+        p_order_type_filter: null,
+        p_game_code_filter: null
       })
 
     if (error) {
@@ -1172,13 +1177,18 @@ const loadTransactionHistory = async () => {
       return
     }
 
-    // Use the existing RPC function with caching and optimized performance
-    // Database indexes will provide significant performance improvements
+    // Use the optimized RPC function with server-side filtering and caching
+    // This function includes all necessary joins and filters server-side with indexes
     const { data, error } = await supabase
-      .rpc('get_currency_orders_v2_public', {
+      .rpc('get_currency_orders_optimized', {
         p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control
         p_for_delivery: false,             // History tab (not delivery)
-        p_limit: 100
+        p_limit: 100,
+        p_offset: 0,
+        p_search_query: null,             // Can be used for future search functionality
+        p_status_filter: null,             // Show all statuses, will filter client-side for history
+        p_order_type_filter: null,
+        p_game_code_filter: null
       })
 
     // Filter history data to only show completed and cancelled orders
