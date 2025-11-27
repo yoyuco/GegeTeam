@@ -86,6 +86,15 @@ mcp-tools-discovery.json
 mcp-system-config.json
 mcp-tools-specifications.json
 
+# Web Reader MCP Server
+mcp-web-reader/
+!/mcp-web-reader/package.json
+!/mcp-web-reader/README.md
+
+# Console Logger MCP Server
+mcp-console-logger/
+!/mcp-console-logger/package.json
+
 # Backup folders and archived files
 backup/
 production_full_backup.sql

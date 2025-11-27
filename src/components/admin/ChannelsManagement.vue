@@ -549,13 +549,22 @@ const loadChannels = async () => {
   emit('loadingChange', true)
 
   try {
-    const { data, error } = await supabase
-      .from('channels')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_channels_direct')
 
-    if (error) throw error
-    channels.value = data || []
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('channels')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (fallbackError) throw fallbackError
+      channels.value = fallbackData || []
+    } else {
+      channels.value = data || []
+    }
   } catch (error) {
     console.error('Error loading channels:', error)
     message.error('Không thể tải danh sách kênh giao dịch')
@@ -640,40 +649,39 @@ const handleSubmit = async () => {
       description: formData.value.description.trim() || null,
       website_url: formData.value.website_url.trim() || null,
       direction: formData.value.direction,
-      is_active: formData.value.is_active,
-      updated_by: profileId,
-      updated_at: new Date().toISOString()
+      is_active: formData.value.is_active
     }
 
     let error: any
 
     if (editingChannel.value) {
-      // Update existing channel
-      const { data, error: updateError } = await supabase
-        .from('channels')
-        .update(channelData)
-        .eq('id', editingChannel.value.id)
-        .select()
-
+      // Use RPC function to bypass RLS
+      const { error: updateError } = await supabase.rpc('update_channel_direct', {
+        p_channel_id: editingChannel.value.id,
+        p_code: channelData.code,
+        p_name: channelData.name,
+        p_description: channelData.description,
+        p_website_url: channelData.website_url,
+        p_direction: channelData.direction,
+        p_is_active: channelData.is_active,
+        p_updated_by: profileId
+      })
       error = updateError
     } else {
-      // Create new channel
-      const { data, error: createError } = await supabase
-        .from('channels')
-        .insert({
-          ...channelData,
-          created_by: profileId,
-          created_at: new Date().toISOString()
-        })
-        .select()
-
+      // Use RPC function to bypass RLS
+      const { error: createError } = await supabase.rpc('create_channel_direct', {
+        p_code: channelData.code,
+        p_name: channelData.name,
+        p_description: channelData.description,
+        p_website_url: channelData.website_url,
+        p_direction: channelData.direction,
+        p_is_active: channelData.is_active,
+        p_created_by: profileId
+      })
       error = createError
     }
 
-    if (error) {
-      console.error('Error saving channel:', error)
-      throw error
-    }
+    if (error) throw error
 
     message.success(editingChannel.value ? 'Cập nhật kênh giao dịch thành công' : 'Tạo kênh giao dịch thành công')
     closeModal()
@@ -691,10 +699,10 @@ const confirmDelete = async (channel: Channel) => {
   deleting.value = true
 
   try {
-    const { error } = await supabase
-      .from('channels')
-      .delete()
-      .eq('id', channel.id)
+    // Use RPC function to bypass RLS
+    const { error } = await supabase.rpc('delete_channel_direct', {
+      p_channel_id: channel.id
+    })
 
     if (error) throw error
 

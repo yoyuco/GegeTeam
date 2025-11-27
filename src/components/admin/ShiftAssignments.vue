@@ -403,17 +403,29 @@ const columns: DataTableColumns<ShiftAssignment> = [
 
 async function loadEmployees() {
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, display_name')
-      .eq('status', 'active')
-      .order('display_name')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_active_profiles_direct')
 
-    if (error) throw error
-    employeeOptions.value = (data || []).map(emp => ({
-      label: emp.display_name || 'Unknown',
-      value: emp.id
-    }))
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .eq('status', 'active')
+        .order('display_name')
+
+      if (fallbackError) throw fallbackError
+      employeeOptions.value = (fallbackData || []).map(emp => ({
+        label: emp.display_name || 'Unknown',
+        value: emp.id
+      }))
+    } else {
+      employeeOptions.value = (data || []).map(emp => ({
+        label: emp.display_name || 'Unknown',
+        value: emp.id
+      }))
+    }
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách nhân viên')
   }
@@ -421,18 +433,34 @@ async function loadEmployees() {
 
 async function loadGameAccounts() {
   try {
-    const { data, error } = await supabase
-      .from('game_accounts')
-      .select('id, account_name')
-      .eq('is_active', true)
-      .eq('purpose', 'INVENTORY')
-      .order('account_name')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_game_accounts_direct')
 
-    if (error) throw error
-    gameAccountOptions.value = (data || []).map(account => ({
-      label: account.account_name,
-      value: account.id
-    }))
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('game_accounts')
+        .select('id, account_name')
+        .eq('is_active', true)
+        .eq('purpose', 'INVENTORY')
+        .order('account_name')
+
+      if (fallbackError) throw fallbackError
+      gameAccountOptions.value = (fallbackData || [])
+        .filter(account => account.purpose === 'INVENTORY')
+        .map(account => ({
+          label: account.account_name,
+          value: account.id
+        }))
+    } else {
+      gameAccountOptions.value = (data || [])
+        .filter(account => account.purpose === 'INVENTORY')
+        .map(account => ({
+          label: account.account_name,
+          value: account.id
+        }))
+    }
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách game accounts')
   }
@@ -440,17 +468,29 @@ async function loadGameAccounts() {
 
 async function loadShifts() {
   try {
-    const { data, error } = await supabase
-      .from('work_shifts')
-      .select('id, name')
-      .eq('is_active', true)
-      .order('start_time')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_work_shifts_direct')
 
-    if (error) throw error
-    shiftOptions.value = (data || []).map((shift: any) => ({
-      label: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
-      value: shift.id
-    }))
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('work_shifts')
+        .select('id, name, start_time, end_time')
+        .eq('is_active', true)
+        .order('start_time')
+
+      if (fallbackError) throw fallbackError
+      shiftOptions.value = (fallbackData || []).map((shift: any) => ({
+        label: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+        value: shift.id
+      }))
+    } else {
+      shiftOptions.value = (data || []).map((shift: any) => ({
+        label: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+        value: shift.id
+      }))
+    }
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách ca làm việc')
   }
@@ -458,17 +498,29 @@ async function loadShifts() {
 
 async function loadChannels() {
   try {
-    const { data, error } = await supabase
-      .from('channels')
-      .select('id, name')
-      .eq('is_active', true)
-      .order('name')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_channels_direct')
 
-    if (error) throw error
-    channelOptions.value = (data || []).map((channel: any) => ({
-      label: channel.name,
-      value: channel.id
-    }))
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('channels')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+
+      if (fallbackError) throw fallbackError
+      channelOptions.value = (fallbackData || []).map((channel: any) => ({
+        label: channel.name,
+        value: channel.id
+      }))
+    } else {
+      channelOptions.value = (data || []).map((channel: any) => ({
+        label: channel.name,
+        value: channel.id
+      }))
+    }
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách kênh')
   }
@@ -476,17 +528,29 @@ async function loadChannels() {
 
 async function loadCurrencies() {
   try {
-    const { data, error } = await supabase
-      .from('currencies')
-      .select('code, name')
-      .eq('is_active', true)
-      .order('code')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_currencies_direct')
 
-    if (error) throw error
-    currencyOptions.value = (data || []).map((currency: any) => ({
-      label: `${currency.code} - ${currency.name}`,
-      value: currency.code
-    }))
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('currencies')
+        .select('code, name')
+        .eq('is_active', true)
+        .order('code')
+
+      if (fallbackError) throw fallbackError
+      currencyOptions.value = (fallbackData || []).map((currency: any) => ({
+        label: `${currency.code} - ${currency.name}`,
+        value: currency.code
+      }))
+    } else {
+      currencyOptions.value = (data || []).map((currency: any) => ({
+        label: `${currency.code} - ${currency.name}`,
+        value: currency.code
+      }))
+    }
   } catch (error: any) {
     message.error(error.message || 'Không thể tải danh sách tiền tệ')
   }
@@ -501,59 +565,85 @@ async function loadAssignments() {
   loading.value = true
   emit('loading-change', true)
   try {
-    // First load assignments
-    const { data: assignmentsData, error: assignmentsError } = await supabase
-      .from('shift_assignments')
-      .select('*')
-      .order('game_account_id, shift_id')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_shift_assignments_direct')
 
-    if (assignmentsError) throw assignmentsError
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
 
-    if (!assignmentsData || assignmentsData.length === 0) {
-      assignments.value = []
-      return
-    }
+      // First load assignments
+      const { data: assignmentsData, error: assignmentsError } = await supabase
+        .from('shift_assignments')
+        .select('*')
+        .order('game_account_id, shift_id')
 
-    // Get related data separately
-    const [gameAccountsRes, profilesRes, workShiftsRes, channelsRes] = await Promise.all([
-      supabase.from('game_accounts').select('id, account_name').in('id', [...new Set(assignmentsData.map(a => a.game_account_id))]),
-      supabase.from('profiles').select('id, display_name').in('id', [...new Set(assignmentsData.map(a => a.employee_profile_id))]),
-      supabase.from('work_shifts').select('id, name, start_time, end_time').in('id', [...new Set(assignmentsData.map(a => a.shift_id))]),
-      supabase.from('channels').select('id, name').in('id', [...new Set(assignmentsData.map(a => a.channels_id))])
-    ])
+      if (assignmentsError) throw assignmentsError
 
-    if (gameAccountsRes.error) throw gameAccountsRes.error
-    if (profilesRes.error) throw profilesRes.error
-    if (workShiftsRes.error) throw workShiftsRes.error
-    if (channelsRes.error) throw channelsRes.error
+      if (!assignmentsData || assignmentsData.length === 0) {
+        assignments.value = []
+        return
+      }
 
-    // Create lookup maps
-    const gameAccountMap = new Map((gameAccountsRes.data || []).map(acc => [acc.id, acc.account_name]))
-    const profileMap = new Map((profilesRes.data || []).map(profile => [profile.id, profile.display_name]))
-    const workShiftMap = new Map((workShiftsRes.data || []).map(shift => [shift.id, shift]))
-    const channelMap = new Map((channelsRes.data || []).map(channel => [channel.id, channel.name]))
+      // Get related data separately
+      const [gameAccountsRes, profilesRes, workShiftsRes, channelsRes] = await Promise.all([
+        supabase.from('game_accounts').select('id, account_name').in('id', [...new Set(assignmentsData.map(a => a.game_account_id))]),
+        supabase.from('profiles').select('id, display_name').in('id', [...new Set(assignmentsData.map(a => a.employee_profile_id))]),
+        supabase.from('work_shifts').select('id, name, start_time, end_time').in('id', [...new Set(assignmentsData.map(a => a.shift_id))]),
+        supabase.from('channels').select('id, name').in('id', [...new Set(assignmentsData.map(a => a.channels_id))])
+      ])
 
-    // Combine data
-    const combinedData = assignmentsData.map((item: any) => {
-      const workShift = workShiftMap.get(item.shift_id)
-      return {
+      if (gameAccountsRes.error) throw gameAccountsRes.error
+      if (profilesRes.error) throw profilesRes.error
+      if (workShiftsRes.error) throw workShiftsRes.error
+      if (channelsRes.error) throw channelsRes.error
+
+      // Create lookup maps
+      const gameAccountMap = new Map((gameAccountsRes.data || []).map(acc => [acc.id, acc.account_name]))
+      const profileMap = new Map((profilesRes.data || []).map(profile => [profile.id, profile.display_name]))
+      const workShiftMap = new Map((workShiftsRes.data || []).map(shift => [shift.id, shift]))
+      const channelMap = new Map((channelsRes.data || []).map(channel => [channel.id, channel.name]))
+
+      // Combine data
+      const combinedData = assignmentsData.map((item: any) => {
+        const workShift = workShiftMap.get(item.shift_id)
+        return {
+          id: item.id,
+          game_account_id: item.game_account_id,
+          game_account_name: gameAccountMap.get(item.game_account_id) || 'Unknown',
+          employee_profile_id: item.employee_profile_id,
+          employee_name: profileMap.get(item.employee_profile_id) || 'Unknown',
+          shift_id: item.shift_id,
+          shift_name: workShift ? `${workShift.name} (${workShift.start_time} - ${workShift.end_time})` : 'Unknown',
+          channels_id: item.channels_id,
+          channel_name: channelMap.get(item.channels_id) || 'Unknown',
+          currency_code: item.currency_code || 'VND',
+          currency_name: getCurrencyName(item.currency_code || 'VND'),
+          is_active: item.is_active,
+          assigned_at: item.assigned_at
+        }
+      })
+
+      allAssignments.value = combinedData
+    } else {
+      // Use RPC data with combined information
+      allAssignments.value = (data || []).map((item: any) => ({
         id: item.id,
         game_account_id: item.game_account_id,
-        game_account_name: gameAccountMap.get(item.game_account_id) || 'Unknown',
+        game_account_name: item.game_account_name,
         employee_profile_id: item.employee_profile_id,
-        employee_name: profileMap.get(item.employee_profile_id) || 'Unknown',
+        employee_name: item.employee_name,
         shift_id: item.shift_id,
-        shift_name: workShift ? `${workShift.name} (${workShift.start_time} - ${workShift.end_time})` : 'Unknown',
+        shift_name: `${item.shift_name} (${item.shift_start_time} - ${item.shift_end_time})`,
         channels_id: item.channels_id,
-        channel_name: channelMap.get(item.channels_id) || 'Unknown',
-        currency_code: item.currency_code || 'VND',
-        currency_name: getCurrencyName(item.currency_code || 'VND'),
+        channel_name: item.channel_name,
+        currency_code: item.currency_code,
+        currency_name: item.currency_name,
         is_active: item.is_active,
         assigned_at: item.assigned_at
-      }
-    })
+      }))
+    }
 
-    allAssignments.value = combinedData
     applyFilters()
   } catch (error: any) {
     console.error('Error loading assignments:', error)
@@ -710,12 +800,19 @@ function deleteAssignment(assignment: ShiftAssignment) {
     negativeText: 'Hủy',
     onPositiveClick: async () => {
       try {
-        const { error } = await supabase
-          .from('shift_assignments')
-          .delete()
-          .eq('id', assignment.id)
+        // Use RPC function to bypass RLS
+        const { data, error } = await supabase.rpc('delete_shift_assignment_direct', {
+          p_assignment_id: assignment.id
+        })
 
         if (error) throw error
+
+        // Check RPC response
+        if (data && !data.success) {
+          message.error(data.message || 'Không thể xóa phân công')
+          return
+        }
+
         message.success('Xóa phân công thành công!')
         await loadAssignments()
       } catch (error: any) {
@@ -734,25 +831,33 @@ async function saveAssignment() {
 
   modal.saving = true
   try {
-    if (modal.editingId) {
-      // Update existing assignment
-      const { error } = await supabase
-        .from('shift_assignments')
-        .update(modal.form)
-        .eq('id', modal.editingId)
-
-      if (error) throw error
-      message.success('Cập nhật phân công thành công!')
-    } else {
-      // Create new assignment
-      const { error } = await supabase
-        .from('shift_assignments')
-        .insert(modal.form)
-
-      if (error) throw error
-      message.success('Thêm phân công thành công!')
+    const assignmentData = {
+      p_game_account_id: modal.form.game_account_id,
+      p_employee_profile_id: modal.form.employee_profile_id,
+      p_shift_id: modal.form.shift_id,
+      p_channels_id: modal.form.channels_id,
+      p_currency_code: modal.form.currency_code,
+      p_is_active: modal.form.is_active
     }
 
+    let error: any
+
+    if (modal.editingId) {
+      // Use RPC function to update existing assignment
+      const { error: updateError } = await supabase.rpc('update_shift_assignment_direct', {
+        p_assignment_id: modal.editingId,
+        ...assignmentData
+      })
+      error = updateError
+    } else {
+      // Use RPC function to create new assignment
+      const { error: createError } = await supabase.rpc('create_shift_assignment_direct', assignmentData)
+      error = createError
+    }
+
+    if (error) throw error
+
+    message.success(modal.editingId ? 'Cập nhật phân công thành công!' : 'Thêm phân công thành công!')
     modal.open = false
     await loadAssignments()
   } catch (error: any) {

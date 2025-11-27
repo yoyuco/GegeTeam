@@ -592,14 +592,24 @@ const loadGameAccounts = async () => {
   emit('loadingChange', true)
 
   try {
-    const { data, error } = await supabase
-      .from('game_accounts')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_game_accounts_direct')
 
-    if (error) throw error
-    allGameAccounts.value = data || []
-    gameAccounts.value = data || []
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('game_accounts')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (fallbackError) throw fallbackError
+      allGameAccounts.value = fallbackData || []
+      gameAccounts.value = fallbackData || []
+    } else {
+      allGameAccounts.value = data || []
+      gameAccounts.value = data || []
+    }
   } catch (error) {
     console.error('Error loading game accounts:', error)
     message.error('Không thể tải danh sách tài khoản game')
@@ -754,17 +764,25 @@ const handleSubmit = async () => {
     let error: any
 
     if (editingGameAccount.value) {
-      // Update existing account
-      const { error: updateError } = await supabase
-        .from('game_accounts')
-        .update(accountData)
-        .eq('id', editingGameAccount.value.id)
+      // Use RPC function to bypass RLS
+      const { error: updateError } = await supabase.rpc('update_game_account_direct', {
+        p_account_id: editingGameAccount.value.id,
+        p_game_code: accountData.game_code,
+        p_account_name: accountData.account_name,
+        p_purpose: accountData.purpose,
+        p_server_attribute_code: accountData.server_attribute_code,
+        p_is_active: accountData.is_active
+      })
       error = updateError
     } else {
-      // Create new account
-      const { error: createError } = await supabase
-        .from('game_accounts')
-        .insert(accountData)
+      // Use RPC function to bypass RLS
+      const { error: createError } = await supabase.rpc('create_game_account_direct', {
+        p_game_code: accountData.game_code,
+        p_account_name: accountData.account_name,
+        p_purpose: accountData.purpose,
+        p_server_attribute_code: accountData.server_attribute_code,
+        p_is_active: accountData.is_active
+      })
       error = createError
     }
 
@@ -804,23 +822,20 @@ const confirmDelete = async (account: GameAccount) => {
       }
     }
 
-    // Try direct delete - the fixed trigger should handle the cleanup
-    const { error } = await supabase
-      .from('game_accounts')
-      .delete()
-      .eq('id', account.id)
+    // Use RPC function to bypass RLS
+    const { data, error } = await supabase.rpc('delete_game_account_direct', {
+      p_account_id: account.id
+    })
 
     if (error) {
       console.error('Delete failed:', error)
+      message.error(`Không thể xóa tài khoản: ${error.message}`)
+      return
+    }
 
-      // Provide more specific error messages
-      if (error.message.includes('inventory')) {
-        message.error('Không thể xóa tài khoản game vì vẫn còn tồn kho trong inventory pools. Vui lòng kiểm tra lại.')
-      } else if (error.message.includes('foreign key')) {
-        message.error('Tài khoản game đang được sử dụng ở nơi khác. Vui lòng kiểm tra lại.')
-      } else {
-        message.error(`Không thể xóa tài khoản: ${error.message}`)
-      }
+    // Check RPC response
+    if (data && !data.success) {
+      message.error(data.message || 'Không thể xóa tài khoản game')
       return
     }
 

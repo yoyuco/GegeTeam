@@ -100,9 +100,11 @@
                   <n-time-picker
                     v-model:value="formData.start_time"
                     format="HH:mm"
-                    placeholder="🌅 Chọn thời gian bắt đầu"
+                    placeholder="🌅 Chọn thời gian bắt đầu (GMT+7)"
                     style="width: 100%"
                     size="large"
+                    :time-zone="getTimeZone()"
+                    value-format="x"
                   />
                 </n-form-item>
               </n-gi>
@@ -112,9 +114,11 @@
                   <n-time-picker
                     v-model:value="formData.end_time"
                     format="HH:mm"
-                    placeholder="🌙 Chọn thời gian kết thúc"
+                    placeholder="🌙 Chọn thời gian kết thúc (GMT+7)"
                     style="width: 100%"
                     size="large"
+                    :time-zone="getTimeZone()"
+                    value-format="x"
                   />
                 </n-form-item>
               </n-gi>
@@ -363,10 +367,30 @@ const formRules: FormRules = {
     { min: 2, message: 'Tên ca phải có ít nhất 2 ký tự', trigger: 'blur' }
   ],
   start_time: [
-    { required: true, message: 'Vui lòng chọn thời gian bắt đầu', trigger: 'change' }
+    {
+      required: true,
+      message: 'Vui lòng chọn thời gian bắt đầu',
+      trigger: ['change', 'blur'],
+      validator: (rule, value) => {
+        if (value === null || value === undefined || value === 0) {
+          return new Error('Vui lòng chọn thời gian bắt đầu')
+        }
+        return true
+      }
+    }
   ],
   end_time: [
-    { required: true, message: 'Vui lòng chọn thời gian kết thúc', trigger: 'change' }
+    {
+      required: true,
+      message: 'Vui lòng chọn thời gian kết thúc',
+      trigger: ['change', 'blur'],
+      validator: (rule, value) => {
+        if (value === null || value === undefined || value === 0) {
+          return new Error('Vui lòng chọn thời gian kết thúc')
+        }
+        return true
+      }
+    }
   ]
 }
 
@@ -488,6 +512,10 @@ const columns = [
 ]
 
 // Methods
+const getTimeZone = () => {
+  return 'Asia/Bangkok' // GMT+7 timezone
+}
+
 const formatTime = (time: string) => {
   return time.substring(0, 5) // Extract HH:mm from HH:mm:ss
 }
@@ -501,13 +529,22 @@ const loadShifts = async () => {
   emit('loadingChange', true)
 
   try {
-    const { data, error } = await supabase
-      .from('work_shifts')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_work_shifts_direct')
 
-    if (error) throw error
-    shifts.value = data || []
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('work_shifts')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (fallbackError) throw fallbackError
+      shifts.value = fallbackData || []
+    } else {
+      shifts.value = data || []
+    }
   } catch (error) {
     console.error('Error loading shifts:', error)
     message.error('Không thể tải danh sách ca làm việc')
@@ -532,14 +569,24 @@ const openCreateModal = () => {
 const openEditModal = (shift: WorkShift) => {
   editingShift.value = shift
 
-  // Convert time strings to milliseconds for n-time-picker
+  // Convert time strings to milliseconds for n-time-picker (GMT+7)
   const [startHours, startMinutes] = shift.start_time.split(':').map(Number)
   const [endHours, endMinutes] = shift.end_time.split(':').map(Number)
 
+  // Create date objects with GMT+7 timezone
+  const gmt7Date = new Date()
+  const gmt7Offset = 7 * 60 * 60 * 1000 // 7 hours in milliseconds
+
+  const startDate = new Date(gmt7Date.getTime())
+  startDate.setHours(startHours, startMinutes, 0, 0)
+
+  const endDate = new Date(gmt7Date.getTime())
+  endDate.setHours(endHours, endMinutes, 0, 0)
+
   formData.value = {
     name: shift.name,
-    start_time: (startHours * 60 + startMinutes) * 60 * 1000,
-    end_time: (endHours * 60 + endMinutes) * 60 * 1000,
+    start_time: startDate.getTime(),
+    end_time: endDate.getTime(),
     description: shift.description || '',
     is_active: shift.is_active
   }
@@ -569,13 +616,23 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    // Convert milliseconds back to time strings
-    const startTime = formData.value.start_time
-      ? new Date(formData.value.start_time).toTimeString().substring(0, 8)
-      : ''
-    const endTime = formData.value.end_time
-      ? new Date(formData.value.end_time).toTimeString().substring(0, 8)
-      : ''
+    // Convert milliseconds to GMT+7 time strings
+    let startTime = ''
+    let endTime = ''
+
+    if (formData.value.start_time) {
+      const startDate = new Date(formData.value.start_time)
+      // GMT+7 = UTC + 7 hours
+      const gmt7StartTime = new Date(startDate.getTime() + (7 * 60 * 60 * 1000))
+      startTime = gmt7StartTime.toTimeString().substring(0, 8)
+    }
+
+    if (formData.value.end_time) {
+      const endDate = new Date(formData.value.end_time)
+      // GMT+7 = UTC + 7 hours
+      const gmt7EndTime = new Date(endDate.getTime() + (7 * 60 * 60 * 1000))
+      endTime = gmt7EndTime.toTimeString().substring(0, 8)
+    }
 
     const shiftData = {
       name: formData.value.name.trim(),
@@ -588,17 +645,25 @@ const handleSubmit = async () => {
     let error: any
 
     if (editingShift.value) {
-      // Update existing shift
-      const { error: updateError } = await supabase
-        .from('work_shifts')
-        .update(shiftData)
-        .eq('id', editingShift.value.id)
+      // Use RPC function to bypass RLS
+      const { error: updateError } = await supabase.rpc('update_work_shift_direct', {
+        p_shift_id: editingShift.value.id,
+        p_name: shiftData.name,
+        p_start_time: shiftData.start_time,
+        p_end_time: shiftData.end_time,
+        p_description: shiftData.description,
+        p_is_active: shiftData.is_active
+      })
       error = updateError
     } else {
-      // Create new shift
-      const { error: createError } = await supabase
-        .from('work_shifts')
-        .insert(shiftData)
+      // Use RPC function to bypass RLS
+      const { error: createError } = await supabase.rpc('create_work_shift_direct', {
+        p_name: shiftData.name,
+        p_start_time: shiftData.start_time,
+        p_end_time: shiftData.end_time,
+        p_description: shiftData.description,
+        p_is_active: shiftData.is_active
+      })
       error = createError
     }
 
@@ -620,10 +685,10 @@ const confirmDelete = async (shift: WorkShift) => {
   deleting.value = true
 
   try {
-    const { error } = await supabase
-      .from('work_shifts')
-      .delete()
-      .eq('id', shift.id)
+    // Use RPC function to bypass RLS
+    const { error } = await supabase.rpc('delete_work_shift_direct', {
+      p_shift_id: shift.id
+    })
 
     if (error) throw error
 

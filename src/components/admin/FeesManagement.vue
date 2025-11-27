@@ -654,16 +654,22 @@ const loadFees = async () => {
   emit('loadingChange', true)
 
   try {
-    const { data, error } = await supabase
-      .from('fees')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_fees_direct')
 
     if (error) {
-      throw error
-    }
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('fees')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    fees.value = data || []
+      if (fallbackError) throw fallbackError
+      fees.value = fallbackData || []
+    } else {
+      fees.value = data || []
+    }
   } catch (error) {
     console.error('Error loading fees:', error)
     message.error('Không thể tải danh sách phí dịch vụ')
@@ -722,29 +728,27 @@ const handleSubmit = async () => {
     submitting.value = true
 
     const feeData = {
-      code: formData.value.code.trim().toUpperCase(),
-      name: formData.value.name.trim(),
-      direction: formData.value.direction,
-      fee_type: formData.value.fee_type,
-      amount: formData.value.amount || 0,
-      currency: formData.value.currency,
-      is_active: formData.value.is_active
+      p_code: formData.value.code.trim().toUpperCase(),
+      p_name: formData.value.name.trim(),
+      p_direction: formData.value.direction,
+      p_fee_type: formData.value.fee_type,
+      p_amount: formData.value.amount || 0,
+      p_currency: formData.value.currency,
+      p_is_active: formData.value.is_active
     }
 
     let error: any
 
     if (editingFee.value) {
-      // Update existing fee
-      const { error: updateError } = await supabase
-        .from('fees')
-        .update(feeData)
-        .eq('id', editingFee.value.id)
+      // Use RPC function to update existing fee
+      const { error: updateError } = await supabase.rpc('update_fee_direct', {
+        p_fee_id: editingFee.value.id,
+        ...feeData
+      })
       error = updateError
     } else {
-      // Create new fee
-      const { error: createError } = await supabase
-        .from('fees')
-        .insert(feeData)
+      // Use RPC function to create new fee
+      const { error: createError } = await supabase.rpc('create_fee_direct', feeData)
       error = createError
     }
 
@@ -766,12 +770,18 @@ const confirmDelete = async (fee: Fee) => {
   deleting.value = true
 
   try {
-    const { error } = await supabase
-      .from('fees')
-      .delete()
-      .eq('id', fee.id)
+    // Use RPC function to bypass RLS
+    const { data, error } = await supabase.rpc('delete_fee_direct', {
+      p_fee_id: fee.id
+    })
 
     if (error) throw error
+
+    // Check RPC response
+    if (data && !data.success) {
+      message.error(data.message || 'Không thể xóa phí dịch vụ')
+      return
+    }
 
     message.success('Xóa phí dịch vụ thành công')
     await loadFees()

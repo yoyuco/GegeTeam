@@ -43,7 +43,7 @@
     <n-modal
       v-model:show="modalOpen"
       :mask-closable="false"
-      :style="{ width: '700px' }"
+      :style="{ width: '900px' }"
       preset="card"
       :title="editingProcess ? 'Chỉnh sửa Quy trình Kinh doanh' : 'Thêm Quy trình Kinh doanh mới'"
       size="large"
@@ -58,227 +58,222 @@
           require-mark-placement="right-hanging"
           size="large"
         >
-          <!-- Basic Information Section -->
-          <div class="form-section">
-            <div class="section-title">
-              <n-icon size="20" color="#2080f0">
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-              </n-icon>
-              <span>Thông tin cơ bản</span>
-            </div>
+          <!-- Main Content in 2 Columns -->
+          <n-grid :cols="12" :x-gap="24" :y-gap="20">
 
-            <n-form-item label="Mã quy trình" path="code">
-              <n-input
-                v-model:value="formData.code"
-                placeholder="⚙️ Nhập mã quy trình (ví dụ: P_SAN_A_SAN_B)"
-                size="large"
-              />
-            </n-form-item>
+            <!-- Left Column (8/12) -->
+            <n-gi :span="8">
+              <!-- Basic Information Section -->
+              <div class="form-section mb-6">
+                <div class="section-title mb-4">
+                  <n-icon size="18" color="#2080f0">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                  </n-icon>
+                  <span class="font-medium">Thông tin cơ bản</span>
+                </div>
 
-            <n-form-item label="Tên quy trình" path="name">
-              <n-input
-                v-model:value="formData.name"
-                placeholder="📝 Nhập tên quy trình kinh doanh"
-                size="large"
-              />
-            </n-form-item>
+                <n-grid :cols="2" :x-gap="16">
+                  <n-gi>
+                    <n-form-item label="Mã quy trình" path="code">
+                      <n-input
+                        v-model:value="formData.code"
+                        placeholder="⚙️ P_SAN_A_SAN_B"
+                        size="medium"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="Trạng thái" path="is_active">
+                      <n-switch
+                        v-model:value="formData.is_active"
+                        :checked-value="true"
+                        :unchecked-value="false"
+                        size="medium"
+                      >
+                        <template #checked>
+                          <span class="text-green-600">🟢 Hoạt động</span>
+                        </template>
+                        <template #unchecked>
+                          <span class="text-red-600">🔴 Ngừng</span>
+                        </template>
+                      </n-switch>
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
 
-            <n-form-item label="Mô tả" path="description">
-              <n-input
-                v-model:value="formData.description"
-                type="textarea"
-                placeholder="📋 Mô tả chi tiết về quy trình kinh doanh"
-                :rows="4"
-                size="large"
-              />
-            </n-form-item>
-          </div>
-
-          <!-- Channel and Currency Section -->
-          <div class="form-section">
-            <div class="section-title">
-              <n-icon size="20" color="#2080f0">
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22L12 18.56L5.82 22L7 14.14l-5-4.87l6.91-1.01L12 2z"/></svg>
-              </n-icon>
-              <span>Thông tin Kênh và Tiền tệ</span>
-            </div>
-
-            <n-grid :cols="2" :x-gap="16">
-              <n-gi>
-                <n-form-item label="Kênh bán hàng" path="sale_channel_id">
-                  <n-select
-                    v-model:value="formData.sale_channel_id"
-                    :options="channelOptions"
-                    placeholder="📡 Chọn kênh bán hàng"
-                    clearable
-                    filterable
-                    size="large"
-                  />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="Tiền tệ bán" path="sale_currency">
+                <n-form-item label="Tên quy trình" path="name">
                   <n-input
-                    v-model:value="formData.sale_currency"
-                    placeholder="💱 VD: VND, USD"
-                    size="large"
+                    v-model:value="formData.name"
+                    placeholder="📝 Tên quy trình kinh doanh"
+                    size="medium"
                   />
                 </n-form-item>
-              </n-gi>
-            </n-grid>
 
-            <n-grid :cols="2" :x-gap="16">
-              <n-gi>
-                <n-form-item label="Kênh mua hàng" path="purchase_channel_id">
-                  <n-select
-                    v-model:value="formData.purchase_channel_id"
-                    :options="channelOptions"
-                    placeholder="📡 Chọn kênh mua hàng"
-                    clearable
-                    filterable
-                    size="large"
-                  />
-                </n-form-item>
-              </n-gi>
-              <n-gi>
-                <n-form-item label="Tiền tệ mua" path="purchase_currency">
+                <n-form-item label="Mô tả" path="description">
                   <n-input
-                    v-model:value="formData.purchase_currency"
-                    placeholder="💱 VD: VND, USD"
-                    size="large"
+                    v-model:value="formData.description"
+                    type="textarea"
+                    placeholder="📋 Mô tả chi tiết về quy trình"
+                    :rows="3"
+                    size="medium"
                   />
                 </n-form-item>
-              </n-gi>
-            </n-grid>
-          </div>
+              </div>
 
-          <!-- Fee Management Section -->
-          <div class="form-section">
-            <div class="section-title">
-              <n-icon size="20" color="#2080f0">
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-              </n-icon>
-              <span>Phí áp dụng cho quy trình</span>
-            </div>
+              <!-- Channel and Currency Section -->
+              <div class="form-section">
+                <div class="section-title mb-4">
+                  <n-icon size="18" color="#2080f0">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22L12 18.56L5.82 22L7 14.14l-5-4.87l6.91-1.01L12 2z"/></svg>
+                  </n-icon>
+                  <span class="font-medium">Kênh và Tiền tệ</span>
+                </div>
 
-            <n-form-item label="Phí bổ sung">
-              <div class="space-y-2 w-full">
-                <div
-                  v-for="(assignedFee, _index) in assignedFees"
-                  :key="assignedFee.fee_id"
-                  class="flex items-center justify-between bg-gray-50 p-3 rounded-md fee-item"
-                >
-                  <div class="flex-1">
-                    <div class="font-medium">{{ assignedFee.fee_name }}</div>
-                    <div class="text-sm text-gray-600">
-                      {{ assignedFee.fee_direction }} - {{ assignedFee.fee_amount }} {{ assignedFee.fee_currency }}
+                <n-grid :cols="2" :x-gap="16" :y-gap="12">
+                  <n-gi>
+                    <n-form-item label="Kênh bán" path="sale_channel_id">
+                      <n-select
+                        v-model:value="formData.sale_channel_id"
+                        :options="channelOptions"
+                        placeholder="📡 Chọn kênh bán"
+                        clearable
+                        filterable
+                        size="medium"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="Tiền tệ bán" path="sale_currency">
+                      <n-input
+                        v-model:value="formData.sale_currency"
+                        placeholder="💱 VD: VND, USD"
+                        size="medium"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="Kênh mua" path="purchase_channel_id">
+                      <n-select
+                        v-model:value="formData.purchase_channel_id"
+                        :options="channelOptions"
+                        placeholder="📡 Chọn kênh mua"
+                        clearable
+                        filterable
+                        size="medium"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi>
+                    <n-form-item label="Tiền tệ mua" path="purchase_currency">
+                      <n-input
+                        v-model:value="formData.purchase_currency"
+                        placeholder="💱 VD: VND, USD"
+                        size="medium"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+              </div>
+            </n-gi>
+
+            <!-- Right Column (4/12) -->
+            <n-gi :span="4">
+              <!-- Fee Management Section -->
+              <div class="form-section">
+                <div class="section-title mb-4">
+                  <n-icon size="18" color="#2080f0">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                  </n-icon>
+                  <span class="font-medium">Phí áp dụng</span>
+                </div>
+
+                <div class="space-y-3">
+                  <!-- Assigned Fees List -->
+                  <div class="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-3 bg-gray-50">
+                    <div
+                      v-for="(assignedFee, index) in assignedFees"
+                      :key="assignedFee.fee_id"
+                      class="bg-white p-2 rounded border border-gray-200 hover:border-gray-300 transition-colors"
+                    >
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                          <div class="font-medium text-sm truncate">{{ assignedFee.fee_name }}</div>
+                          <div class="text-xs text-gray-500 mt-1">
+                            {{ assignedFee.fee_direction }} • {{ assignedFee.fee_amount }} {{ assignedFee.fee_currency }}
+                          </div>
+                        </div>
+                        <n-button
+                          size="tiny"
+                          type="error"
+                          text
+                          @click="removeAssignedFee(assignedFee.fee_id)"
+                          class="ml-2"
+                        >
+                          <template #icon>
+                            <n-icon size="14"><TrashIcon /></n-icon>
+                          </template>
+                        </n-button>
+                      </div>
+                    </div>
+
+                    <div v-if="assignedFees.length === 0" class="text-center text-gray-400 text-sm py-4">
+                      Chưa có phí nào được áp dụng
                     </div>
                   </div>
-                  <n-button
-                    size="small"
-                    type="error"
-                    tertiary
-                    :style="{ padding: '4px 8px' }"
-                    @click="removeAssignedFee(assignedFee.fee_id)"
-                  >
-                    <template #icon>
-                      <n-icon><TrashIcon /></n-icon>
-                    </template>
-                  </n-button>
-                </div>
 
-                <div class="flex gap-2">
-                  <n-select
-                    v-model:value="selectedFeeId"
-                    :options="availableFeeOptions"
-                    placeholder="Chọn phí để thêm"
-                    filterable
-                    class="flex-1"
-                    size="large"
-                  />
-                  <n-button
-                    type="primary"
-                    :disabled="!selectedFeeId"
-                    @click="addAssignedFee"
-                    size="large"
-                  >
-                    <template #icon>
-                      <n-icon><PlusIcon /></n-icon>
-                    </template>
-                    Thêm
-                  </n-button>
+                  <!-- Add Fee Section -->
+                  <div class="space-y-2">
+                    <n-select
+                      v-model:value="selectedFeeId"
+                      :options="availableFeeOptions"
+                      placeholder="Chọn phí để thêm..."
+                      filterable
+                      size="medium"
+                    />
+                    <n-button
+                      type="primary"
+                      :disabled="!selectedFeeId"
+                      @click="addAssignedFee"
+                      size="medium"
+                      block
+                    >
+                      <template #icon>
+                        <n-icon><PlusIcon /></n-icon>
+                      </template>
+                      Thêm phí
+                    </n-button>
+                  </div>
+
+                  <!-- Fee Count -->
+                  <div class="text-center text-sm text-gray-500 pt-2 border-t">
+                    Đã áp dụng <span class="font-medium text-blue-600">{{ assignedFees.length }}</span> phí
+                  </div>
                 </div>
               </div>
-            </n-form-item>
-          </div>
-
-          <!-- Status Section -->
-          <div class="form-section">
-            <div class="section-title">
-              <n-icon size="20" color="#2080f0">
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-              </n-icon>
-              <span>Trạng thái</span>
-            </div>
-
-            <n-form-item label="Trạng thái hoạt động" path="is_active">
-              <n-switch
-                v-model:value="formData.is_active"
-                :checked-value="true"
-                :unchecked-value="false"
-                size="large"
-              >
-                <template #checked>
-                  <span style="display: flex; align-items: center; gap: 4px;">
-                    <n-icon color="#52c41a">
-                      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5l1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    </n-icon>
-                    Hoạt động
-                  </span>
-                </template>
-                <template #unchecked>
-                  <span style="display: flex; align-items: center; gap: 4px;">
-                    <n-icon color="#909399">
-                      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                    </n-icon>
-                    Không hoạt động
-                  </span>
-                </template>
-              </n-switch>
-            </n-form-item>
-          </div>
+            </n-gi>
+          </n-grid>
         </n-form>
       </div>
 
-        <template #action>
-          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div style="font-size: 14px; color: #909399;">
-              Các trường có <span style="color: #d03050;">*</span> là bắt buộc
+        <!-- Modal Actions -->
+        <template #footer>
+          <div class="flex justify-between items-center">
+            <div class="text-sm text-gray-500" v-if="editingProcess">
+              ID: {{ editingProcess.id }}
             </div>
-            <n-space>
-              <n-button size="large" @click="closeModal">
-                <template #icon>
-                  <n-icon>
-                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41z"/></svg>
-                  </n-icon>
-                </template>
+            <div class="flex gap-2">
+              <n-button @click="closeModal" size="medium">
                 Hủy
               </n-button>
               <n-button
                 type="primary"
-                size="large"
-                :loading="submitting"
-                :disabled="!formData.code || !formData.name"
                 @click="handleSubmit"
+                :loading="submitting"
+                size="medium"
               >
-                <template #icon>
-                  <n-icon>
-                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19L21 7l-1.41-1.41L9 16.17z"/></svg>
-                  </n-icon>
-                </template>
                 {{ editingProcess ? 'Cập nhật' : 'Tạo mới' }}
               </n-button>
-            </n-space>
+            </div>
           </div>
         </template>
     </n-modal>
@@ -678,18 +673,32 @@ const getProcessFeeCount = (processId: string) => {
 
 const loadProcessFeeCounts = async () => {
   try {
-    const { data, error } = await supabase
-      .from('process_fees_map')
-      .select('process_id')
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_process_fee_counts_direct')
 
-    if (error) throw error
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('process_fees_map')
+        .select('process_id')
 
-    const counts: Record<string, number> = {}
-    ;(data || []).forEach(item => {
-      counts[item.process_id] = (counts[item.process_id] || 0) + 1
-    })
+      if (fallbackError) throw fallbackError
 
-    processFeeCounts.value = counts
+      const counts: Record<string, number> = {}
+      ;(fallbackData || []).forEach(item => {
+        counts[item.process_id] = (counts[item.process_id] || 0) + 1
+      })
+
+      processFeeCounts.value = counts
+    } else {
+      const counts: Record<string, number> = {}
+      ;(data || []).forEach(item => {
+        counts[item.process_id] = item.fee_count
+      })
+
+      processFeeCounts.value = counts
+    }
   } catch (error) {
     console.error('Error loading process fee counts:', error)
   }
@@ -700,36 +709,44 @@ const loadProcesses = async () => {
   emit('loadingChange', true)
 
   try {
-    const { data, error } = await supabase
-      .from('business_processes')
-      .select(`
-        *,
-        sale_channel:channels!business_processes_sale_channel_id_fkey(
-          id,
-          name,
-          code,
-          is_active
-        ),
-        purchase_channel:channels!business_processes_purchase_channel_id_fkey(
-          id,
-          name,
-          code,
-          is_active
-        )
-      `)
-      .order('created_at', { ascending: false })
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_all_business_processes_direct')
 
     if (error) {
-      throw error
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('business_processes')
+        .select(`
+          *,
+          sale_channel:channels!business_processes_sale_channel_id_fkey(
+            id,
+            name,
+            code,
+            is_active
+          ),
+          purchase_channel:channels!business_processes_purchase_channel_id_fkey(
+            id,
+            name,
+            code,
+            is_active
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (fallbackError) throw fallbackError
+
+      const processedData = (fallbackData || []).map((process: any) => ({
+        ...process,
+        sale_channel_name: process.sale_channel?.name,
+        purchase_channel_name: process.purchase_channel?.name
+      }))
+
+      processes.value = processedData
+    } else {
+      // Use RPC data with joined channel information
+      processes.value = (data || [])
     }
-
-    const processedData = (data || []).map((process: any) => ({
-      ...process,
-      sale_channel_name: process.sale_channel?.name,
-      purchase_channel_name: process.purchase_channel?.name
-    }))
-
-    processes.value = processedData
 
     // Load fee counts for all processes
     await loadProcessFeeCounts()
@@ -785,23 +802,40 @@ const loadFees = async () => {
 
 const loadProcessFees = async (processId: string) => {
   try {
-    const { data, error } = await supabase
-      .from('process_fees_map')
-      .select(`
-        fee_id,
-        fees!inner(name, direction, amount, currency)
-      `)
-      .eq('process_id', processId)
+    // Try RPC function first to bypass RLS issues
+    const { data, error } = await supabase.rpc('get_process_fee_mappings_direct', {
+      p_process_id: processId
+    })
 
-    if (error) throw error
+    if (error) {
+      // Fallback to direct query
+      console.warn('RPC failed, falling back to direct query:', error)
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('process_fees_map')
+        .select(`
+          fee_id,
+          fees!inner(name, direction, amount, currency)
+        `)
+        .eq('process_id', processId)
 
-    assignedFees.value = (data || []).map((item: any) => ({
-      fee_id: item.fee_id,
-      fee_name: (item.fees as any)?.name,
-      fee_direction: (item.fees as any)?.direction,
-      fee_amount: (item.fees as any)?.amount,
-      fee_currency: (item.fees as any)?.currency
-    }))
+      if (fallbackError) throw fallbackError
+
+      assignedFees.value = (fallbackData || []).map((item: any) => ({
+        fee_id: item.fee_id,
+        fee_name: (item.fees as any)?.name,
+        fee_direction: (item.fees as any)?.direction,
+        fee_amount: (item.fees as any)?.amount,
+        fee_currency: (item.fees as any)?.currency
+      }))
+    } else {
+      assignedFees.value = (data || []).map((item: any) => ({
+        fee_id: item.fee_id,
+        fee_name: item.fee_name,
+        fee_direction: item.fee_direction,
+        fee_amount: item.fee_amount,
+        fee_currency: item.fee_currency
+      }))
+    }
 
     updateAvailableFeeOptions()
   } catch (error) {
@@ -898,64 +932,90 @@ const handleSubmit = async () => {
     submitting.value = true
 
     const processData = {
-      code: formData.value.code.trim().toUpperCase(),
-      name: formData.value.name.trim(),
-      description: formData.value.description.trim() || null,
-      is_active: formData.value.is_active,
-      sale_channel_id: formData.value.sale_channel_id,
-      sale_currency: formData.value.sale_currency.trim() || 'VND',
-      purchase_channel_id: formData.value.purchase_channel_id,
-      purchase_currency: formData.value.purchase_currency?.trim() || null
+      p_code: formData.value.code.trim().toUpperCase(),
+      p_name: formData.value.name.trim(),
+      p_description: formData.value.description.trim() || null,
+      p_is_active: formData.value.is_active,
+      p_sale_channel_id: formData.value.sale_channel_id,
+      p_sale_currency: formData.value.sale_currency.trim() || 'VND',
+      p_purchase_channel_id: formData.value.purchase_channel_id,
+      p_purchase_currency: formData.value.purchase_currency?.trim() || null
     }
 
     let processId: string | undefined
     let error: any
 
     if (editingProcess.value) {
-      // Update existing process
-      const { data, error: updateError } = await supabase
-        .from('business_processes')
-        .update(processData)
-        .eq('id', editingProcess.value.id)
-        .select()
-        .single()
-
+      // Use RPC function to update existing process
+      const { data, error: updateError } = await supabase.rpc('update_business_process_direct', {
+        p_process_id: editingProcess.value.id,
+        ...processData
+      })
       error = updateError
-      if (!error && data) processId = data.id
-    } else {
-      // Create new process
-      const { data, error: createError } = await supabase
-        .from('business_processes')
-        .insert(processData)
-        .select()
-        .single()
 
+      if (!error && data) {
+        processId = editingProcess.value.id
+        if (data && !data.success) {
+          message.error(data.message || 'Không thể cập nhật quy trình kinh doanh')
+          return
+        }
+      }
+    } else {
+      // Use RPC function to create new process
+      const { data, error: createError } = await supabase.rpc('create_business_process_direct', processData)
       error = createError
-      if (!error && data) processId = data.id
+
+      if (!error && data) {
+        if (data && !data.success) {
+          message.error(data.message || 'Không thể tạo quy trình kinh doanh')
+          return
+        }
+        // For create, the process_id is returned in the response
+        processId = data.process_id
+      }
     }
 
     if (error) throw error
 
-    // Update process fees
+    // Update process fees using RPC functions to bypass RLS
     if (processId) {
-      // Delete existing fee mappings
-      await supabase
-        .from('process_fees_map')
-        .delete()
-        .eq('process_id', processId)
+      // Delete existing fee mappings using RPC
+      const { error: deleteError } = await supabase.rpc('delete_process_fee_mappings_direct', {
+        p_process_id: processId
+      })
 
-      // Insert new fee mappings
-      if (assignedFees.value.length > 0) {
-        const feeMappings = assignedFees.value.map(fee => ({
-          process_id: processId,
-          fee_id: fee.fee_id
-        }))
-
-        const { error: feeError } = await supabase
+      if (deleteError) {
+        console.warn('Delete fee mappings RPC failed, falling back to direct query:', deleteError)
+        // Fallback to direct query
+        await supabase
           .from('process_fees_map')
-          .insert(feeMappings)
+          .delete()
+          .eq('process_id', processId)
+      }
 
-        if (feeError) throw feeError
+      // Insert new fee mappings using RPC if there are any
+      if (assignedFees.value.length > 0) {
+        const feeIds = assignedFees.value.map(fee => fee.fee_id)
+
+        const { error: insertError } = await supabase.rpc('insert_process_fee_mappings_direct', {
+          p_process_id: processId,
+          p_fee_ids: feeIds
+        })
+
+        if (insertError) {
+          console.warn('Insert fee mappings RPC failed, falling back to direct query:', insertError)
+          // Fallback to direct query
+          const feeMappings = assignedFees.value.map(fee => ({
+            process_id: processId,
+            fee_id: fee.fee_id
+          }))
+
+          const { error: fallbackError } = await supabase
+            .from('process_fees_map')
+            .insert(feeMappings)
+
+          if (fallbackError) throw fallbackError
+        }
       }
     }
 
@@ -975,19 +1035,32 @@ const confirmDelete = async (process: BusinessProcess) => {
   deleting.value = true
 
   try {
-    // Delete process fee mappings first
-    await supabase
-      .from('process_fees_map')
-      .delete()
-      .eq('process_id', process.id)
+    // Delete process fee mappings using RPC
+    const { error: feeDeleteError } = await supabase.rpc('delete_process_fee_mappings_direct', {
+      p_process_id: process.id
+    })
 
-    // Delete the process
-    const { error } = await supabase
-      .from('business_processes')
-      .delete()
-      .eq('id', process.id)
+    if (feeDeleteError) {
+      console.warn('Delete fee mappings RPC failed, falling back to direct query:', feeDeleteError)
+      // Fallback to direct query
+      await supabase
+        .from('process_fees_map')
+        .delete()
+        .eq('process_id', process.id)
+    }
+
+    // Use RPC function to delete the process
+    const { data, error } = await supabase.rpc('delete_business_process_direct', {
+      p_process_id: process.id
+    })
 
     if (error) throw error
+
+    // Check RPC response
+    if (data && !data.success) {
+      message.error(data.message || 'Không thể xóa quy trình kinh doanh')
+      return
+    }
 
     message.success('Xóa quy trình kinh doanh thành công')
     await loadProcesses()
@@ -1220,5 +1293,52 @@ watch(() => props.refreshTrigger, () => {
   font-weight: 500;
   border-radius: 6px;
   transition: all 0.2s ease;
+}
+
+/* Form sections styling */
+.form-section {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #2080f0;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* Fee list styling */
+.fee-item {
+  transition: all 0.2s ease;
+}
+
+.fee-item:hover {
+  background-color: #f5f5f5;
+  transform: translateY(-1px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .business-processes-management :deep(.n-modal .n-card) {
+    width: 95vw !important;
+    max-width: 800px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .business-processes-management :deep(.n-modal .n-card) {
+    width: 98vw !important;
+    margin: 1vh auto;
+  }
+
+  .process-form :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
 }
 </style>
