@@ -210,6 +210,7 @@
               @proof-uploaded="handleProofUploaded"
               @process-inventory="handleProcessInventory"
               @refresh-data="loadDeliveryOrders"
+              @filter-change="handleDeliveryFilterChange"
             />
 
             <!-- Load More Button for Delivery -->
@@ -257,6 +258,7 @@
               @export="handleHistoryExport"
               @view-detail="handleHistoryViewDetail"
               @refresh-data="loadTransactionHistory"
+              @filter-change="handleHistoryFilterChange"
             />
 
             <!-- Load More Button for History -->
@@ -489,16 +491,31 @@ const loadingHistory = ref(false)
 // Pagination state for optimized loading
 const historyPagination = ref({
   currentPage: 1,
-  pageSize: 25,
+  pageSize: 50,
   hasMore: true,
   totalCount: 0
 })
 
 const deliveryPagination = ref({
   currentPage: 1,
-  pageSize: 25,
+  pageSize: 50,
   hasMore: true,
   totalCount: 0
+})
+
+// Date filter state
+const deliveryDateFilters = ref({
+  startDateTime: null as number | null,
+  endDateTime: null as number | null,
+  status: null as string | null,
+  type: null as string | null
+})
+
+const historyDateFilters = ref({
+  startDateTime: null as number | null,
+  endDateTime: null as number | null,
+  status: null as string | null,
+  type: null as string | null
 })
 
 // Order completion modal state
@@ -780,16 +797,32 @@ const loadDeliveryOrders = async () => {
 
     // Use the optimized RPC function with server-side filtering and caching
     // Delivery tab already has good server-side filtering via p_for_delivery=true
+    // Optimized data loading with pagination and filtering
+    const pagination = deliveryPagination.value
+    const offset = (pagination.currentPage - 1) * pagination.pageSize
+
+    // Convert date range from timestamp to Date objects for RPC function
+    let startDate = null
+    let endDate = null
+    if (deliveryDateFilters.value.startDateTime) {
+      startDate = new Date(deliveryDateFilters.value.startDateTime).toISOString()
+    }
+    if (deliveryDateFilters.value.endDateTime) {
+      endDate = new Date(deliveryDateFilters.value.endDateTime).toISOString()
+    }
+
     const { data, error } = await supabase
       .rpc('get_currency_orders_optimized', {
         p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control (FIRST PARAM!)
         p_for_delivery: true,              // Filter for delivery-relevant statuses (assigned, preparing, delivering, ready, delivered)
-        p_limit: 50,                       // Reduced limit since server-side filtering is efficient
-        p_offset: 0,
+        p_limit: pagination.pageSize,       // Use pagination page size
+        p_offset: offset,                   // Use pagination offset
         p_search_query: null,             // Can be used for future search functionality
-        p_status_filter: null,             // Use built-in delivery filtering
-        p_order_type_filter: null,
-        p_game_code_filter: null
+        p_status_filter: deliveryDateFilters.value.status || null,  // Use delivery status filter
+        p_order_type_filter: deliveryDateFilters.value.type || null,  // Use delivery order type filter
+        p_game_code_filter: null,
+        p_start_date: startDate,           // Add date range filtering
+        p_end_date: endDate               // Add date range filtering
       })
 
     if (error) {
@@ -798,30 +831,8 @@ const loadDeliveryOrders = async () => {
       return
     }
 
-    
-
-    // Optimized data loading with pagination and filtering
-    // Load data in smaller batches with pagination
-    const pagination = deliveryPagination.value
-    const offset = (pagination.currentPage - 1) * pagination.pageSize
-
-    // Load additional data if needed for pagination
-    const additionalData = pagination.currentPage > 1 ? await supabase
-      .rpc('get_currency_orders_optimized', {
-        p_current_profile_id: profileData,
-        p_for_delivery: true,
-        p_limit: pagination.pageSize,
-        p_offset: offset,
-        p_search_query: null,
-        p_status_filter: null,
-        p_order_type_filter: null,
-        p_game_code_filter: null
-      }) : { data: null, error: null }
-
-    const allData = pagination.currentPage === 1 ? data : [...(data || []), ...(additionalData.data || [])]
-
     // Update pagination state
-    pagination.hasMore = allData?.length === pagination.pageSize + offset
+    deliveryPagination.value.hasMore = (data && data.length) === deliveryPagination.value.pageSize
 
     // Preload commonly used data for better performance
     await preloadCommonData(supabase)
@@ -832,7 +843,7 @@ const loadDeliveryOrders = async () => {
 
     // Format the data using the pre-joined data from optimized RPC function
     // NO MANUAL JOINS NEEDED - RPC function already provides all related data!
-    const formattedOrders = (allData || []).map((order: any) => ({
+    const formattedOrders = (data || []).map((order: any) => ({
       ...order,
       // Add compatibility fields for existing component logic
       currencyName: order.currency_attribute?.name || 'Unknown Currency',
@@ -1255,7 +1266,23 @@ const loadTransactionHistory = async () => {
     // Optimized data loading with pagination and filtering
     // Load data in smaller batches with pagination
     const pagination = historyPagination.value
+
+    // IMPORTANT: Offset calculation for server-side with client-side filtering
+    // Since we filter client-side, we need to calculate offset differently
+    // This is a complex problem because we don't know how many records will be filtered out
+    // For now, we use a simple approach - this might miss some records or duplicate others
+    // TODO: Implement proper cursor-based pagination or move filtering to server-side
     const offset = (pagination.currentPage - 1) * pagination.pageSize
+
+    // Convert date range from timestamp to Date objects for RPC function
+    let startDate = null
+    let endDate = null
+    if (historyDateFilters.value.startDateTime) {
+      startDate = new Date(historyDateFilters.value.startDateTime).toISOString()
+    }
+    if (historyDateFilters.value.endDateTime) {
+      endDate = new Date(historyDateFilters.value.endDateTime).toISOString()
+    }
 
     const { data, error } = await supabase
       .rpc('get_currency_orders_optimized', {
@@ -1264,18 +1291,27 @@ const loadTransactionHistory = async () => {
         p_limit: pagination.pageSize,      // Use pagination size instead of large batch
         p_offset: offset,                  // Use offset for pagination
         p_search_query: null,             // Can be used for future search functionality
-        p_status_filter: null,             // Use client-side filter for now (function supports single status only)
-        p_order_type_filter: null,
-        p_game_code_filter: null
+        p_status_filter: historyDateFilters.value.status || null,  // Use history status filter
+        // NOTE: We could optimize by filtering completed/cancelled on server-side
+        // but current RPC only supports single status filter, not multiple statuses
+        p_order_type_filter: historyDateFilters.value.type || null,  // Use history order type filter
+        p_game_code_filter: null,
+        p_start_date: startDate,           // Add date range filtering
+        p_end_date: endDate               // Add date range filtering
       })
 
     // Client-side filter for history tab - only completed/cancelled orders
+    // NOTE: This is why we get fewer records than requested!
+    // RPC returns 20 records, but after filtering only completed/cancelled remain
+    // TODO: Move this filtering to server-side for better efficiency
     const historyData = data?.filter((order: any) =>
       ['completed', 'cancelled'].includes(order.status)
     ) || []
 
-    // Update pagination state
-    pagination.hasMore = data?.length === pagination.pageSize
+    // Update pagination state - FIX: Sử dụng raw data để kiểm tra hasMore, filtered data để display
+    // hasMore: Dựa vào raw data để biết server còn data hay không
+    // display: Dùng filtered data để hiển thị đúng nội dung
+    pagination.hasMore = (data && data.length) === pagination.pageSize
     pagination.totalCount = historyData.length + offset
 
     if (error) {
@@ -1441,6 +1477,23 @@ const resetPagination = () => {
   historyPagination.value.hasMore = true
   deliveryPagination.value.currentPage = 1
   deliveryPagination.value.hasMore = true
+}
+
+// Filter change handlers
+const handleDeliveryFilterChange = async (filters: any) => {
+  deliveryDateFilters.value = { ...filters }
+  deliveryPagination.value.currentPage = 1
+  deliveryPagination.value.hasMore = true
+  deliveryOrders.value = []
+  await loadDeliveryOrders()
+}
+
+const handleHistoryFilterChange = async (filters: any) => {
+  historyDateFilters.value = { ...filters }
+  historyPagination.value.currentPage = 1
+  historyPagination.value.hasMore = true
+  transactionHistory.value = []
+  await loadTransactionHistory()
 }
 
 // --- LIFECYCLE ---

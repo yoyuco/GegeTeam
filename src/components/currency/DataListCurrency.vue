@@ -59,9 +59,10 @@
       </div>
     </div>
 
-    <!-- Filters Panel -->
+    <!-- Enhanced Filters Panel -->
     <div v-if="showFilters" class="mb-6 p-4 bg-gray-50 rounded-lg">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+        <!-- Trạng thái -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Trạng thái</label>
           <n-select
@@ -72,6 +73,8 @@
             @update:value="onFilterChange"
           />
         </div>
+
+        <!-- Loại giao dịch -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Loại giao dịch</label>
           <n-select
@@ -82,14 +85,75 @@
             @update:value="onFilterChange"
           />
         </div>
+
+        <!-- Thời gian bắt đầu -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Khoảng thời gian</label>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <span class="flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Từ ngày
+            </span>
+          </label>
           <n-date-picker
-            v-model:value="filters.dateRange"
-            type="daterange"
+            v-model:value="filters.startDateTime"
+            type="datetime"
+            placeholder="Chọn ngày giờ bắt đầu"
             clearable
+            format="dd/MM/yyyy HH:mm"
+            value-format="x"
             @update:value="onFilterChange"
           />
+        </div>
+
+        <!-- Thời gian kết thúc -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <span class="flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Đến ngày
+            </span>
+          </label>
+          <n-date-picker
+            v-model:value="filters.endDateTime"
+            type="datetime"
+            placeholder="Chọn ngày giờ kết thúc"
+            clearable
+            format="dd/MM/yyyy HH:mm"
+            value-format="x"
+            @update:value="onFilterChange"
+          />
+        </div>
+
+        <!-- Quick Filter Buttons -->
+        <div class="lg:col-span-2 xl:col-span-4">
+          <div class="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+            <span class="text-sm text-gray-600 py-1">Lọc nhanh:</span>
+            <n-button size="small" @click="setQuickDateRange('today')" quaternary type="info">
+              Hôm nay
+            </n-button>
+            <n-button size="small" @click="setQuickDateRange('yesterday')" quaternary type="info">
+              Hôm qua
+            </n-button>
+            <n-button size="small" @click="setQuickDateRange('thisWeek')" quaternary type="info">
+              Tuần này
+            </n-button>
+            <n-button size="small" @click="setQuickDateRange('lastWeek')" quaternary type="info">
+              Tuần trước
+            </n-button>
+            <n-button size="small" @click="setQuickDateRange('thisMonth')" quaternary type="info">
+              Tháng này
+            </n-button>
+            <n-button size="small" @click="setQuickDateRange('lastMonth')" quaternary type="info">
+              Tháng trước
+            </n-button>
+            <n-button size="small" @click="clearDateFilters" quaternary type="warning">
+              Xóa bộ lọc ngày
+            </n-button>
+          </div>
         </div>
       </div>
     </div>
@@ -684,7 +748,21 @@ interface Emits {
   (e: 'refresh-data'): void
 }
 
-const emit = defineEmits<Emits>()
+const emit = defineEmits<{
+  (e: 'assign', item: any): void
+  (e: 'start', item: any): void
+  (e: 'complete', item: any): void
+  (e: 'finalize', item: any): void
+  (e: 'update-status', item: any, status: string): void
+  (e: 'finalize-order', item: any): void
+  (e: 'proof-uploaded', data: { orderId: string; proofs: any }): void
+  (e: 'process-inventory', data: { order: any; currentStatus: string; targetStatus: string }): void
+  (e: 'refresh-data'): void
+  (e: 'filter-change', filters: any): void
+  (e: 'search', query: string): void
+  (e: 'export'): void
+  (e: 'view-detail', item: any): void
+}>()
 
 // Composables
 const message = useMessage()
@@ -708,11 +786,13 @@ const cancellingOrder = ref(false)
 const filters = ref<{
   status: string | null
   type: string | null
-  dateRange: [number, number] | null
+  startDateTime: number | null
+  endDateTime: number | null
 }>({
   status: null,
   type: null,
-  dateRange: null
+  startDateTime: null,
+  endDateTime: null
 })
 
 const pagination = ref({
@@ -1130,12 +1210,21 @@ const filteredData = computed(() => {
   if (filters.value.type) {
     data = data.filter(item => item.order_type === filters.value.type)
   }
-  // Apply date range filter
-  if (filters.value.dateRange && filters.value.dateRange.length === 2) {
-    const [start, end] = filters.value.dateRange
+  // Apply datetime filter
+  if (filters.value.startDateTime || filters.value.endDateTime) {
     data = data.filter(item => {
       const itemDate = new Date(item.created_at).getTime()
-      return itemDate >= start && itemDate <= end
+      const startDate = filters.value.startDateTime
+      const endDate = filters.value.endDateTime
+
+      if (startDate && endDate) {
+        return itemDate >= startDate && itemDate <= endDate
+      } else if (startDate) {
+        return itemDate >= startDate
+      } else if (endDate) {
+        return itemDate <= endDate
+      }
+      return true
     })
   }
 
@@ -1666,7 +1755,68 @@ const onSearch = () => {
 }
 
 const onFilterChange = () => {
-  emit('filter', filters.value)
+  emit('filter-change', filters.value)
+}
+
+// Quick date range methods
+const setQuickDateRange = (range: string) => {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+
+  switch (range) {
+    case 'today':
+      filters.value.startDateTime = today.getTime()
+      filters.value.endDateTime = tomorrow.getTime() - 1 // End of today
+      break
+
+    case 'yesterday':
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+      filters.value.startDateTime = yesterday.getTime()
+      filters.value.endDateTime = today.getTime() - 1
+      break
+
+    case 'thisWeek':
+      const thisWeekStart = new Date(today)
+      thisWeekStart.setDate(today.getDate() - today.getDay())
+      thisWeekStart.setHours(0, 0, 0, 0)
+      filters.value.startDateTime = thisWeekStart.getTime()
+      filters.value.endDateTime = tomorrow.getTime() - 1
+      break
+
+    case 'lastWeek':
+      const lastWeekStart = new Date(today)
+      lastWeekStart.setDate(today.getDate() - today.getDay() - 7)
+      lastWeekStart.setHours(0, 0, 0, 0)
+      const lastWeekEnd = new Date(today)
+      lastWeekEnd.setDate(today.getDate() - today.getDay())
+      lastWeekEnd.setHours(0, 0, 0, 0)
+      filters.value.startDateTime = lastWeekStart.getTime()
+      filters.value.endDateTime = lastWeekEnd.getTime() - 1
+      break
+
+    case 'thisMonth':
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      filters.value.startDateTime = thisMonthStart.getTime()
+      filters.value.endDateTime = tomorrow.getTime() - 1
+      break
+
+    case 'lastMonth':
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1)
+      filters.value.startDateTime = lastMonthStart.getTime()
+      filters.value.endDateTime = lastMonthEnd.getTime() - 1
+      break
+  }
+
+  // Trigger filter change after setting date range
+  emit('filter-change', filters.value)
+}
+
+const clearDateFilters = () => {
+  filters.value.startDateTime = null
+  filters.value.endDateTime = null
+  emit('filter-change', filters.value)
 }
 
 const onExport = () => {

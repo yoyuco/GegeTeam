@@ -165,6 +165,51 @@
           @update:value="handleFilterChange"
         />
       </div>
+
+      <!-- Priority Filter -->
+      <div class="filter-item" v-if="showPriorityFilter">
+        <label class="filter-label">Ưu tiên</label>
+        <n-select
+          v-model:value="filters.priority"
+          :options="priorityOptions"
+          placeholder="Chọn mức ưu tiên..."
+          clearable
+          multiple
+          size="small"
+          :max-tag-count="1"
+          style="min-width: 140px"
+          @update:value="handleFilterChange"
+        />
+      </div>
+
+      <!-- Report Type Filter -->
+      <div class="filter-item" v-if="showReportTypeFilter">
+        <label class="filter-label">Loại báo cáo</label>
+        <n-select
+          v-model:value="filters.reportType"
+          :options="reportTypeOptions"
+          placeholder="Chọn loại báo cáo..."
+          clearable
+          multiple
+          size="small"
+          :max-tag-count="1"
+          style="min-width: 140px"
+          @update:value="handleFilterChange"
+        />
+      </div>
+
+      <!-- Role Search Filter -->
+      <div class="filter-item" v-if="showRoleSearch">
+        <label class="filter-label">Tìm vai trò</label>
+        <n-input
+          v-model:value="filters.roleSearch"
+          placeholder="Tìm kiếm vai trò..."
+          clearable
+          size="small"
+          style="min-width: 160px"
+          @update:value="handleFilterChange"
+        />
+      </div>
     </div>
 
   
@@ -186,7 +231,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { NSelect, NDatePicker, NButton, NIcon, NTag } from 'naive-ui'
+import { NSelect, NDatePicker, NButton, NIcon, NTag, NInput } from 'naive-ui'
 import { supabase } from '@/lib/supabase'
 
 interface FilterOptions {
@@ -200,6 +245,9 @@ interface FilterOptions {
   purpose?: string | string[]
   accountType?: string | string[]
   shift?: string | string[]
+  priority?: string | string[]
+  reportType?: string | string[]
+  roleSearch?: string
 }
 
 interface Props {
@@ -213,6 +261,9 @@ interface Props {
   showAccountTypeFilter?: boolean
   showShiftFilter?: boolean
   showAdvancedSearch?: boolean
+  showPriorityFilter?: boolean
+  showReportTypeFilter?: boolean
+  showRoleSearch?: boolean
   gameCodes?: string[]
 }
 
@@ -226,6 +277,9 @@ const props = withDefaults(defineProps<Props>(), {
   showPurposeFilter: false,
   showAccountTypeFilter: false,
   showShiftFilter: false,
+  showPriorityFilter: false,
+  showReportTypeFilter: false,
+  showRoleSearch: false,
   gameCodes: () => []
 })
 
@@ -297,6 +351,20 @@ const shiftOptions = computed(() => [
     value: shift.id
   }))
 ])
+
+const priorityOptions = [
+  { label: 'Thấp', value: 'low' },
+  { label: 'Trung bình', value: 'medium' },
+  { label: 'Cao', value: 'high' },
+  { label: 'Khẩn cấp', value: 'urgent' }
+]
+
+const reportTypeOptions = [
+  { label: 'Báo cáo dịch vụ', value: 'service' },
+  { label: 'Báo cáo lỗi', value: 'bug' },
+  { label: 'Báo cáo vi phạm', value: 'violation' },
+  { label: 'Báo cáo khác', value: 'other' }
+]
 
 // Computed
 const hasActiveFilters = computed(() => {

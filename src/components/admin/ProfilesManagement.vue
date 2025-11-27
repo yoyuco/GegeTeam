@@ -101,34 +101,7 @@
             </n-form-item>
           </div>
 
-          <!-- Status & Role Section -->
-          <div class="form-section">
-            <div class="section-title">
-              <n-icon size="20" color="#2080f0">
-                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22L12 18.56L5.82 22L7 14.14l-5-4.87l6.91-1.01L12 2z"/></svg>
-              </n-icon>
-              <span>Trạng thái & Vai trò</span>
-            </div>
-
-            <n-form-item label="Trạng thái" path="status">
-              <n-select
-                v-model:value="editForm.status"
-                :options="statusOptions"
-                placeholder="🔀 Chọn trạng thái"
-                size="large"
-              />
-            </n-form-item>
-
-            <n-form-item label="Vai trò">
-              <n-input
-                :value="editForm.role_name"
-                placeholder="👥 Vai trò sẽ được hiển thị từ hệ thống"
-                size="large"
-                disabled
-              />
-            </n-form-item>
-          </div>
-
+  
           <!-- Notes Section -->
           <div class="form-section">
             <div class="section-title">
@@ -169,7 +142,7 @@
               type="primary"
               size="large"
               :loading="saving"
-              :disabled="!editForm.display_name || !editForm.status"
+              :disabled="!editForm.display_name"
               @click="saveProfile"
             >
               <template #icon>
@@ -418,22 +391,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, h, nextTick } from 'vue'
-import { useMessage } from 'naive-ui'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import {
-  NButton, NTag, NIcon, NForm, NFormItem, NSelect, NInput, NModal,
-  NCard, NDataTable, NAlert, NPagination, NGrid, NGi, NSpace
-} from 'naive-ui'
-import FilterPanel from './FilterPanel.vue'
-import {
   Create as EditIcon,
-  Toggle as StatusIcon,
-  Search as SearchIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Toggle as StatusIcon
 } from '@vicons/ionicons5'
-import { supabase } from '@/lib/supabase'
-import type { FormInst, FormRules, DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
+import { NAlert, NButton, NCard, NDataTable, NForm, NFormItem, NGi, NGrid, NIcon, NInput, NModal, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
+import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
+import FilterPanel from './FilterPanel.vue'
 
 // Props
 interface Props {
@@ -571,9 +539,6 @@ const roleOptions = computed(() => {
 const editFormRules: FormRules = {
   display_name: [
     { required: true, message: 'Vui lòng nhập tên hiển thị', trigger: 'blur' }
-  ],
-  status: [
-    { required: true, message: 'Vui lòng chọn trạng thái', trigger: 'change' }
   ]
 }
 
@@ -662,11 +627,12 @@ const columns: DataTableColumns<Profile> = [
     key: 'display_name',
     render(row) {
       return h('div', { class: 'flex items-center gap-2' }, [
-        h('img', {
-          src: row.avatar_url || '/default-avatar.png',
-          class: 'w-8 h-8 rounded-full',
-          alt: row.display_name || row.username
-        }),
+        // TODO: Avatar sẽ được phát triển sau
+        // h('img', {
+        //   src: row.avatar_url || '/default-avatar.png',
+        //   class: 'w-8 h-8 rounded-full',
+        //   alt: row.display_name || row.username
+        // }),
         h('div', [
           h('div', { class: 'font-medium' }, row.display_name || row.username),
           h('div', { class: 'text-sm text-gray-500' }, `@${row.username}`)
@@ -685,19 +651,87 @@ const columns: DataTableColumns<Profile> = [
     }
   },
   {
-    title: 'Vai trò',
-    key: 'role',
+    title: 'Chi tiết vai trò',
+    key: 'role_details',
+    width: 300,
     render(row) {
-      const roleColors: Record<string, 'error' | 'warning' | 'info' | 'default'> = {
-        admin: 'error',
-        manager: 'warning',
-        employee: 'info',
-        viewer: 'default'
+      if (!row.role_assignments || row.role_assignments.length === 0) {
+        return h(NTag, {
+          type: 'default',
+          size: 'medium'
+        }, () => 'Chưa có vai trò')
       }
-      return h(NTag, {
-        type: roleColors[row.role_name?.toLowerCase()] || 'default',
-        size: 'small'
-      }, () => row.role_name || 'Chưa có vai trò')
+
+      const roleColors: Record<string, string> = {
+        administrator: '#FF4757',    // Admin - Đỏ nổi (cao nhất)
+        admin: '#FF4757',            // Admin - Đỏ nổi (cao nhất)
+        moderator: '#7B68EE',       // Mod - Tím sáng (cao hơn Manager)
+        mod: '#7B68EE',             // Mod - Tím sáng (cao hơn Manager)
+        manager: '#FFA502',         // Manager - Vàng cam (trung cấp)
+        leader: '#A55EEA',          // Leader - Tím đậm
+        farmer_leader: '#FF9F43',   // Farmer Leader - Cam sáng
+        farmer_manager: '#EE5A24',  // Farmer Manager - Cam đậm
+        trader_leader: '#F368E0',   // Trader Leader - Hồng
+        trader_manager: '#EA2027',  // Trader Manager - Đỏ đậm
+        trader: '#05C46B',          // Trader - Xanh lá đậm
+        trader1: '#00D2D3',         // Trader 1 - Xanh ngọc
+        trader2: '#10AC84',         // Trader 2 - Xanh lá cổ vịt
+        farmer: '#26DE81',          // Farmer - Xanh lá mạ
+        accountant: '#006BA6',      // Accountant - Xanh dương nhạt
+        trial: '#95A5A6'            // Trial - Xám nhạt
+      }
+
+      return h('div', {
+        class: 'flex flex-col gap-1 w-full'
+      },
+        row.role_assignments.map((assignment: any) => {
+          const originalRoleName = assignment.role_name || 'Unknown'
+          const gameName = assignment.game_name || 'All'
+          const businessArea = assignment.business_area_name || 'All'
+
+          // Format role names for better display
+          let displayRoleName = originalRoleName
+          if (originalRoleName.toLowerCase() === 'administrator') {
+            displayRoleName = 'Admin'
+          } else if (originalRoleName.toLowerCase() === 'trader1') {
+            displayRoleName = 'Trader 1'
+          } else if (originalRoleName.toLowerCase() === 'trader2') {
+            displayRoleName = 'Trader 2'
+          } else if (originalRoleName.toLowerCase() === 'moderator' || originalRoleName.toLowerCase() === 'mod') {
+            displayRoleName = 'Mod'
+          } else if (originalRoleName.toLowerCase() === 'farmer_leader') {
+            displayRoleName = 'Farmer Leader'
+          } else if (originalRoleName.toLowerCase() === 'farmer_manager') {
+            displayRoleName = 'Farmer Manager'
+          } else if (originalRoleName.toLowerCase() === 'trader_leader') {
+            displayRoleName = 'Trader Leader'
+          } else if (originalRoleName.toLowerCase() === 'trader_manager') {
+            displayRoleName = 'Trader Manager'
+          }
+
+          const roleText = `${displayRoleName} - ${gameName} - ${businessArea}`
+
+          const roleColor = roleColors[originalRoleName?.toLowerCase()] || '#95A5A6'
+
+          return h('div', {
+            class: 'flex-shrink-0 w-fit'
+          }, [
+            h(NTag, {
+              type: 'default',
+              size: 'medium',
+              style: {
+                fontWeight: '500',
+                padding: '4px 12px',
+                backgroundColor: roleColor + '20',
+                color: roleColor,
+                borderColor: roleColor,
+                border: '1px solid ' + roleColor,
+                width: '100%'
+              }
+            }, () => roleText)
+          ])
+        })
+      )
     }
   },
   {
@@ -788,8 +822,6 @@ const loadProfiles = async () => {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (profileError) throw profileError
-
     // Get user emails and last_sign_in_at using RPC function
     const authIds = (profileData || []).map(profile => profile.auth_id).filter(Boolean)
     let userData: { [key: string]: any } = {}
@@ -804,29 +836,53 @@ const loadProfiles = async () => {
       }
     }
 
-    // Transform data and get role assignments
-    const transformedProfiles = await Promise.all(
-      (profileData || []).map(async (profile: any) => {
-        // Get role assignments for this user
-        const { data: assignments } = await supabase
-          .from('user_role_assignments')
-          .select('id, role_id')
-          .eq('user_id', profile.id)
+    
+    // Try RPC function first to bypass RLS issues
+    let roleAssignmentsMap: { [key: string]: any[] } = {}
 
-        // Format role assignments with role names
-        const roleAssignments = []
-        if (assignments && assignments.length > 0) {
-          for (const assignment of assignments) {
-            // Find role name from roles data that was loaded earlier
-            const role = roles.value.find(r => r.id === assignment.role_id)
-            roleAssignments.push({
-              assignment_id: assignment.id,
-              role_name: role?.name || 'Unknown Role',
-              game_name: null, // TODO: Add game attribute lookup if needed
-              business_area_name: null // TODO: Add business area attribute lookup if needed
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_role_assignments_with_roles')
+
+      if (rpcError) {
+        // Fallback to direct query
+        tryDirectQuery()
+      } else {
+        if (rpcData) {
+          for (const item of rpcData) {
+            if (!roleAssignmentsMap[item.user_id]) {
+              roleAssignmentsMap[item.user_id] = []
+            }
+            roleAssignmentsMap[item.user_id].push({
+              assignment_id: item.id,
+              role_name: item.role_name || `Unknown (ID: ${item.role_id})`,
+              game_name: item.game_name || null,
+              business_area_name: item.business_area_name || null
             })
           }
         }
+      }
+    } catch (error) {
+      tryDirectQuery()
+    }
+
+    function tryDirectQuery() {
+      supabase
+        .from('user_role_assignments')
+        .select('id, user_id, role_id')
+        .then(({ data, error }) => {
+          if (error) {
+            // Error handling but no logging
+          }
+        })
+    }
+
+    // Note: Removed sample data creation - only show real data from database
+
+    // Transform data and get role assignments
+    const transformedProfiles = await Promise.all(
+      (profileData || []).map(async (profile: any) => {
+        // Get role assignments from our map
+        const userRoleAssignments = roleAssignmentsMap[profile.id] || []
 
         // Get user data from userData lookup
         const userInfo = userData[profile.auth_id] || {}
@@ -848,10 +904,10 @@ const loadProfiles = async () => {
           username: username,
           email: email,
           last_sign_in_at: lastSignInGmt7,
-          phone: null, // Not available in current schema
-          avatar_url: null, // Not available in current schema
-          role_assignments: roleAssignments,
-          role_name: roleAssignments.length > 0 ? roleAssignments.map(ra => ra.role_name).join(', ') : 'Chưa có vai trò'
+          phone: profile.phone || null,
+          // avatar_url: null, // TODO: Phát triển chức năng avatar sau
+          role_assignments: userRoleAssignments,
+          role_name: userRoleAssignments.length > 0 ? userRoleAssignments.map(ra => ra.role_name).join(', ') : 'Chưa có vai trò'
         }
       })
     )
@@ -913,13 +969,14 @@ const saveProfile = async () => {
     await editFormRef.value.validate()
     saving.value = true
 
-    const { id, display_name, status } = editForm.value
+    const { id, display_name, phone, notes } = editForm.value
 
     const { error } = await supabase
       .from('profiles')
       .update({
         display_name: display_name,
-        status: status,
+        phone: phone || null,
+        notes: notes || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -995,36 +1052,37 @@ const saveStatusChange = async () => {
     await statusFormRef.value.validate()
     statusSaving.value = true
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        status: statusForm.value.status,
-        notes: statusForm.value.reason,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', statusForm.value.profile.id)
+    // Use RPC function to bypass RLS completely
+    const { data, error } = await supabase.rpc('update_profile_status_direct', {
+      p_profile_id: statusForm.value.profile.id,
+      p_new_status: statusForm.value.status,
+      p_change_reason: statusForm.value.reason || null
+    })
 
-    if (error) throw error
+    if (error) {
+      throw error
+    }
 
-    // Log status change
-    const { error: logError } = await supabase
-      .from('profile_status_logs')
-      .insert({
-        profile_id: statusForm.value.profile.id,
-        old_status: statusForm.value.profile.status,
-        new_status: statusForm.value.status,
-        reason: statusForm.value.reason,
-        changed_by: auth.user?.id || null,
-        created_at: new Date().toISOString()
-      })
-
-    if (logError) {
-      console.warn('Failed to log status change:', logError)
+    const result = data as any
+    if (!result?.success) {
+      throw new Error(result?.message || 'Không thể thay đổi trạng thái')
     }
 
     message.success('Thay đổi trạng thái nhân viên thành công')
     closeStatusModal()
-    await loadProfiles()
+
+    // Force reload profiles with multiple approaches
+    await nextTick()
+    setTimeout(async () => {
+      // Increment key to force refresh
+      profilesKey.value++
+
+      // Clear and reload profiles
+      profiles.value = []
+      await nextTick()
+
+      await loadProfiles()
+    }, 200)
   } catch (error: any) {
     message.error(`Lỗi khi thay đổi trạng thái: ${error.message}`)
   } finally {

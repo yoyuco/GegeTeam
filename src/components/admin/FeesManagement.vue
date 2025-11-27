@@ -659,7 +659,10 @@ const loadFees = async () => {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      throw error
+    }
+
     fees.value = data || []
   } catch (error) {
     console.error('Error loading fees:', error)

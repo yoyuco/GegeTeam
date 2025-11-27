@@ -719,13 +719,17 @@ const loadProcesses = async () => {
       `)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      throw error
+    }
 
-    processes.value = (data || []).map((process: any) => ({
+    const processedData = (data || []).map((process: any) => ({
       ...process,
       sale_channel_name: process.sale_channel?.name,
       purchase_channel_name: process.purchase_channel?.name
     }))
+
+    processes.value = processedData
 
     // Load fee counts for all processes
     await loadProcessFeeCounts()

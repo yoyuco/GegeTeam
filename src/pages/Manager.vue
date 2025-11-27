@@ -52,7 +52,7 @@
             ]"
             @click="activeTab = 'profiles'"
           >
-            👤 Quản lý Profile
+            👥 Quản lý Nhân viên
           </button>
           <button
             :class="[
@@ -109,6 +109,17 @@
           >
             ⚙️ Quy trình Kinh doanh
           </button>
+            <button
+            :class="[
+              'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
+              activeTab === 'roles'
+                ? 'tab-active text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                : 'tab-inactive text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+            ]"
+            @click="activeTab = 'roles'"
+          >
+            👥 Vai trò & Quyền hạn
+          </button>
         </div>
       </div>
 
@@ -132,7 +143,7 @@
           />
         </div>
 
-        <!-- Tab 3: Quản lý Profile -->
+        <!-- Tab 3: Quản lý Nhân viên -->
         <div v-if="activeTab === 'profiles'" class="tab-pane">
           <ProfilesManagement
             :search-query="searchQuery"
@@ -191,6 +202,16 @@
             @loading-change="handleTabLoading('businessProcesses', $event)"
           />
         </div>
+
+        <!-- Tab 9: Vai trò & Quyền hạn -->
+        <div v-if="activeTab === 'roles'" class="tab-pane">
+          <RoleManagement
+            :search-query="searchQuery"
+            :refresh-trigger="refreshTriggers.roles"
+            @refreshed="handleTabRefreshed('roles')"
+            @loading-change="handleTabLoading('roles', $event)"
+          />
+        </div>
       </div>
     </div>
 
@@ -221,6 +242,7 @@ import GameAccountsManagement from '@/components/admin/GameAccountsManagement.vu
 import ShiftAssignments from '@/components/admin/ShiftAssignments.vue'
 import FeesManagement from '@/components/admin/FeesManagement.vue'
 import BusinessProcessesManagement from '@/components/admin/BusinessProcessesManagement.vue'
+import RoleManagement from '@/components/admin/RoleManagement.vue'
 
 const { message } = createDiscreteApi(['message'])
 const auth = useAuth()
@@ -237,7 +259,7 @@ const refreshTriggers = ref<Record<string, number>>({
   shiftAssignments: 0,
   fees: 0,
   businessProcesses: 0,
-  disabled: 0
+  roles: 0
 })
 
 // State
@@ -292,7 +314,6 @@ onMounted(() => {
     () => auth.loading,
     (isLoading) => {
       if (!isLoading) {
-        // Check if user has any management permissions
         canManage.value =
           auth.hasPermission('admin:manage_roles') ||
           auth.hasPermission('admin:manage_users') ||
