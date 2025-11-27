@@ -113,7 +113,11 @@ export function usePermissions() {
     // Check if user has access to this specific business area
     return userAssignments.value.some(
       (assignment) =>
-        assignment.business_area_name === areaCode || assignment.business_area_code === areaCode
+        assignment.business_area_name === areaCode ||
+        assignment.business_area_code === areaCode ||
+        // NULL business area means access to all areas
+        assignment.business_area_name === null ||
+        assignment.business_area_code === null
     )
   }
 
@@ -201,6 +205,148 @@ export function usePermissions() {
     return hasPermissionForCurrency('currency:manage_inventory', gameCode)
   }
 
+  // === CURRENCY ORDER PERMISSIONS ===
+
+  // View permissions
+  const canViewCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:view_orders', gameCode)
+  }
+
+  const canViewCurrencyOrderDetails = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:view_order_details', gameCode)
+  }
+
+  // Create permissions
+  const canCreateCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:create_orders', gameCode)
+  }
+
+  // Edit permissions
+  const canEditCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:edit_orders', gameCode)
+  }
+
+  const canEditCurrencyOrderPrice = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:edit_price', gameCode)
+  }
+
+  const canEditCurrencyOrderDeadline = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:edit_deadline', gameCode)
+  }
+
+  const canEditCurrencyOrderNotes = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:edit_notes', gameCode)
+  }
+
+  // Order management permissions
+  const canAssignCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:assign_orders', gameCode)
+  }
+
+  const canStartCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:start_orders', gameCode)
+  }
+
+  // Delivery and receiving permissions
+  const canDeliverCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:deliver_orders', gameCode)
+  }
+
+  const canReceiveCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:receive_orders', gameCode)
+  }
+
+  // Exchange permissions
+  const canExchangeCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:exchange_orders', gameCode)
+  }
+
+  // Cancellation permissions
+  const canCancelCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:cancel_orders', gameCode)
+  }
+
+  // Completion permissions (existing)
+  const canCompleteCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:complete', gameCode)
+  }
+
+  // Management permissions
+  const canManageAllCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:manage_all_orders', gameCode)
+  }
+
+  const canOverrideCurrencyOrders = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:override_orders', gameCode)
+  }
+
+  const canTransferCurrencyInventory = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:transfer_inventory', gameCode)
+  }
+
+  // Analytics permissions
+  const canViewCurrencyInventory = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:view_inventory', gameCode)
+  }
+
+  const canViewCurrencyAnalytics = (gameCode = null) => {
+    if (isAdmin.value || isManager.value) return true
+    return hasPermissionForCurrency('currency:view_analytics', gameCode)
+  }
+
+  // Helper methods for common combinations
+  const canManageCurrencyOrderLifecycle = (gameCode = null) => {
+    return (
+      canStartCurrencyOrders(gameCode) &&
+      canDeliverCurrencyOrders(gameCode) &&
+      canReceiveCurrencyOrders(gameCode) &&
+      canCompleteCurrencyOrders(gameCode)
+    )
+  }
+
+  const canModifyCurrencyOrderDetails = (gameCode = null) => {
+    return (
+      canEditCurrencyOrders(gameCode) &&
+      canEditCurrencyOrderPrice(gameCode) &&
+      canEditCurrencyOrderDeadline(gameCode) &&
+      canEditCurrencyOrderNotes(gameCode)
+    )
+  }
+
+  // Debug method to check current permission status (development only)
+  const debugCurrencyPermissions = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.group('🔍 Currency Permissions Debug')
+      console.log('User:', user.value?.email)
+      console.log('Primary Role:', primaryRole.value)
+      console.log('Assignments:', userAssignments.value)
+      console.log('Can Access Currency Area:', canAccessCurrencyArea())
+      console.log('Can Create Orders:', hasPermissionForCurrency('currency:create_orders'))
+      console.log('Can View Orders:', hasPermissionForCurrency('currency:view_orders'))
+      console.log('Can Exchange Orders:', hasPermissionForCurrency('currency:exchange_orders'))
+      console.log('Can View Inventory:', hasPermissionForCurrency('currency:view_inventory'))
+      console.groupEnd()
+    }
+  }
+
   // Get user's primary role
   const primaryRole = computed(() => {
     if (isAdmin.value) return { code: 'admin', name: 'Admin' }
@@ -227,7 +373,7 @@ export function usePermissions() {
     accessibleBusinessAreas,
     primaryRole,
 
-    // Methods
+    // Basic methods
     hasPermission,
     canAccessGame,
     canManageGame,
@@ -245,5 +391,52 @@ export function usePermissions() {
     canManageCurrencyOperations,
     canCreateCurrencyTransactions,
     canManageCurrencyInventory,
+
+    // === CURRENCY ORDER PERMISSIONS ===
+    // View permissions
+    canViewCurrencyOrders,
+    canViewCurrencyOrderDetails,
+
+    // Create permissions
+    canCreateCurrencyOrders,
+
+    // Edit permissions
+    canEditCurrencyOrders,
+    canEditCurrencyOrderPrice,
+    canEditCurrencyOrderDeadline,
+    canEditCurrencyOrderNotes,
+
+    // Order management permissions
+    canAssignCurrencyOrders,
+    canStartCurrencyOrders,
+
+    // Delivery and receiving permissions
+    canDeliverCurrencyOrders,
+    canReceiveCurrencyOrders,
+
+    // Exchange permissions
+    canExchangeCurrencyOrders,
+
+    // Cancellation permissions
+    canCancelCurrencyOrders,
+
+    // Completion permissions
+    canCompleteCurrencyOrders,
+
+    // Management permissions
+    canManageAllCurrencyOrders,
+    canOverrideCurrencyOrders,
+    canTransferCurrencyInventory,
+
+    // Analytics permissions
+    canViewCurrencyInventory,
+    canViewCurrencyAnalytics,
+
+    // Helper methods for common combinations
+    canManageCurrencyOrderLifecycle,
+    canModifyCurrencyOrderDetails,
+
+    // Debug method (development only)
+    debugCurrencyPermissions,
   }
 }

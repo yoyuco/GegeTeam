@@ -14,10 +14,22 @@
                 <RouterLink v-if="auth.hasPermission('orders:view_all')" to="/" class="menu-item">
                   <n-icon><HomeIcon /></n-icon><span>Dashboard</span>
                 </RouterLink>
-                <RouterLink to="/currency/create-orders" class="menu-item">
+                <RouterLink
+                  v-if="permissions.hasPermissionForCurrency('currency:create_orders')"
+                  to="/currency/create-orders"
+                  class="menu-item"
+                >
                   <n-icon><CashIcon /></n-icon><span>Mua Bán Currency</span>
                 </RouterLink>
-                <RouterLink to="/currency/ops" class="menu-item">
+                <RouterLink
+                  v-if="
+                    permissions.hasPermissionForCurrency('currency:view_orders') ||
+                    permissions.hasPermissionForCurrency('currency:exchange_orders') ||
+                    permissions.hasPermissionForCurrency('currency:view_inventory')
+                  "
+                  to="/currency/ops"
+                  class="menu-item"
+                >
                   <n-icon><BarChartOutline /></n-icon><span>Vận hành Currency</span>
                 </RouterLink>
                 <RouterLink
@@ -128,6 +140,7 @@
 <script setup lang="ts">
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { useAuth } from '@/stores/auth'
+import { usePermissions } from '@/composables/usePermissions'
 import {
   AnalyticsOutline as AnalyticsIcon,
   ArchiveOutline as ArchiveIcon,
@@ -154,10 +167,38 @@ import {
 } from 'naive-ui'
 import type { Component } from 'vue'
 import { useRouter } from 'vue-router'
+import { watch } from 'vue'
+import type { User } from '@supabase/supabase-js'
 
 const router = useRouter()
 const auth = useAuth()
+const permissions = usePermissions()
 const { message } = createDiscreteApi(['message'])
+
+// Debug currency permissions in development
+if (import.meta.env.DEV) {
+  // Debug permissions when user data is loaded
+  watch(() => auth.user, (user: User | null) => {
+    if (user) {
+      setTimeout(() => {
+        permissions.debugCurrencyPermissions()
+
+        // Test specific tab visibility logic
+        console.group('📋 Tab Visibility Test')
+        console.log('Create Orders Tab:', permissions.hasPermissionForCurrency('currency:create_orders'))
+        console.log('Ops Tab (View):', permissions.hasPermissionForCurrency('currency:view_orders'))
+        console.log('Ops Tab (Exchange):', permissions.hasPermissionForCurrency('currency:exchange_orders'))
+        console.log('Ops Tab (Inventory):', permissions.hasPermissionForCurrency('currency:view_inventory'))
+        console.log('Ops Tab (Combined):',
+          permissions.hasPermissionForCurrency('currency:view_orders') ||
+          permissions.hasPermissionForCurrency('currency:exchange_orders') ||
+          permissions.hasPermissionForCurrency('currency:view_inventory')
+        )
+        console.groupEnd()
+      }, 1000) // Delay to ensure assignments are loaded
+    }
+  })
+}
 
 const roleDisplay: Record<string, { icon: Component; color: string }> = {
   admin: { icon: DiamondOutline, color: '#d946ef' },
