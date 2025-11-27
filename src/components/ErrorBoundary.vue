@@ -170,17 +170,7 @@ const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
 const handleGlobalError = (event: ErrorEvent) => {
   // Completely suppress ResizeObserver errors since they're non-critical browser warnings
   if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
-    // Silently ignore ResizeObserver errors - they don't affect functionality
-    // Only log for debugging in development mode, but not in production
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('ResizeObserver loop suppressed (non-critical)', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        route: router.currentRoute.value.fullPath
-      })
-    }
+    return // Silently ignore ResizeObserver errors
   } else {
     console.error('Global error:', event.error || event.message)
     if (window.$errorLogger) {

@@ -262,6 +262,17 @@ interface ShiftAssignment {
   assigned_at: string
 }
 
+interface Employee {
+  id: string
+  display_name: string
+}
+
+interface GameAccount {
+  id: string
+  account_name: string
+  purpose: string
+}
+
 const message = useMessage()
 const dialog = useDialog()
 const loading = ref(false)
@@ -421,7 +432,7 @@ async function loadEmployees() {
         value: emp.id
       }))
     } else {
-      employeeOptions.value = (data || []).map(emp => ({
+      employeeOptions.value = (data as Employee[] || []).map((emp: Employee) => ({
         label: emp.display_name || 'Unknown',
         value: emp.id
       }))
@@ -447,16 +458,16 @@ async function loadGameAccounts() {
         .order('account_name')
 
       if (fallbackError) throw fallbackError
-      gameAccountOptions.value = (fallbackData || [])
-        .filter(account => account.purpose === 'INVENTORY')
-        .map(account => ({
+      gameAccountOptions.value = (fallbackData as GameAccount[] || [])
+        .filter((account: GameAccount) => account.purpose === 'INVENTORY')
+        .map((account: GameAccount) => ({
           label: account.account_name,
           value: account.id
         }))
     } else {
-      gameAccountOptions.value = (data || [])
-        .filter(account => account.purpose === 'INVENTORY')
-        .map(account => ({
+      gameAccountOptions.value = (data as GameAccount[] || [])
+        .filter((account: GameAccount) => account.purpose === 'INVENTORY')
+        .map((account: GameAccount) => ({
           label: account.account_name,
           value: account.id
         }))

@@ -455,6 +455,15 @@ interface FormData {
   purchase_currency: string | null
 }
 
+interface ProcessFeeCountItem {
+  process_id: string
+  fee_count: number
+}
+
+interface ProcessFeeMapItem {
+  process_id: string
+}
+
 // State
 const loading = ref(false)
 const submitting = ref(false)
@@ -686,14 +695,14 @@ const loadProcessFeeCounts = async () => {
       if (fallbackError) throw fallbackError
 
       const counts: Record<string, number> = {}
-      ;(fallbackData || []).forEach(item => {
+      ;(fallbackData || []).forEach((item: ProcessFeeMapItem) => {
         counts[item.process_id] = (counts[item.process_id] || 0) + 1
       })
 
       processFeeCounts.value = counts
     } else {
       const counts: Record<string, number> = {}
-      ;(data || []).forEach(item => {
+      ;(data || []).forEach((item: ProcessFeeCountItem) => {
         counts[item.process_id] = item.fee_count
       })
 

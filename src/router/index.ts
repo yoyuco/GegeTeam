@@ -33,12 +33,7 @@ const routes = [
     meta: { requiresAuth: true },
   },
   // /employees route removed - Employees.vue file does not exist
-  {
-    path: '/role-management',
-    name: 'role-management',
-    component: () => import('../pages/RoleManagement.vue'),
-    meta: { requiresAuth: true },
-  },
+  // /role-management route removed - old role management replaced by Manager.vue tabs
   {
     path: '/systemops',
     component: () => import('@/pages/SystemOps.vue'),

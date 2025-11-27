@@ -500,7 +500,7 @@ onMounted(() => {
 
 <style scoped>
 .roles-management {
-  /* Component-specific styles */
+  padding: 1rem;
 }
 
 .role-card {

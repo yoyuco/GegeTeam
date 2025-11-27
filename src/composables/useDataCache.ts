@@ -8,6 +8,11 @@ interface CacheItem<T> {
   timestamp: number
 }
 
+interface GameServerItem {
+  code: string
+  name: string
+}
+
 // Generic cache storage
 const cache = new Map<string, CacheItem<any>>()
 
@@ -132,7 +137,7 @@ export const useDataCache = () => {
           .eq('type', 'GAME')
 
         if (games) {
-          const gameNameMap = new Map(games.map(item => [item.code, item.name]))
+          const gameNameMap = new Map((games as GameServerItem[]).map((item: GameServerItem) => [item.code, item.name]))
           setCachedGameNames(gameNameMap)
         }
       }
@@ -144,7 +149,7 @@ export const useDataCache = () => {
           .in('type', ['SERVER', 'GAME_SERVER'])
 
         if (servers) {
-          const serverNameMap = new Map(servers.map(item => [item.code, item.name]))
+          const serverNameMap = new Map((servers as GameServerItem[]).map((item: GameServerItem) => [item.code, item.name]))
           setCachedServerNames(serverNameMap)
         }
       }

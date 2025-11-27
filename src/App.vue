@@ -14,6 +14,12 @@
                 <RouterLink v-if="auth.hasPermission('orders:view_all')" to="/" class="menu-item">
                   <n-icon><HomeIcon /></n-icon><span>Dashboard</span>
                 </RouterLink>
+                <RouterLink to="/currency/create-orders" class="menu-item">
+                  <n-icon><CashIcon /></n-icon><span>Mua Bán Currency</span>
+                </RouterLink>
+                <RouterLink to="/currency/ops" class="menu-item">
+                  <n-icon><BarChartOutline /></n-icon><span>Vận hành Currency</span>
+                </RouterLink>
                 <RouterLink
                   v-if="
                     auth.hasPermission('orders:create', {
@@ -24,7 +30,7 @@
                   to="/sales"
                   class="menu-item"
                 >
-                  <n-icon><CashIcon /></n-icon><span>Bán hàng</span>
+                  <n-icon><CashIcon /></n-icon><span>Bán hàng Boosting</span>
                 </RouterLink>
                 <RouterLink
                   v-if="
@@ -39,13 +45,6 @@
                   <n-icon><RocketIcon /></n-icon><span>Service – Boosting</span>
                 </RouterLink>
                 <RouterLink
-                  v-if="auth.hasPermission('reports:view')"
-                  to="/reports"
-                  class="menu-item"
-                >
-                  <n-icon><ArchiveIcon /></n-icon><span>Quản lý Báo cáo</span>
-                </RouterLink>
-                <RouterLink
                   v-if="
                     auth.hasPermission('admin:manage_roles') ||
                     auth.hasPermission('shift:manage') ||
@@ -57,18 +56,11 @@
                   <n-icon><SettingsIcon /></n-icon><span>Quản lý Tổ chức</span>
                 </RouterLink>
                 <RouterLink
-                  v-if="auth.hasPermission('admin:manage_roles')"
-                  to="/employees"
+                  v-if="auth.hasPermission('reports:view')"
+                  to="/reports"
                   class="menu-item"
                 >
-                  <n-icon><PeopleIcon /></n-icon><span>Nhân viên (cũ)</span>
-                </RouterLink>
-                <RouterLink
-                  v-if="auth.hasPermission('admin:manage_roles')"
-                  to="/role-management"
-                  class="menu-item"
-                >
-                  <n-icon><ShieldCheckmarkOutline /></n-icon><span>Phân quyền (cũ)</span>
+                  <n-icon><ArchiveIcon /></n-icon><span>Quản lý Báo cáo</span>
                 </RouterLink>
                 <RouterLink
                   v-if="auth.hasPermission('system:view_audit_logs')"
@@ -76,12 +68,6 @@
                   class="menu-item"
                 >
                   <n-icon><AnalyticsIcon /></n-icon><span>Thao tác hệ thống</span>
-                </RouterLink>
-                <RouterLink to="/currency/ops" class="menu-item">
-                  <n-icon><AnalyticsIcon /></n-icon><span>Currency Operations</span>
-                </RouterLink>
-                <RouterLink to="/currency/create-orders" class="menu-item">
-                  <n-icon><CashIcon /></n-icon><span>Currency Mua Bán</span>
                 </RouterLink>
               </nav>
 
@@ -140,35 +126,34 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
-import {
-  NConfigProvider,
-  NMessageProvider,
-  NDialogProvider,
-  NIcon,
-  createDiscreteApi,
-} from 'naive-ui'
 import { useAuth } from '@/stores/auth'
 import {
-  HomeOutline as HomeIcon,
-  CashOutline as CashIcon,
-  RocketOutline as RocketIcon,
-  ArchiveOutline as ArchiveIcon,
-  PeopleOutline as PeopleIcon,
   AnalyticsOutline as AnalyticsIcon,
-  SettingsOutline as SettingsIcon,
-  DiamondOutline,
-  ShieldCheckmarkOutline,
-  BuildOutline,
+  ArchiveOutline as ArchiveIcon,
   BarChartOutline,
-  LogOutOutline as LogoutIcon,
-  RibbonOutline,
-  SparklesOutline,
+  BuildOutline,
+  CashOutline as CashIcon,
+  DiamondOutline,
+  HomeOutline as HomeIcon,
   HourglassOutline,
+  LogOutOutline as LogoutIcon,
   NewspaperOutline,
+  RibbonOutline,
+  RocketOutline as RocketIcon,
+  SettingsOutline as SettingsIcon,
+  ShieldCheckmarkOutline,
+  SparklesOutline,
 } from '@vicons/ionicons5'
+import {
+  NConfigProvider,
+  NDialogProvider,
+  NIcon,
+  NMessageProvider,
+  createDiscreteApi,
+} from 'naive-ui'
 import type { Component } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const auth = useAuth()

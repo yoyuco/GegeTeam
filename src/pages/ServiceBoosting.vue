@@ -1168,26 +1168,6 @@
 
         <!-- Pilot Cycle Information - chỉ hiển thị cho pilot orders đang hoạt động -->
         <template v-if="customerPlayModal.serviceType === 'Pilot' && customerPlayModal.orderId">
-          <!-- Alert Warning/Blocked Layer -->
-          <n-alert
-            v-if="pilotCycleModalInfo.warningLevel >= 1"
-            :type="pilotCycleModalInfo.warningLevel === 2 ? 'error' : 'warning'"
-            :title="
-              pilotCycleModalInfo.warningLevel === 2 ? '⚠️ Cảnh báo quan trọng' : '⚠️ Cảnh báo'
-            "
-            :show-icon="true"
-            class="mb-4"
-          >
-            <div class="text-sm">
-              <p v-if="pilotCycleModalInfo.warningLevel === 1">
-                • Pilot đã online liên tục gần 5 ngày - cần nghỉ để tránh bị khóa
-              </p>
-              <p v-else>• Pilot đã online liên tục trên 6 ngày - đã bị khóa</p>
-              <p>
-                {{ pilotCycleModalInfo.resetRequirement }}
-              </p>
-            </div>
-          </n-alert>
 
           <div class="border border-blue-200 bg-blue-50 p-4 rounded-lg">
             <div class="flex items-center gap-2 mb-3">
@@ -1252,76 +1232,74 @@
 </template>
 
 <script setup lang="ts">
-import {
-  h,
-  ref,
-  reactive,
-  computed,
-  onMounted,
-  onBeforeUnmount,
-  watch,
-  provide,
-  type VNode,
-} from 'vue'
-import {
-  NCard,
-  NButton,
-  NDataTable,
-  NTag,
-  NTooltip,
-  NDrawer,
-  NDrawerContent,
-  NDivider,
-  NInput,
-  NUpload,
-  NInputNumber,
-  NCheckbox,
-  NImage,
-  NSpin,
-  createDiscreteApi,
-  useDialog,
-  NRadioGroup,
-  NRadioButton,
-  NDatePicker,
-  NRate,
-  NModal,
-  NSelect,
-  NIcon,
-  NImageGroup,
-  NCollapse,
-  NCollapseItem,
-  NRadio,
-  NSpace,
-  NSwitch,
-  NAlert,
-  type UploadFileInfo,
-  type SelectOption,
-  type DataTableColumns,
-} from 'naive-ui'
-import {
-  ChevronDown,
-  ChevronUp,
-  Pencil as EditIcon,
-  TrashOutline as TrashIcon,
-  InformationCircleOutline,
-  EyeOutline,
-  AlertCircleOutline as WarningIcon,
-  BookOutline,
-  PaperPlaneOutline as DeliveryIcon,
-  DesktopOutline as PcIcon,
-} from '@vicons/ionicons5'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/stores/auth'
 import ServiceDescription from '@/components/service/ServiceDescription.vue'
 import ServiceItemLabel from '@/components/service/ServiceItemLabel.vue'
 import {
   fetchLastProofs,
-  startWorkSession,
   finishWorkSessionIdem,
-  type SessionOutputRow,
+  startWorkSession,
   type ActivityRow,
+  type SessionOutputRow,
 } from '@/lib/progress'
-
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/stores/auth'
+import {
+  BookOutline,
+  ChevronDown,
+  ChevronUp,
+  PaperPlaneOutline as DeliveryIcon,
+  Pencil as EditIcon,
+  EyeOutline,
+  InformationCircleOutline,
+  DesktopOutline as PcIcon,
+  TrashOutline as TrashIcon,
+  AlertCircleOutline as WarningIcon,
+} from '@vicons/ionicons5'
+import {
+  NButton,
+  NCard,
+  NCheckbox,
+  NCollapse,
+  NCollapseItem,
+  NDataTable,
+  NDatePicker,
+  NDivider,
+  NDrawer,
+  NDrawerContent,
+  NIcon,
+  NImage,
+  NImageGroup,
+  NInput,
+  NInputNumber,
+  NModal,
+  NRadio,
+  NRadioButton,
+  NRadioGroup,
+  NRate,
+  NSelect,
+  NSpace,
+  NSpin,
+  NSwitch,
+  NTag,
+  NTooltip,
+  NUpload,
+  createDiscreteApi,
+  useDialog,
+  type DataTableColumns,
+  type SelectOption,
+  type UploadFileInfo
+} from 'naive-ui'
+import {
+  computed,
+  h,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  reactive,
+  ref,
+  watch,
+  type VNode,
+} from 'vue'
 // =================================================================
 // TYPES
 // =================================================================
@@ -2353,18 +2331,7 @@ const columns: DataTableColumns<OrderRow> = [
       // Only apply warning colors for pilot orders with actual warnings
       let warningStyle = {}
 
-      // DEBUG: Log pilot orders data to find real warnings
-      if (row.service_type === 'Pilot') {
-        console.log('Pilot order data:', {
-          id: row.id,
-          customer_name: row.customer_name,
-          status: row.status,
-          created_at: row.created_at,
-          pilot_warning_level: row.pilot_warning_level,
-          pilot_is_blocked: row.pilot_is_blocked,
-        })
-      }
-
+      
       if (
         row.service_type === 'Pilot' &&
         !['completed', 'cancelled', 'delivered', 'pending_completion'].includes(row.status)
@@ -2377,15 +2344,13 @@ const columns: DataTableColumns<OrderRow> = [
             borderRadius: '4px',
             border: '1px solid #ef4444',
           }
-          console.log('WARNING: Blocked pilot found -', row.customer_name)
-        } else if (row.pilot_warning_level === 1) {
+                  } else if (row.pilot_warning_level === 1) {
           warningStyle = {
             backgroundColor: '#fef3c7', // amber-100
             padding: '2px 6px',
             borderRadius: '4px',
             border: '1px solid #f59e0b',
           }
-          console.log('WARNING: Warning pilot found -', row.customer_name)
         }
       }
 
