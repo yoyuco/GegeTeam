@@ -211,6 +211,18 @@
               @process-inventory="handleProcessInventory"
               @refresh-data="loadDeliveryOrders"
             />
+
+            <!-- Load More Button for Delivery -->
+            <div v-if="deliveryPagination.hasMore && !loadingDelivery && deliveryOrders.length > 0" class="mt-4 text-center">
+              <button
+                @click="loadMoreDelivery"
+                :disabled="loadingDelivery"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                <span v-if="!loadingDelivery">Tải thêm đơn hàng</span>
+                <span v-else>Đang tải...</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -246,6 +258,18 @@
               @view-detail="handleHistoryViewDetail"
               @refresh-data="loadTransactionHistory"
             />
+
+            <!-- Load More Button for History -->
+            <div v-if="historyPagination.hasMore && !loadingHistory && transactionHistory.length > 0" class="mt-4 text-center">
+              <button
+                @click="loadMoreHistory"
+                :disabled="loadingHistory"
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                <span v-if="!loadingHistory">Tải thêm lịch sử</span>
+                <span v-else>Đang tải...</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -461,6 +485,21 @@ const loadingDelivery = ref(false)
 // Transaction history state
 const transactionHistory = ref<any[]>([])
 const loadingHistory = ref(false)
+
+// Pagination state for optimized loading
+const historyPagination = ref({
+  currentPage: 1,
+  pageSize: 25,
+  hasMore: true,
+  totalCount: 0
+})
+
+const deliveryPagination = ref({
+  currentPage: 1,
+  pageSize: 25,
+  hasMore: true,
+  totalCount: 0
+})
 
 // Order completion modal state
 const showOrderCompletionModal = ref(false)
@@ -740,11 +779,12 @@ const loadDeliveryOrders = async () => {
     }
 
     // Use the optimized RPC function with server-side filtering and caching
+    // Delivery tab already has good server-side filtering via p_for_delivery=true
     const { data, error } = await supabase
       .rpc('get_currency_orders_optimized', {
         p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control (FIRST PARAM!)
-        p_for_delivery: true,              // Filter for delivery-relevant statuses
-        p_limit: 100,                      // Get more orders for comprehensive view
+        p_for_delivery: true,              // Filter for delivery-relevant statuses (assigned, preparing, delivering, ready, delivered)
+        p_limit: 50,                       // Reduced limit since server-side filtering is efficient
         p_offset: 0,
         p_search_query: null,             // Can be used for future search functionality
         p_status_filter: null,             // Use built-in delivery filtering
@@ -760,31 +800,39 @@ const loadDeliveryOrders = async () => {
 
     
 
-    // Collect unique game and server codes for name lookup
-    const gameCodes = [...new Set(data.map((order: any) => order.game_code).filter(Boolean))]
-    const serverCodes = [...new Set(data.map((order: any) => order.server_attribute_code).filter(Boolean))]
+    // Optimized data loading with pagination and filtering
+    // Load data in smaller batches with pagination
+    const pagination = deliveryPagination.value
+    const offset = (pagination.currentPage - 1) * pagination.pageSize
 
-    // Fetch game and server names
-    const [gameData, serverData] = await Promise.all([
-      gameCodes.length > 0 ? supabase
-        .from('attributes')
-        .select('code, name')
-        .eq('type', 'GAME')
-        .in('code', gameCodes) : Promise.resolve({ data: [] }),
+    // Load additional data if needed for pagination
+    const additionalData = pagination.currentPage > 1 ? await supabase
+      .rpc('get_currency_orders_optimized', {
+        p_current_profile_id: profileData,
+        p_for_delivery: true,
+        p_limit: pagination.pageSize,
+        p_offset: offset,
+        p_search_query: null,
+        p_status_filter: null,
+        p_order_type_filter: null,
+        p_game_code_filter: null
+      }) : { data: null, error: null }
 
-      serverCodes.length > 0 ? supabase
-        .from('attributes')
-        .select('code, name')
-        .in('type', ['SERVER', 'GAME_SERVER'])
-        .in('code', serverCodes) : Promise.resolve({ data: [] })
-    ])
+    const allData = pagination.currentPage === 1 ? data : [...(data || []), ...(additionalData.data || [])]
 
-    // Create lookup maps
-    const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
-    const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
+    // Update pagination state
+    pagination.hasMore = allData?.length === pagination.pageSize + offset
 
-    // The RPC function returns pre-joined data, so we just need to format it
-    const formattedOrders = (data || []).map((order: CurrencyOrder) => ({
+    // Preload commonly used data for better performance
+    await preloadCommonData(supabase)
+
+    // Get cached name maps for additional name resolution
+    const gameNameMap = getCachedGameNames() || new Map()
+    const serverNameMap = getCachedServerNames() || new Map()
+
+    // Format the data using the pre-joined data from optimized RPC function
+    // NO MANUAL JOINS NEEDED - RPC function already provides all related data!
+    const formattedOrders = (allData || []).map((order: any) => ({
       ...order,
       // Add compatibility fields for existing component logic
       currencyName: order.currency_attribute?.name || 'Unknown Currency',
@@ -794,18 +842,45 @@ const loadDeliveryOrders = async () => {
       customerName: order.party?.name || 'Direct Customer',
       customer: order.party?.name || 'Direct Customer', // Added for table column mapping
       employeeName: order.assigned_employee?.display_name || 'Unassigned',
-      // Add resolved names
+      // Add resolved names using cached data when possible
       game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
       server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null,
-      // Flatten nested objects for templates
+      // Ensure nested objects are available for templates (already provided by RPC)
       currency_attribute: order.currency_attribute,
       channel: order.channel,
       assigned_employee: order.assigned_employee,
-      game_account: order.game_account,
-      party: order.party
+      created_by_profile: order.created_by_profile,
+      foreign_currency_attribute: order.foreign_currency_attribute
     }))
 
-    deliveryOrders.value = formattedOrders
+    // SORTING RULE: Delivery tab - active orders first, delivered at bottom
+    // Priority order: assigned → preparing → delivering → ready (active), then delivered
+    const statusPriority = {
+      'assigned': 1,
+      'preparing': 2,
+      'delivering': 3,
+      'ready': 4,
+      'delivered': 5
+    }
+
+    formattedOrders.sort((a: any, b: any) => {
+      const priorityA = statusPriority[a.status as keyof typeof statusPriority] || 999
+      const priorityB = statusPriority[b.status as keyof typeof statusPriority] || 999
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB
+      }
+
+      // Within same status priority, sort by created_at (newest first)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
+    // Handle pagination: for first page, replace; for subsequent pages, append
+    if (pagination.currentPage === 1) {
+      deliveryOrders.value = formattedOrders
+    } else {
+      deliveryOrders.value = [...deliveryOrders.value, ...formattedOrders]
+    }
 
   } catch (error) {
 
@@ -1177,115 +1252,76 @@ const loadTransactionHistory = async () => {
       return
     }
 
-    // Use the optimized RPC function with server-side filtering and caching
-    // This function includes all necessary joins and filters server-side with indexes
+    // Optimized data loading with pagination and filtering
+    // Load data in smaller batches with pagination
+    const pagination = historyPagination.value
+    const offset = (pagination.currentPage - 1) * pagination.pageSize
+
     const { data, error } = await supabase
       .rpc('get_currency_orders_optimized', {
         p_current_profile_id: profileData,  // REQUIRED: Valid profile ID for access control
         p_for_delivery: false,             // History tab (not delivery)
-        p_limit: 100,
-        p_offset: 0,
+        p_limit: pagination.pageSize,      // Use pagination size instead of large batch
+        p_offset: offset,                  // Use offset for pagination
         p_search_query: null,             // Can be used for future search functionality
-        p_status_filter: null,             // Show all statuses, will filter client-side for history
+        p_status_filter: null,             // Use client-side filter for now (function supports single status only)
         p_order_type_filter: null,
         p_game_code_filter: null
       })
 
-    // Filter history data to only show completed and cancelled orders
+    // Client-side filter for history tab - only completed/cancelled orders
     const historyData = data?.filter((order: any) =>
       ['completed', 'cancelled'].includes(order.status)
     ) || []
+
+    // Update pagination state
+    pagination.hasMore = data?.length === pagination.pageSize
+    pagination.totalCount = historyData.length + offset
 
     if (error) {
       message.error('Không thể tải lịch sử giao dịch: ' + error.message)
       return
     }
 
-    // Manual joins for related data (relationships don't exist in schema)
-    const ordersWithData = []
-    if (data && data.length > 0) {
-      // Collect all unique IDs for batch queries
-      const currencyIds = [...new Set(data.map((order: any) => order.currency_attribute_id).filter(Boolean))]
-      const channelIds = [...new Set(data.map((order: any) => order.channel_id).filter(Boolean))]
-      const employeeIds = [...new Set(data.map((order: any) => order.assigned_to).filter(Boolean))]
-      const gameAccountIds = [...new Set(data.map((order: any) => order.game_account_id).filter(Boolean))]
-      const partyIds = [...new Set(data.map((order: any) => order.party_id).filter(Boolean))]
+    // Preload commonly used data for better performance
+    await preloadCommonData(supabase)
 
-      // Collect game and server codes for name lookup
-      const gameCodes = [...new Set(data.map((order: any) => order.game_code).filter(Boolean))]
-      const serverCodes = [...new Set(data.map((order: any) => order.server_attribute_code).filter(Boolean))]
+    // Get cached name maps for additional name resolution
+    const gameNameMap = getCachedGameNames() || new Map()
+    const serverNameMap = getCachedServerNames() || new Map()
 
-      // Batch fetch related data
-      const [currencyData, channelData, employeeData, gameAccountData, partyData, gameData, serverData] = await Promise.all([
-        currencyIds.length > 0 ? supabase
-          .from('attributes')
-          .select('id, code, name, type')
-          .in('id', currencyIds) : Promise.resolve({ data: [] }),
+    // Format the data using the pre-joined data from optimized RPC function
+    // NO MANUAL JOINS NEEDED - RPC function already provides all related data!
+    const formattedOrders = historyData.map((order: any) => ({
+      ...order,
+      // Add compatibility fields for existing component logic
+      currencyName: order.currency_attribute?.name || 'Unknown Currency',
+      currencyCode: order.currency_attribute?.code || 'Unknown',
+      channelName: order.channel?.name || 'Unknown Channel',
+      channelCode: order.channel?.code || 'Other',
+      customerName: order.party?.name || 'Direct Customer',
+      customer: order.party?.name || 'Direct Customer', // Added for table column mapping
+      employeeName: order.assigned_employee?.display_name || 'Unassigned',
+      // Add resolved names using cached data when possible
+      game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
+      server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null,
+      // Ensure nested objects are available for templates (already provided by RPC)
+      currency_attribute: order.currency_attribute,
+      channel: order.channel,
+      assigned_employee: order.assigned_employee,
+      created_by_profile: order.created_by_profile,
+      foreign_currency_attribute: order.foreign_currency_attribute
+    }))
 
-        channelIds.length > 0 ? supabase
-          .from('channels')
-          .select('id, code, name')
-          .in('id', channelIds) : Promise.resolve({ data: [] }),
+    // SORTING RULE: History tab - newest first (created_at DESC)
+    formattedOrders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-        employeeIds.length > 0 ? supabase
-          .from('profiles')
-          .select('id, display_name')
-          .in('id', employeeIds) : Promise.resolve({ data: [] }),
-
-        gameAccountIds.length > 0 ? supabase
-          .from('game_accounts')
-          .select('id, account_name, game_code, purpose')
-          .in('id', gameAccountIds) : Promise.resolve({ data: [] }),
-
-        partyIds.length > 0 ? supabase
-          .from('parties')
-          .select('id, name, type')
-          .in('id', partyIds) : Promise.resolve({ data: [] }),
-
-        // Fetch game names
-        gameCodes.length > 0 ? supabase
-          .from('attributes')
-          .select('code, name')
-          .eq('type', 'GAME')
-          .in('code', gameCodes) : Promise.resolve({ data: [] }),
-
-        // Fetch server names (handle both SERVER and GAME_SERVER types)
-        serverCodes.length > 0 ? supabase
-          .from('attributes')
-          .select('code, name')
-          .in('type', ['SERVER', 'GAME_SERVER'])
-          .in('code', serverCodes) : Promise.resolve({ data: [] })
-      ])
-
-      // Create lookup maps
-      const currencyMap = new Map(currencyData.data?.map(item => [item.id, item]) || [])
-      const channelMap = new Map(channelData.data?.map(item => [item.id, item]) || [])
-      const employeeMap = new Map(employeeData.data?.map(item => [item.id, item]) || [])
-      const gameAccountMap = new Map(gameAccountData.data?.map(item => [item.id, item]) || [])
-      const partyMap = new Map(partyData.data?.map(item => [item.id, item]) || [])
-      const gameNameMap = new Map(gameData.data?.map(item => [item.code, item.name]) || [])
-      const serverNameMap = new Map(serverData.data?.map(item => [item.code, item.name]) || [])
-
-      // Combine data
-      for (const order of data) {
-        const combinedOrder = {
-          ...order,
-          currency_attribute: order.currency_attribute_id ? currencyMap.get(order.currency_attribute_id) || null : null,
-          channel: order.channel_id ? channelMap.get(order.channel_id) || null : null,
-          assigned_employee: order.assigned_to ? employeeMap.get(order.assigned_to) || null : null,
-          game_account: order.game_account_id ? gameAccountMap.get(order.game_account_id) || null : null,
-          party: order.party_id ? partyMap.get(order.party_id) || null : null,
-          // Add resolved names
-          game_name: order.game_code ? gameNameMap.get(order.game_code) || order.game_code : null,
-          server_name: order.server_attribute_code ? serverNameMap.get(order.server_attribute_code) || order.server_attribute_code : null
-        }
-
-        ordersWithData.push(combinedOrder)
-      }
+    // Handle pagination: for first page, replace; for subsequent pages, append
+    if (pagination.currentPage === 1) {
+      transactionHistory.value = formattedOrders
+    } else {
+      transactionHistory.value = [...transactionHistory.value, ...formattedOrders]
     }
-
-    // Use filtered history data that only includes completed and cancelled orders
-    transactionHistory.value = historyData
   } catch (error) {
 
     message.error('Có lỗi xảy ra khi tải lịch sử giao dịch')
@@ -1370,16 +1406,42 @@ watch([currentGame, currentServer], async () => {
 
 // Watch for tab changes to load appropriate data
 watch(activeTab, async (newTab) => {
-  // Load data based on the new active tab
+  // Reset pagination when switching tabs
   if (newTab === 'delivery') {
+    deliveryPagination.value.currentPage = 1
+    deliveryOrders.value = []
     await loadDeliveryOrders()
   } else if (newTab === 'history') {
+    historyPagination.value.currentPage = 1
+    transactionHistory.value = []
     await loadTransactionHistory()
   } else if (newTab === 'exchange') {
     // For exchange tab, load the full data including game context
     await loadData()
   }
 })
+
+// Pagination functions
+const loadMoreHistory = async () => {
+  if (!historyPagination.value.hasMore || loadingHistory.value) return
+
+  historyPagination.value.currentPage++
+  await loadTransactionHistory()
+}
+
+const loadMoreDelivery = async () => {
+  if (!deliveryPagination.value.hasMore || loadingDelivery.value) return
+
+  deliveryPagination.value.currentPage++
+  await loadDeliveryOrders()
+}
+
+const resetPagination = () => {
+  historyPagination.value.currentPage = 1
+  historyPagination.value.hasMore = true
+  deliveryPagination.value.currentPage = 1
+  deliveryPagination.value.hasMore = true
+}
 
 // --- LIFECYCLE ---
 onMounted(async () => {
