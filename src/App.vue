@@ -167,38 +167,12 @@ import {
 } from 'naive-ui'
 import type { Component } from 'vue'
 import { useRouter } from 'vue-router'
-import { watch } from 'vue'
-import type { User } from '@supabase/supabase-js'
 
 const router = useRouter()
 const auth = useAuth()
 const permissions = usePermissions()
 const { message } = createDiscreteApi(['message'])
 
-// Debug currency permissions in development
-if (import.meta.env.DEV) {
-  // Debug permissions when user data is loaded
-  watch(() => auth.user, (user: User | null) => {
-    if (user) {
-      setTimeout(() => {
-        permissions.debugCurrencyPermissions()
-
-        // Test specific tab visibility logic
-        console.group('📋 Tab Visibility Test')
-        console.log('Create Orders Tab:', permissions.hasPermissionForCurrency('currency:create_orders'))
-        console.log('Ops Tab (View):', permissions.hasPermissionForCurrency('currency:view_orders'))
-        console.log('Ops Tab (Exchange):', permissions.hasPermissionForCurrency('currency:exchange_orders'))
-        console.log('Ops Tab (Inventory):', permissions.hasPermissionForCurrency('currency:view_inventory'))
-        console.log('Ops Tab (Combined):',
-          permissions.hasPermissionForCurrency('currency:view_orders') ||
-          permissions.hasPermissionForCurrency('currency:exchange_orders') ||
-          permissions.hasPermissionForCurrency('currency:view_inventory')
-        )
-        console.groupEnd()
-      }, 1000) // Delay to ensure assignments are loaded
-    }
-  })
-}
 
 const roleDisplay: Record<string, { icon: Component; color: string }> = {
   admin: { icon: DiamondOutline, color: '#d946ef' },

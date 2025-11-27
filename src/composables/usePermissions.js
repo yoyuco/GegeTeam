@@ -331,22 +331,7 @@ export function usePermissions() {
     )
   }
 
-  // Debug method to check current permission status (development only)
-  const debugCurrencyPermissions = () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.group('🔍 Currency Permissions Debug')
-      console.log('User:', user.value?.email)
-      console.log('Primary Role:', primaryRole.value)
-      console.log('Assignments:', userAssignments.value)
-      console.log('Can Access Currency Area:', canAccessCurrencyArea())
-      console.log('Can Create Orders:', hasPermissionForCurrency('currency:create_orders'))
-      console.log('Can View Orders:', hasPermissionForCurrency('currency:view_orders'))
-      console.log('Can Exchange Orders:', hasPermissionForCurrency('currency:exchange_orders'))
-      console.log('Can View Inventory:', hasPermissionForCurrency('currency:view_inventory'))
-      console.groupEnd()
-    }
-  }
-
+  
   // Get user's primary role
   const primaryRole = computed(() => {
     if (isAdmin.value) return { code: 'admin', name: 'Admin' }
@@ -435,8 +420,5 @@ export function usePermissions() {
     // Helper methods for common combinations
     canManageCurrencyOrderLifecycle,
     canModifyCurrencyOrderDetails,
-
-    // Debug method (development only)
-    debugCurrencyPermissions,
   }
 }
