@@ -1382,15 +1382,19 @@ const saveSale = async () => {
         ? formData.unitPriceUsd
         : formData.unitPriceVnd || 0
     // Prepare payload for create_currency_sell_order_draft
+    // Note: Function parameters order was changed to fix stock validation
     const payload: any = {
+      // New parameter order for fixed function
+      p_game_code: currentGame.value,
+      p_server_attribute_code: currentServer.value,
       p_currency_attribute_id: formData.currencyId,
       p_quantity: Number(formData.quantity),
-      p_game_code: currentGame.value,
+      p_character_id: customerFormData.value.gameTag, // Game tag
+      p_character_name: customerFormData.value.gameTag, // Customer name (using gameTag for now)
+      p_channel_id: customerFormData.value.channelId,
       p_delivery_info: customerFormData.value.deliveryInfo
         ? `${customerFormData.value.gameTag} | ${customerFormData.value.deliveryInfo}`
         : customerFormData.value.gameTag, // game tag | thông tin giao hàng
-      p_channel_id: customerFormData.value.channelId,
-      p_server_attribute_code: currentServer.value, // Server attribute code
       p_notes: (() => {
         const parts = []
         // Add exchange type with details if not 'none'
@@ -1408,9 +1412,6 @@ const saveSale = async () => {
       })(), // Loại hình chuyển đổi (nếu có) | note người dùng
       // Add customer party info
       p_party_id: customerPartyId, // Customer party ID (from existing or newly created)
-      // Add character info
-      p_character_name: customerFormData.value.gameTag,
-      p_character_id: customerFormData.value.gameTag, // Using gameTag as character ID for now
       // Add sale details
       p_sale_amount: formData.totalPrice,
       p_sale_currency_code: formData.currencyCode,
@@ -1460,6 +1461,9 @@ const saveSale = async () => {
 
     // Check if draft was created successfully
     if (data && data.length > 0) {
+      // Debug: Log response to see actual structure
+      console.log('Function response:', data[0])
+
       // Extract order info from response structure
       let orderId, orderNumber
 
@@ -1467,8 +1471,12 @@ const saveSale = async () => {
       if (data[0].success && data[0].order_id && data[0].order_number) {
         orderId = data[0].order_id
         orderNumber = data[0].order_number
+      } else if (data[0].success === false && data[0].message) {
+        // Function returned an error message - throw it
+        throw new Error(data[0].message)
       } else {
-        throw new Error('Không thể đọc thông tin đơn hàng từ response')
+        // Unexpected response structure
+        throw new Error(`Response không mong đợi: ${JSON.stringify(data[0])}`)
       }
 
       
@@ -1529,11 +1537,12 @@ const saveSale = async () => {
         }
       }
 
-      // Step 4: Auto-assign sell order using inventory-first approach
+      // Step 4: Auto-assign sell order using 3-level rotation approach
       try {
-                const { data: assignmentResult, error: assignmentError } = await supabase.rpc('assign_sell_order_with_inventory', {
+                const { data: assignmentResult, error: assignmentError } = await supabase.rpc('assign_sell_order_with_inventory_v2', {
           p_order_id: orderId,
-          p_user_id: profileData
+          p_user_id: profileData,
+          p_rotation_type: 'account_first'
         })
 
         if (assignmentError) {
