@@ -1475,7 +1475,7 @@ const saveSale = async () => {
       // Set current order ID for proof uploads
       currentOrderId.value = orderNumber || orderId
 
-      message.success(`✅ Tạo đơn bán thành công! Order #${orderNumber}`)
+      // Initial success message will be shown after processing is complete
 
       // Step 2: Upload proof images if any
       let proofUrls: string[] = []
@@ -1538,23 +1538,15 @@ const saveSale = async () => {
 
         if (assignmentError) {
           console.error('Assignment error:', assignmentError)
-          message.warning(
-            `⚠️ Tạo đơn thành công nhưng phân công thất bại: ${assignmentError.message}. ` +
-            `Admin sẽ xem xét và phân công thủ công.`
-          )
-        } else if (assignmentResult && assignmentResult.length > 0 && assignmentResult[0].success) {
-          message.success(`✅ Tạo đơn bán thành công! Order #${orderNumber} đã được phân công tự động`)
-        } else {
-          message.warning(
-            '⚠️ Tạo đơn thành công nhưng không có inventory phù hợp. Admin sẽ xem xét và phân công thủ công.'
-          )
+          message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công`)
         }
       } catch (assignError) {
         console.error('Assignment failed:', assignError)
-        message.warning(
-          '⚠️ Tạo đơn thành công nhưng phân công gặp sự cố. Admin sẽ phân công thủ công.'
-        )
+        // Silently handle assignment errors
       }
+
+      // Single success message at the end
+      message.success(`✅ Đơn bán #${orderNumber} đã được tạo thành công!`)
 
     // Reset form after successful submission
     handleCurrencyFormReset()
@@ -2104,16 +2096,14 @@ const _handlePurchaseSubmit = async () => {
     // Auto assign purchase order to suitable employee (should succeed based on pre-check)
     try {
             await autoAssignPurchaseOrder(orderUuid)
-            message.success(`✅ Tạo đơn mua thành công! Order #${orderNumber} đã được phân công tự động`)
     } catch (assignError) {
-            const errorMessage = assignError instanceof Error ? assignError.message : String(assignError)
-
+            console.error('Assignment error:', assignError)
       // This should rarely happen due to pre-check, but handle gracefully
-      message.warning(
-        `⚠️ Tạo đơn thành công nhưng phân công thất bại: ${errorMessage}. ` +
-        `Admin sẽ xem xét và phân công thủ công.`
-      )
+      message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công`)
     }
+
+    // Single success message
+    message.success(`✅ Đơn mua #${orderNumber} đã được tạo thành công!`)
 
     // Reset form after successful submission
     resetPurchaseForm()

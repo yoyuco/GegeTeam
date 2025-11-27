@@ -678,8 +678,6 @@ const handleExchangeSubmit = async (data: any) => {
     const orderId = orderResult.order_id
     const orderNumber = orderResult.order_number
 
-    message.success(`✅ Tạo đơn draft thành công: ${orderNumber}`)
-
     // Step 2: Upload proofs if any
     let proofsData = null
     if (data.proofFiles && data.proofFiles.length > 0) {
@@ -702,7 +700,8 @@ const handleExchangeSubmit = async (data: any) => {
       throw new Error(completeData?.[0]?.message || 'Hoàn thành exchange thất bại')
     }
 
-    message.success(`✅ Exchange currency hoàn thành: ${orderNumber}`)
+    // Single success message at the end
+    message.success(`✅ Đơn exchange #${orderNumber} đã được hoàn thành!`)
 
     // Reset the form
     handleExchangeReset()
@@ -763,7 +762,7 @@ const uploadExchangeProofs = async (orderId: string, orderNumber: string, files:
       })
     }
 
-    message.success(`✅ Upload thành công ${files.length} file proof`)
+    // Upload success will be shown in the main completion message
 
     // Return proofs data for step 3
     return proofsArray
@@ -779,7 +778,7 @@ const handleExchangeReset = () => {
   if (exchangeFormRef.value && exchangeFormRef.value.onReset) {
     exchangeFormRef.value.onReset()
   }
-  message.info('Form đã được reset.')
+  // Form reset without notification
 }
 
 // Load delivery orders from database using RPC function with role-based access
