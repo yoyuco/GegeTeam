@@ -19,6 +19,7 @@
           </div>
           <div class="flex items-center gap-3">
             <n-button
+              v-if="permissions.canViewInventory()"
               type="primary"
               size="medium"
               class="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
@@ -71,6 +72,7 @@
     <div class="bg-white border border-gray-200 rounded-xl">
       <div class="flex">
         <button
+          v-if="permissions.canExchangeCurrencyOrders()"
           :class="[
             'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
             activeTab === 'exchange'
@@ -90,6 +92,7 @@
           Đổi Currency
         </button>
         <button
+          v-if="permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders()"
           :class="[
             'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
             activeTab === 'delivery'
@@ -115,6 +118,7 @@
           </span>
         </button>
         <button
+          v-if="permissions.canViewCurrencyOrders()"
           :class="[
             'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
             activeTab === 'history'
@@ -138,8 +142,21 @@
 
       <!-- Tab Content -->
       <div class="flex-1">
-      <!-- Tab Đổi Currency -->
-      <div v-if="activeTab === 'exchange'" class="tab-pane">
+        <!-- No Access Message -->
+        <div v-if="!hasAnyCurrencyTabAccess()" class="flex items-center justify-center h-96">
+          <div class="text-center">
+            <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.316 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Không có quyền truy cập</h3>
+            <p class="text-gray-500">Bạn không có quyền truy cập bất kỳ chức năng currency nào. Vui lòng liên hệ admin để được cấp quyền.</p>
+          </div>
+        </div>
+
+        <!-- Tab Content (only show if has access) -->
+        <div v-if="hasAnyCurrencyTabAccess()">
+          <!-- Tab Đổi Currency -->
+          <div v-if="activeTab === 'exchange' && permissions.canExchangeCurrencyOrders()" class="tab-pane">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="p-6">
             <div class="flex items-center gap-2 mb-6">
@@ -177,7 +194,7 @@
       </div>
 
       <!-- Tab Giao nhận Currency -->
-      <div v-if="activeTab === 'delivery'" class="tab-pane">
+      <div v-if="activeTab === 'delivery' && (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders())" class="tab-pane">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="p-6">
             <div class="flex items-center gap-2 mb-6">
@@ -229,7 +246,7 @@
       </div>
 
       <!-- Tab Lịch Sử Giao Dịch -->
-      <div v-if="activeTab === 'history'" class="tab-pane">
+      <div v-if="activeTab === 'history' && permissions.canViewCurrencyOrders()" class="tab-pane">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="p-6">
             <div class="flex items-center gap-2 mb-6">
@@ -274,13 +291,14 @@
             </div>
           </div>
         </div>
+        </div> <!-- End of Tab Content wrapper -->
       </div>
     </div>
   </div>
 
   <!-- Inventory Panel as true sidebar -->
   <CurrencyInventoryPanel
-    v-if="isInventoryOpen"
+    v-if="isInventoryOpen && permissions.canViewInventory()"
     :is-open="isInventoryOpen"
     :game-code="currentGame"
     :server-code="currentServer"
@@ -312,6 +330,7 @@ import DataListCurrency from '@/components/currency/DataListCurrency.vue'
 // Import composables
 import { useGameContext } from '@/composables/useGameContext.js'
 import { useCurrency } from '@/composables/useCurrency.js'
+import { usePermissions } from '@/composables/usePermissions.js'
 import { useInventory } from '@/composables/useInventory.js'
 import { useDataCache, useDebounce } from '@/composables/useDataCache'
 import type { Currency, GameAccount, Channel } from '@/types/composables'
@@ -358,6 +377,9 @@ interface CurrencyOrder {
 
 // --- KHỞI TẠO ---
 const message = useMessage()
+
+// Initialize permissions
+const permissions = usePermissions()
 
 // --- COMPOSABLES ---
 const {
@@ -473,6 +495,27 @@ const loadCurrenciesForCurrentGame = async () => {
 // --- TRẠNG THÁI (STATE) ---
 const isInventoryOpen = ref(false)
 const activeTab = ref('delivery')
+
+// Function to get first available tab based on permissions
+const getFirstAvailableTab = () => {
+  if (permissions.canExchangeCurrencyOrders()) return 'exchange'
+  if (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders()) return 'delivery'
+  if (permissions.canViewCurrencyOrders()) return 'history'
+  return 'delivery' // fallback
+}
+
+// Auto-select first available tab
+if (!permissions.canDeliverCurrencyOrders() && !permissions.canReceiveCurrencyOrders()) {
+  activeTab.value = getFirstAvailableTab()
+}
+
+// Function to check if user has any currency tab access
+const hasAnyCurrencyTabAccess = () => {
+  return permissions.canExchangeCurrencyOrders() ||
+         permissions.canDeliverCurrencyOrders() ||
+         permissions.canReceiveCurrencyOrders() ||
+         permissions.canViewCurrencyOrders()
+}
 const loadingAccounts = ref(false)
 const areCurrenciesLoading = ref(false)
 const isDataLoading = ref(false)
