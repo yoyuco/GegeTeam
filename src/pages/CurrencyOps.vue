@@ -92,7 +92,7 @@
           Đổi Currency
         </button>
         <button
-          v-if="permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders()"
+          v-if="permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders() || permissions.canCompleteCurrencyOrders() || permissions.canCancelCurrencyOrders() || permissions.canEditCurrencyOrders()"
           :class="[
             'px-6 py-4 text-sm font-medium transition-all duration-200 flex items-center gap-2',
             activeTab === 'delivery'
@@ -194,7 +194,7 @@
       </div>
 
       <!-- Tab Giao nhận Currency -->
-      <div v-if="activeTab === 'delivery' && (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders())" class="tab-pane">
+      <div v-if="activeTab === 'delivery' && (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders() || permissions.canCompleteCurrencyOrders() || permissions.canCancelCurrencyOrders() || permissions.canEditCurrencyOrders())" class="tab-pane">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="p-6">
             <div class="flex items-center gap-2 mb-6">
@@ -499,13 +499,13 @@ const activeTab = ref('delivery')
 // Function to get first available tab based on permissions
 const getFirstAvailableTab = () => {
   if (permissions.canExchangeCurrencyOrders()) return 'exchange'
-  if (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders()) return 'delivery'
+  if (permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders() || permissions.canCompleteCurrencyOrders() || permissions.canCancelCurrencyOrders() || permissions.canEditCurrencyOrders()) return 'delivery'
   if (permissions.canViewCurrencyOrders()) return 'history'
   return 'delivery' // fallback
 }
 
 // Auto-select first available tab
-if (!permissions.canDeliverCurrencyOrders() && !permissions.canReceiveCurrencyOrders()) {
+if (!(permissions.canDeliverCurrencyOrders() || permissions.canReceiveCurrencyOrders() || permissions.canCompleteCurrencyOrders() || permissions.canCancelCurrencyOrders() || permissions.canEditCurrencyOrders())) {
   activeTab.value = getFirstAvailableTab()
 }
 
@@ -514,6 +514,9 @@ const hasAnyCurrencyTabAccess = () => {
   return permissions.canExchangeCurrencyOrders() ||
          permissions.canDeliverCurrencyOrders() ||
          permissions.canReceiveCurrencyOrders() ||
+         permissions.canCompleteCurrencyOrders() ||
+         permissions.canCancelCurrencyOrders() ||
+         permissions.canEditCurrencyOrders() ||
          permissions.canViewCurrencyOrders()
 }
 const loadingAccounts = ref(false)
