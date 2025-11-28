@@ -88,8 +88,6 @@ mcp-tools-specifications.json
 
 # Web Reader MCP Server
 mcp-web-reader/
-!/mcp-web-reader/package.json
-!/mcp-web-reader/README.md
 
 # Console Logger MCP Server
 mcp-console-logger/
