@@ -744,6 +744,7 @@ ALTER FUNCTION "public"."assign_role_to_user"("p_user_id" "uuid", "p_role_id" "u
 
 CREATE OR REPLACE FUNCTION "public"."assign_sell_order_with_inventory_v2"("p_order_id" "uuid", "p_user_id" "uuid" DEFAULT NULL::"uuid", "p_rotation_type" "text" DEFAULT 'account_first'::"text") RETURNS TABLE("success" boolean, "message" "text", "assigned_employee_id" "uuid", "assigned_employee_name" "text", "game_account_id" "uuid", "game_account_name" "text", "channel_id" "uuid", "channel_name" "text", "cost_amount" numeric, "cost_currency" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
     -- Get current user (from parameter or auth)
@@ -1600,28 +1601,6 @@ $$;
 ALTER FUNCTION "public"."cancel_sell_order_with_inventory_rollback"("p_order_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."cancel_work_session_v1"() RETURNS TABLE("session_id" "uuid", "order_id" "uuid", "status" "text", "cancelled_at" timestamp with time zone)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        ws.id as session_id,
-        ws.order_id,
-        ws.status,
-        ws.cancelled_at
-    FROM work_sessions ws
-    WHERE ws.status = 'cancelled'
-    ORDER BY ws.cancelled_at DESC
-    LIMIT 10;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."cancel_work_session_v1"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1699,27 +1678,6 @@ $$;
 ALTER FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."check_and_reset_pilot_cycle"() RETURNS TABLE("pilot_id" "uuid", "cycle_count" numeric, "last_reset_at" timestamp with time zone)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        e.id as pilot_id,
-        e.orders_completed as cycle_count,
-        e.last_cycle_reset as last_reset_at
-    FROM employees e
-    WHERE e.role = 'pilot'
-      AND e.orders_completed >= 10
-    ORDER BY e.orders_completed DESC;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."check_and_reset_pilot_cycle"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."check_and_reset_pilot_cycle"("p_order_line_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1787,7 +1745,7 @@ ALTER FUNCTION "public"."check_and_reset_pilot_cycle"("p_order_line_id" "uuid") 
 
 CREATE OR REPLACE FUNCTION "public"."check_currency_order_sla_breaches"() RETURNS TABLE("order_id" "uuid", "order_number" "text", "customer_name" "text", "sla_breached" boolean, "hours_overdue" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
     RETURN QUERY
@@ -2259,7 +2217,7 @@ $$;
 ALTER FUNCTION "public"."complete_exchange_currency_order"("p_order_id" "uuid", "p_completed_by_id" "uuid", "p_proofs" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."complete_order_line_v1"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."complete_order_line_v1"("p_line_id" "uuid", "p_completion_proof_urls" "text"[], "p_reason" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -2277,8 +2235,8 @@ BEGIN
     target_order_id,
     v_current_status,
     v_context
-  FROM order_lines ol
-  JOIN orders o ON ol.order_id = o.id
+  FROM public.order_lines ol
+  JOIN public.orders o ON ol.order_id = o.id
   WHERE ol.id = p_line_id;
 
   IF target_order_id IS NULL THEN
@@ -2292,19 +2250,19 @@ BEGIN
 
   -- Bước 3: Dừng deadline nếu đang in_progress
   IF v_current_status = 'in_progress' THEN
-    UPDATE order_lines
+    UPDATE public.order_lines
     SET paused_at = NOW()
     WHERE id = p_line_id;
   END IF;
 
   -- Bước 4: Cập nhật trạng thái và lưu bằng chứng
-  UPDATE orders
+  UPDATE public.orders
   SET
     status = 'completed',
     notes = p_reason
   WHERE id = target_order_id;
 
-  UPDATE order_lines
+  UPDATE public.order_lines
   SET
     action_proof_urls = p_completion_proof_urls
   WHERE id = p_line_id;
@@ -2313,7 +2271,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."complete_order_line_v1"() OWNER TO "postgres";
+ALTER FUNCTION "public"."complete_order_line_v1"("p_line_id" "uuid", "p_completion_proof_urls" "text"[], "p_reason" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."complete_purchase_order_wac"("p_order_id" "uuid", "p_completed_by" "uuid" DEFAULT NULL::"uuid", "p_proofs" "text"[] DEFAULT NULL::"text"[], "p_channel_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("success" boolean, "message" "text", "details" "jsonb")
@@ -3630,6 +3588,7 @@ ALTER FUNCTION "public"."create_currency_purchase_order_draft"("p_currency_attri
 
 CREATE OR REPLACE FUNCTION "public"."create_currency_sell_order_draft"("p_game_code" "text", "p_server_attribute_code" "text", "p_currency_attribute_id" "uuid", "p_quantity" numeric, "p_character_id" "text", "p_character_name" "text", "p_channel_id" "uuid", "p_party_id" "uuid" DEFAULT NULL::"uuid", "p_deadline_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_exchange_type" "text" DEFAULT 'currency'::"text", "p_exchange_details" "jsonb" DEFAULT '{}'::"jsonb", "p_priority_level" "text" DEFAULT 'normal'::"text", "p_delivery_info" "text" DEFAULT NULL::"text", "p_notes" "text" DEFAULT NULL::"text", "p_sale_amount" numeric DEFAULT NULL::numeric, "p_sale_currency_code" "text" DEFAULT NULL::"text", "p_created_by_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("success" boolean, "order_id" "uuid", "order_number" "text", "message" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_order_id UUID;
@@ -6057,71 +6016,6 @@ $$;
 ALTER FUNCTION "public"."get_all_work_shifts_direct"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_available_employee_for_channel"() RETURNS TABLE("employee_id" "uuid", "channel_id" "uuid", "is_available" boolean)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        e.id as employee_id,
-        e.channel_id,
-        true as is_available
-    FROM employees e
-    WHERE e.is_active = true
-      AND e.is_available = true
-    ORDER BY e.last_assigned_at NULLS FIRST
-    LIMIT 10;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_available_employee_for_channel"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_available_employee_for_channel"("p_channel_type" "text") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-  v_employee_id UUID;
-  v_channel_count INTEGER;
-BEGIN
-  -- First, try to find employees who ONLY handle this specific channel
-  -- This prioritizes specialists over generalists
-  SELECT ec.employee_profile_id INTO v_employee_id
-  FROM employee_channels ec
-  WHERE ec.channel_type = p_channel_type 
-    AND ec.is_active = true
-    AND ec.employee_profile_id NOT IN (
-      SELECT employee_profile_id 
-      FROM employee_channels 
-      WHERE channel_type != p_channel_type AND is_active = true
-    )
-  LIMIT 1;
-  
-  -- If no specialist found, try to find any available employee for this channel
-  IF v_employee_id IS NULL THEN
-    SELECT ec.employee_profile_id INTO v_employee_id
-    FROM employee_channels ec
-    WHERE ec.channel_type = p_channel_type 
-      AND ec.is_active = true
-    ORDER BY (
-      SELECT COUNT(*) 
-      FROM employee_channels ec2 
-      WHERE ec2.employee_profile_id = ec.employee_profile_id AND ec2.is_active = true
-    ) ASC  -- Prefer employees with fewer channels (specialists first)
-    LIMIT 1;
-  END IF;
-  
-  RETURN v_employee_id;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_available_employee_for_channel"("p_channel_type" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."get_available_employee_for_channel"("p_channel_id" "uuid") RETURNS TABLE("employee_id" "uuid", "employee_name" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -6193,6 +6087,7 @@ ALTER FUNCTION "public"."get_available_game_accounts"("p_game_code" "text", "p_s
 
 CREATE OR REPLACE FUNCTION "public"."get_best_inventory_pool_for_sell_order"("p_game_code" "text", "p_server_attribute_code" "text", "p_currency_attribute_id" "uuid", "p_required_quantity" numeric) RETURNS TABLE("success" boolean, "message" "text", "inventory_pool_id" "uuid", "game_account_id" "uuid", "channel_id" "uuid", "channel_name" "text", "account_name" "text", "average_cost" numeric, "cost_currency" "text", "match_reason" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_base_key TEXT;
@@ -7731,29 +7626,6 @@ $$;
 ALTER FUNCTION "public"."get_next_available_stock_trader"("p_shift_id" "uuid", "p_assigned_date" "date") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_next_available_trader"() RETURNS TABLE("trader_id" "uuid", "email" "text", "is_available" boolean)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        e.id as trader_id,
-        p.email,
-        true as is_available
-    FROM employees e
-    JOIN profiles p ON e.profile_id = p.id
-    WHERE e.is_active = true
-      AND e.role = 'trader'
-    ORDER BY e.last_assigned_at NULLS FIRST
-    LIMIT 1;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_next_available_trader"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."get_next_available_trader"("p_channel_type" "text", "p_role_type" "text", "p_shift_id" "uuid", "p_assigned_date" "date" DEFAULT CURRENT_DATE) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -8096,264 +7968,6 @@ $$;
 
 
 ALTER FUNCTION "public"."get_next_pool_round_robin"("p_game_code" "text", "p_currency_attribute_id" "uuid", "p_channel_id" "uuid", "p_server_attribute_code" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_or_create_assignment_tracker"() RETURNS TABLE("tracker_id" "uuid", "employee_id" "uuid", "active_assignments" integer)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        at.id as tracker_id,
-        at.employee_id,
-        COUNT(o.id) as active_assignments
-    FROM assignment_trackers at
-    LEFT JOIN orders o ON at.employee_id = o.assigned_to
-      AND o.status IN ('assigned', 'in_progress')
-    GROUP BY at.id, at.employee_id
-    ORDER BY active_assignments
-    LIMIT 10;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_or_create_assignment_tracker"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_or_create_assignment_tracker"("p_channel_id" "uuid", "p_currency_code" "text", "p_shift_id" "uuid", "p_order_type_filter" "text" DEFAULT 'PURCHASE'::"text") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-    v_group_key TEXT;
-    v_tracker_id UUID;
-    v_available_employees JSON;
-    v_employee_ids JSON;
-BEGIN
-    -- Create composite group key
-    v_group_key := format('%s_%s_%s_%s', p_channel_id, p_currency_code, p_shift_id, p_order_type_filter);
-    
-    -- Try to get existing tracker
-    SELECT id INTO v_tracker_id
-    FROM assignment_trackers 
-    WHERE assignment_group_key = v_group_key;
-    
-    -- If not found, create new tracker
-    IF v_tracker_id IS NULL THEN
-        -- Get all available employees for this combination with order type filtering
-        WITH available_employees AS (
-            SELECT 
-                sa.employee_profile_id, 
-                p.display_name as employee_name,
-                sa.game_account_id,
-                ga.account_name
-            FROM shift_assignments sa
-            JOIN profiles p ON sa.employee_profile_id = p.id
-            JOIN game_accounts ga ON sa.game_account_id = ga.id
-            WHERE sa.channels_id = p_channel_id
-              AND sa.currency_code = p_currency_code
-              AND sa.shift_id = p_shift_id
-              AND sa.is_active = true
-              AND p.status = 'active'
-              AND ga.is_active = true
-            ORDER BY p.display_name
-        )
-        SELECT json_agg(json_build_object(
-            'employee_id', employee_profile_id, 
-            'employee_name', employee_name,
-            'game_account_id', game_account_id,
-            'account_name', account_name,
-            'joined_at', NOW()
-        ))
-        INTO v_available_employees
-        FROM available_employees;
-        
-        -- Extract employee IDs as JSON array for rotation order
-        IF v_available_employees IS NOT NULL THEN
-            SELECT json_agg((elem->>'employee_id')::text)
-            INTO v_employee_ids
-            FROM json_array_elements(v_available_employees) elem;
-        END IF;
-        
-        -- Create new tracker with enhanced metadata
-        INSERT INTO assignment_trackers (
-            assignment_type,
-            assignment_group_key,
-            last_assigned_employee_id,
-            employee_rotation_order,
-            current_rotation_index,
-            available_count,
-            order_type_filter,
-            business_domain,
-            priority_ordering,
-            max_consecutive_assignments,
-            reset_frequency_hours,
-            last_reset_at,
-            description,
-            created_at
-        ) VALUES (
-            'round_robin_employee_rotation',
-            v_group_key,
-            COALESCE((SELECT (elem->>'employee_id')::uuid 
-                     FROM json_array_elements(v_available_employees) elem 
-                     LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid),
-            COALESCE(v_employee_ids, '[]'::json),
-            0,
-            COALESCE(json_array_length(v_available_employees), 0),
-            p_order_type_filter,
-            'CURRENCY_TRADING',
-            'ALPHABETICAL',
-            10,
-            24,
-            NOW(),
-            format('Round-robin rotation for %s orders - %s channel, Currency: %s, Shift: %s', 
-                   p_order_type_filter,
-                   (SELECT code FROM channels WHERE id = p_channel_id),
-                   p_currency_code,
-                   (SELECT name FROM work_shifts WHERE id = p_shift_id)),
-            NOW()
-        )
-        RETURNING id INTO v_tracker_id;
-    END IF;
-    
-    RETURN v_tracker_id;
-EXCEPTION WHEN OTHERS THEN
-    RAISE EXCEPTION 'Error in get_or_create_assignment_tracker: %', SQLERRM;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_or_create_assignment_tracker"("p_channel_id" "uuid", "p_currency_code" "text", "p_shift_id" "uuid", "p_order_type_filter" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_or_create_assignment_tracker"("p_channel_id" "uuid", "p_currency_code" "text", "p_shift_id" "uuid", "p_order_type_filter" "text" DEFAULT 'PURCHASE'::"text", "p_game_code" "text" DEFAULT NULL::"text", "p_server_attribute_code" "text" DEFAULT NULL::"text") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-    v_group_key TEXT;
-    v_tracker_id UUID;
-    v_available_employees JSON;
-    v_employee_ids JSON;
-BEGIN
-    -- Create composite group key with proper delimiter (|) to avoid _ conflicts
-    -- Format: channel_id|currency_code|game_code|server_code|shift_id|order_type_filter
-    v_group_key := format('%s|%s|%s|%s|%s|%s', 
-        p_channel_id, 
-        p_currency_code, 
-        COALESCE(p_game_code, 'ANY_GAME'), 
-        COALESCE(p_server_attribute_code, 'ANY_SERVER'), 
-        p_shift_id, 
-        p_order_type_filter
-    );
-    
-    -- Try to get existing tracker
-    SELECT id INTO v_tracker_id
-    FROM assignment_trackers 
-    WHERE assignment_group_key = v_group_key;
-    
-    -- If not found, create new tracker
-    IF v_tracker_id IS NULL THEN
-        -- Get all available employees for this specific combination
-        -- IMPORTANT: Include both global accounts (server_code = NULL) and specific accounts
-        WITH available_employees AS (
-            SELECT 
-                sa.employee_profile_id, 
-                p.display_name as employee_name,
-                sa.game_account_id,
-                ga.account_name,
-                ga.server_attribute_code
-            FROM shift_assignments sa
-            JOIN profiles p ON sa.employee_profile_id = p.id
-            JOIN game_accounts ga ON sa.game_account_id = ga.id
-            WHERE sa.channels_id = p_channel_id
-              AND sa.currency_code = p_currency_code
-              AND sa.shift_id = p_shift_id
-              AND sa.is_active = true
-              AND p.status = 'active'
-              AND ga.is_active = true
-              -- Filter by game_code if specified
-              AND (p_game_code IS NULL OR ga.game_code = p_game_code)
-              -- CRITICAL: Include both global accounts (NULL) AND specific accounts matching the server
-              AND (p_server_attribute_code IS NULL 
-                   OR ga.server_attribute_code IS NULL 
-                   OR ga.server_attribute_code = p_server_attribute_code)
-            ORDER BY p.display_name, 
-                     -- Order global accounts first, then specific server accounts
-                     CASE WHEN ga.server_attribute_code IS NULL THEN 0 ELSE 1 END,
-                     ga.account_name
-        )
-        SELECT json_agg(json_build_object(
-            'employee_id', employee_profile_id, 
-            'employee_name', employee_name,
-            'game_account_id', game_account_id,
-            'account_name', account_name,
-            'server_code', server_attribute_code,
-            'is_global', CASE WHEN server_attribute_code IS NULL THEN true ELSE false END,
-            'joined_at', NOW()
-        ))
-        INTO v_available_employees
-        FROM available_employees;
-        
-        -- Extract employee IDs as JSON array for rotation order
-        IF v_available_employees IS NOT NULL THEN
-            SELECT json_agg((elem->>'employee_id')::text)
-            INTO v_employee_ids
-            FROM json_array_elements(v_available_employees) elem;
-        END IF;
-        
-        -- Create new tracker with enhanced metadata
-        INSERT INTO assignment_trackers (
-            assignment_type,
-            assignment_group_key,
-            last_assigned_employee_id,
-            employee_rotation_order,
-            current_rotation_index,
-            available_count,
-            order_type_filter,
-            business_domain,
-            priority_ordering,
-            max_consecutive_assignments,
-            reset_frequency_hours,
-            last_reset_at,
-            description,
-            created_at
-        ) VALUES (
-            'round_robin_employee_rotation',
-            v_group_key,
-            COALESCE((SELECT (elem->>'employee_id')::uuid 
-                     FROM json_array_elements(v_available_employees) elem 
-                     LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid),
-            COALESCE(v_employee_ids, '[]'::json),
-            0,
-            COALESCE(json_array_length(v_available_employees), 0),
-            p_order_type_filter,
-            'CURRENCY_TRADING',
-            'GLOBAL_FIRST', -- Global accounts prioritized
-            10,
-            24,
-            NOW(),
-            format('Round-robin rotation for %s orders - %s channel, Currency: %s, Game: %s, Server: %s (Includes global accounts), Shift: %s', 
-                   p_order_type_filter,
-                   (SELECT code FROM channels WHERE id = p_channel_id),
-                   p_currency_code,
-                   COALESCE(p_game_code, 'ANY_GAME'),
-                   COALESCE(p_server_attribute_code, 'ANY_SERVER'),
-                   (SELECT name FROM work_shifts WHERE id = p_shift_id)),
-            NOW()
-        )
-        RETURNING id INTO v_tracker_id;
-    END IF;
-    
-    RETURN v_tracker_id;
-EXCEPTION WHEN OTHERS THEN
-    RAISE EXCEPTION 'Error in get_or_create_assignment_tracker: %', SQLERRM;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_or_create_assignment_tracker"("p_channel_id" "uuid", "p_currency_code" "text", "p_shift_id" "uuid", "p_order_type_filter" "text", "p_game_code" "text", "p_server_attribute_code" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_party_by_name_type"("p_name" "text", "p_type" "text") RETURNS TABLE("party_id" "uuid", "name" "text", "type" "text", "contact_info" "jsonb", "notes" "text", "channel_id" "uuid", "game_code" "text")
@@ -9435,52 +9049,6 @@ $$;
 ALTER FUNCTION "public"."migrate_to_account_first_rotation"("p_game_code" "text", "p_currency_attribute_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."process_delivery_confirmation_v2"("p_order_id" "uuid", "p_delivery_proof_url" "text") RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-DECLARE
-    order_exists boolean;
-    is_seller boolean := false;
-    proof_count integer;
-BEGIN
-    -- Check if order exists and belongs to user
-    SELECT EXISTS(
-        SELECT 1 FROM orders 
-        WHERE id = p_order_id 
-          AND status = 'assigned'
-          AND seller_id = get_current_profile_id()
-    ) INTO order_exists;
-    
-    IF NOT order_exists THEN
-        RETURN false;
-    END IF;
-    
-    -- Create delivery proof
-    INSERT INTO proof_files (order_id, stage, proof_url, proof_type)
-    VALUES (p_order_id, 'delivery', p_delivery_proof_url, 'delivery_confirmation');
-    
-    -- Update order status
-    UPDATE orders 
-    SET status = 'delivered', 
-        delivered_at = NOW()
-    WHERE id = p_order_id;
-    
-    -- Release inventory pool
-    UPDATE inventory_pools 
-    SET is_reserved = false,
-        reserved_for_order = NULL,
-        updated_at = NOW()
-    WHERE reserved_for_order = p_order_id;
-    
-    RETURN true;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."process_delivery_confirmation_v2"("p_order_id" "uuid", "p_delivery_proof_url" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."process_delivery_confirmation_v2"("p_order_id" "uuid", "p_user_id" "uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -10221,7 +9789,7 @@ COMMENT ON FUNCTION "public"."start_currency_order_v1"("p_order_id" "uuid", "p_s
 
 
 
-CREATE OR REPLACE FUNCTION "public"."start_work_session_v1"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_start_state" "jsonb", "p_initial_note" "text" DEFAULT NULL::"text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -10248,11 +9816,11 @@ BEGIN
 
     -- <<< THÊM CÁC KIỂM TRA MỚI Ở ĐÂY >>>
     -- 1. Kiểm tra xem có phiên làm việc khác đang chạy không
-    PERFORM 1 FROM work_sessions WHERE order_line_id = p_order_line_id AND ended_at IS NULL;
+    PERFORM 1 FROM public.work_sessions WHERE order_line_id = p_order_line_id AND ended_at IS NULL;
     IF FOUND THEN
         RAISE EXCEPTION 'Đơn hàng này đã có một phiên làm việc đang hoạt động.';
     END IF;
-    
+
     -- 2. Kiểm tra xem khách hàng có đang chơi không
     IF v_current_status = 'customer_playing' THEN
         RAISE EXCEPTION 'Không thể bắt đầu phiên làm việc khi khách đang chơi.';
@@ -10268,17 +9836,17 @@ BEGIN
     END IF;
 
     IF v_current_status IN ('new', 'pending_pilot', 'paused_selfplay') THEN
-        UPDATE orders SET status = 'in_progress' WHERE id = v_order_id;
+        UPDATE public.orders SET status = 'in_progress' WHERE id = v_order_id;
     END IF;
 
-    INSERT INTO work_sessions (order_line_id, farmer_id, notes, start_state, unpaused_duration)
-    VALUES (p_order_line_id, get_current_profile_id(), p_initial_note, p_start_state, v_paused_duration)
+    INSERT INTO public.work_sessions (order_line_id, farmer_id, notes, start_state, unpaused_duration)
+    VALUES (p_order_line_id, public.get_current_profile_id(), p_initial_note, p_start_state, v_paused_duration)
     RETURNING id INTO new_session_id;
 
     IF v_service_type IN ('Service - Pilot', 'Pilot') AND
        v_current_status NOT IN ('completed', 'cancelled', 'delivered', 'pending_completion') THEN
         UPDATE order_lines SET paused_at = NULL WHERE id = p_order_line_id;
-        PERFORM update_pilot_cycle_warning(p_order_line_id);
+        PERFORM public.update_pilot_cycle_warning(p_order_line_id);
     END IF;
 
     RETURN new_session_id;
@@ -10286,7 +9854,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."start_work_session_v1"() OWNER TO "postgres";
+ALTER FUNCTION "public"."start_work_session_v1"("p_order_line_id" "uuid", "p_start_state" "jsonb", "p_initial_note" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."submit_and_assign_sell_order"() RETURNS "text"
@@ -10399,19 +9967,6 @@ END;$$;
 
 
 ALTER FUNCTION "public"."submit_order_review_v1"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."submit_sell_order_with_assignment"() RETURNS TABLE("order_id" "uuid", "assignment_success" boolean)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-BEGIN
-    RETURN QUERY SELECT gen_random_uuid() as order_id, true as assignment_success LIMIT 1;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."submit_sell_order_with_assignment"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."submit_sell_order_with_assignment"("p_order_id" "uuid", "p_proof_urls" "jsonb" DEFAULT '[]'::"jsonb") RETURNS TABLE("success" boolean, "message" "text", "order_id" "uuid", "assigned_employee_id" "uuid", "assigned_employee_name" "text", "assigned_channel_id" "uuid", "assigned_channel_name" "text")
@@ -11595,7 +11150,7 @@ $$;
 ALTER FUNCTION "public"."update_order_details_v1"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."update_order_line_machine_info_v1"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."update_order_line_machine_info_v1"("p_line_id" "uuid", "p_machine_info" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -11603,14 +11158,14 @@ BEGIN
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION 'Authentication required.';
     END IF;
-    UPDATE order_lines
+    UPDATE public.order_lines
     SET machine_info = p_machine_info
     WHERE id = p_line_id;
 END;
 $$;
 
 
-ALTER FUNCTION "public"."update_order_line_machine_info_v1"() OWNER TO "postgres";
+ALTER FUNCTION "public"."update_order_line_machine_info_v1"("p_line_id" "uuid", "p_machine_info" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_parties_updated_at"() RETURNS "trigger"
@@ -15594,21 +15149,9 @@ GRANT ALL ON FUNCTION "public"."cancel_sell_order_with_inventory_rollback"("p_or
 
 
 
-GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"() TO "anon";
-GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"() TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."cancel_work_session_v1"("p_session_id" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."check_and_reset_pilot_cycle"() TO "anon";
-GRANT ALL ON FUNCTION "public"."check_and_reset_pilot_cycle"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."check_and_reset_pilot_cycle"() TO "service_role";
 
 
 
@@ -16656,9 +16199,9 @@ GRANT ALL ON FUNCTION "public"."update_order_details_v1"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"() TO "anon";
-GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"("p_line_id" "uuid", "p_machine_info" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"("p_line_id" "uuid", "p_machine_info" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_order_line_machine_info_v1"("p_line_id" "uuid", "p_machine_info" "text") TO "service_role";
 
 
 
