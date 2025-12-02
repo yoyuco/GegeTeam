@@ -22,7 +22,22 @@ describe('Auth Store', () => {
 
     // Mock getSession response
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { user: { id: '123', email: 'test@example.com' } } },
+      data: {
+        session: {
+          access_token: 'mock-access-token',
+          refresh_token: 'mock-refresh-token',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: {
+            id: '123',
+            email: 'test@example.com',
+            app_metadata: {},
+            user_metadata: {},
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+          },
+        },
+      },
       error: null,
     })
 
@@ -33,19 +48,23 @@ describe('Auth Store', () => {
         permissions: [],
       },
       error: null,
+      count: null,
+      status: 200,
+      statusText: 'OK',
     })
 
     // Mock profiles query
-    vi.mocked(supabase.from).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { id: '123', display_name: 'Test User', status: 'active' },
-            error: null,
-          }),
-        }),
+    const mockQueryBuilder = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: '123', display_name: 'Test User', status: 'active' },
+        error: null,
       }),
-    } as unknown as ReturnType<typeof vi.mocked<typeof supabase.from>>)
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(supabase.from).mockReturnValue(mockQueryBuilder as any)
 
     // Mock onAuthStateChange
     const mockOnAuthStateChange = vi
@@ -108,11 +127,25 @@ describe('Auth Store', () => {
     const auth = useAuth()
 
     // Set some initial state
-    auth.user = { id: '123', email: 'test@example.com' } as { id: string; email: string }
+    auth.user = {
+      id: '123',
+      email: 'test@example.com',
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+    }
     auth.profile = { id: '123', display_name: 'Test User', status: 'active' }
     auth.userPermissions.add('orders:view_all@*@*')
     auth.assignments = [
-      { role_code: 'admin', role_name: 'Admin' } as { role_code: string; role_name: string },
+      {
+        role_code: 'admin',
+        role_name: 'Admin',
+        game_code: null,
+        game_name: null,
+        business_area_code: null,
+        business_area_name: null,
+      },
     ]
 
     await auth.signOut()

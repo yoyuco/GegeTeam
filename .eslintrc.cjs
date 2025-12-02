@@ -4,6 +4,10 @@ module.exports = {
     browser: true,
     es2021: true,
     node: true,
+    deno: true, // Add Deno environment
+  },
+  globals: {
+    Deno: 'readonly', // Define Deno as global for Supabase functions
   },
   extends: [
     'plugin:vue/vue3-recommended',
@@ -23,5 +27,11 @@ module.exports = {
     'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
     'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
     'vue/multi-word-component-names': 'off',
+    'no-undef': 'error', // Re-enable no-undef with Deno global defined
   },
+  ignorePatterns: [
+    'dist/**',
+    'node_modules/**',
+    // 'supabase/functions/**', // Removed to enable ESLint for Supabase functions
+  ],
 }

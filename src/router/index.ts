@@ -27,22 +27,31 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/employees',
-    component: () => import('@/pages/Employees.vue'),
+    path: '/manager',
+    name: 'manager',
+    component: () => import('@/pages/Manager.vue'),
     meta: { requiresAuth: true },
   },
-  {
-    path: '/role-management',
-    name: 'role-management',
-    component: () => import('../pages/RoleManagement.vue'),
-    meta: { requiresAuth: true },
-  },
+  // /employees route removed - Employees.vue file does not exist
+  // /role-management route removed - old role management replaced by Manager.vue tabs
   {
     path: '/systemops',
     component: () => import('@/pages/SystemOps.vue'),
     meta: { requiresAuth: true },
   },
-  { path: '/:pathMatch(.*)*', redirect: '/' },
+  {
+    path: '/currency/create-orders',
+    name: 'currency-create-orders',
+    component: () => import('@/pages/CurrencyCreateOrders.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/currency/ops',
+    name: 'currency-ops',
+    component: () => import('@/pages/CurrencyOps.vue'),
+    meta: { requiresAuth: true },
+  },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
