@@ -8,4 +8,13 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
+  // Suppress Vite console logs
+  server: {
+    hmr: {
+      overlay: false
+    }
+  },
+  // Disable console logs for HMR updates
+  clearScreen: false,
+  logLevel: 'error' // Only show errors, suppress info and warnings
 })

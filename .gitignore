@@ -18,6 +18,18 @@ dist-ssr
 .idea
 .DS_Store
 *.suo
+
+# Scripts - Temporary files
+scripts/temp/*.js
+scripts/temp/*.*
+temp-scripts/
+debug-scripts/
+*.test.js
+*.debug.js
+
+# Scripts - Keep directories but ignore temporary content
+scripts/temp/*
+!scripts/temp/.gitkeep
 *.ntvs*
 *.njsproj
 *.sln
@@ -52,3 +64,39 @@ data_insert.sql.claude/settings.local.json
 
 # Claude Code temp files
 .claude/
+
+# Error Management System logs and temp files
+/.error-management/
+/.error-management/logs/
+/.error-management/reports/
+/.error-management/temp/
+/eslint-errors*.json
+/typescript-errors*.json
+/combined-errors.log
+
+# MCP configuration and temp files
+/.serena/
+/WebGegeTeamtoolsmcp-vue-tools/
+tools/mcp-vue-tools/
+
+# MCP discovery and configuration files
+complete-mcp-discovery.json
+context7.json
+mcp-tools-discovery.json
+mcp-system-config.json
+mcp-tools-specifications.json
+
+# Web Reader MCP Server
+mcp-web-reader/
+
+# Console Logger MCP Server
+mcp-console-logger/
+!/mcp-console-logger/package.json
+
+# Backup folders and archived files
+backup/
+production_full_backup.sql
+supabase/migrations_archive/
+
+# Staging schema exports
+staging-schema-export/

@@ -141,6 +141,7 @@
 ### Read Policies
 
 Most tables allow authenticated read:
+
 - ✅ `orders`, `order_lines`, `order_service_items`
 - ✅ `products`, `product_variants`, `attributes`
 - ✅ `channels`, `currencies`, `parties`
@@ -150,6 +151,7 @@ Most tables allow authenticated read:
 ### Write Protection
 
 Most reference/operational tables **block direct writes**:
+
 - ❌ Block inserts: `orders`, `products`, `channels`, etc.
 - ❌ Block updates: Same tables
 - ❌ Block deletes: Same tables
@@ -166,6 +168,7 @@ Most reference/operational tables **block direct writes**:
 ## 🎯 Key Workflows
 
 ### 1. Create Order
+
 ```sql
 SELECT create_service_order_v1(
   p_channel_code := 'DISCORD',
@@ -184,6 +187,7 @@ SELECT create_service_order_v1(
 ```
 
 ### 2. Start Work Session
+
 ```sql
 SELECT start_work_session_v1(
   p_order_line_id := '...',
@@ -193,6 +197,7 @@ SELECT start_work_session_v1(
 ```
 
 ### 3. Finish Work Session
+
 ```sql
 CALL finish_work_session_idem_v1(
   p_session_id := '...',
@@ -206,12 +211,14 @@ CALL finish_work_session_idem_v1(
 ```
 
 ### 4. Get User Context
+
 ```sql
 SELECT get_user_auth_context_v1();
 -- Returns: {"roles": [...], "permissions": [...]}
 ```
 
 ### 5. Check Permission
+
 ```sql
 SELECT has_permission(
   'orders:create',
@@ -261,4 +268,4 @@ When adding new features:
 
 ---
 
-*Last updated: 2025-10-02*
+_Last updated: 2025-10-02_

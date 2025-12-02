@@ -11,7 +11,17 @@ import vitest from '@vitest/eslint-plugin'
 export default [
   // Ignore patterns
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'supabase/functions/**',
+      'backup/**',
+      'tools/**',
+      'staging-schema-export/**',
+      '*.sql',
+      '*.md',
+      '!.github/workflows/*.yml',
+    ],
   },
 
   // Base config for all files
