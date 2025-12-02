@@ -8932,7 +8932,7 @@ $$;
 ALTER FUNCTION "public"."manually_assign_order"("p_order_id" "uuid", "p_force_reassign" boolean) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."mark_order_as_delivered_v1"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."mark_order_as_delivered_v1"("p_order_id" "uuid", "p_is_delivered" boolean) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -8940,11 +8940,11 @@ DECLARE
   v_context jsonb; -- <<< BIẾN MỚI ĐỂ LƯU NGỮ CẢNH
 BEGIN
   -- 1. Lấy ngữ cảnh của đơn hàng đang được cập nhật
-  SELECT 
+  SELECT
     jsonb_build_object('game_code', o.game_code, 'business_area_code', 'SERVICE')
-  INTO 
+  INTO
     v_context
-  FROM orders o
+  FROM public.orders o
   WHERE o.id = p_order_id;
 
   -- 2. Kiểm tra quyền hạn VỚI NGỮ CẢNH ĐẦY ĐỦ
@@ -8952,18 +8952,18 @@ BEGIN
     RAISE EXCEPTION 'Authorization failed. You do not have permission to edit this order.';
   END IF;
 
-  -- 3. Cập nhật trạng thái (logic cũ giữ nguyên)
-  UPDATE orders
-  SET delivered_at = CASE 
-                      WHEN p_is_delivered THEN NOW() 
-                      ELSE NULL 
+  -- 3. Cập nhật trạng thái - dùng delivered_at thay vì is_delivered
+  UPDATE public.orders
+  SET delivered_at = CASE
+                      WHEN p_is_delivered THEN NOW()
+                      ELSE NULL
                     END
   WHERE id = p_order_id;
 END;
 $$;
 
 
-ALTER FUNCTION "public"."mark_order_as_delivered_v1"() OWNER TO "postgres";
+ALTER FUNCTION "public"."mark_order_as_delivered_v1"("p_order_id" "uuid", "p_is_delivered" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."migrate_parties_contact_info"() RETURNS TABLE("party_id" "uuid", "party_name" "text", "party_type" "text", "old_contact_info" "jsonb", "new_contact_info" "jsonb", "migration_status" "text")
@@ -15935,9 +15935,9 @@ GRANT ALL ON FUNCTION "public"."manually_assign_order"("p_order_id" "uuid", "p_f
 
 
 
-GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"() TO "anon";
-GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"("p_order_id" "uuid", "p_is_delivered" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"("p_order_id" "uuid", "p_is_delivered" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."mark_order_as_delivered_v1"("p_order_id" "uuid", "p_is_delivered" boolean) TO "service_role";
 
 
 
