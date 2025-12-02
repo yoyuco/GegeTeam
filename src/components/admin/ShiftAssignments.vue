@@ -233,6 +233,25 @@ import {
 import { supabase } from '@/lib/supabase'
 import type { DataTableColumns, FormRules } from 'naive-ui'
 import FilterPanel from './FilterPanel.vue'
+import { TIMEZONE_OFFSET } from '@/utils/timezoneHelper'
+
+// Helper function for consistent GMT+7 time display
+const ensureGMT7Display = (timeString: string) => {
+  if (!timeString) return ''
+
+  // Create a date object with the time, treating it as GMT+7
+  const [hours, minutes] = timeString.split(':').map(Number)
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+
+  // Format with explicit GMT+7 timezone
+  return date.toLocaleTimeString('vi-VN', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+}
 
 // Props
 const props = defineProps<{
@@ -493,12 +512,12 @@ async function loadShifts() {
 
       if (fallbackError) throw fallbackError
       shiftOptions.value = (fallbackData || []).map((shift: any) => ({
-        label: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+        label: `${shift.name} (${ensureGMT7Display(shift.start_time)} - ${ensureGMT7Display(shift.end_time)})`,
         value: shift.id
       }))
     } else {
       shiftOptions.value = (data || []).map((shift: any) => ({
-        label: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+        label: `${shift.name} (${ensureGMT7Display(shift.start_time)} - ${ensureGMT7Display(shift.end_time)})`,
         value: shift.id
       }))
     }
@@ -625,7 +644,7 @@ async function loadAssignments() {
           employee_profile_id: item.employee_profile_id,
           employee_name: profileMap.get(item.employee_profile_id) || 'Unknown',
           shift_id: item.shift_id,
-          shift_name: workShift ? `${workShift.name} (${workShift.start_time} - ${workShift.end_time})` : 'Unknown',
+          shift_name: workShift ? `${workShift.name} (${ensureGMT7Display(workShift.start_time)} - ${ensureGMT7Display(workShift.end_time)})` : 'Unknown',
           channels_id: item.channels_id,
           channel_name: channelMap.get(item.channels_id) || 'Unknown',
           currency_code: item.currency_code || 'VND',
@@ -645,7 +664,7 @@ async function loadAssignments() {
         employee_profile_id: item.employee_profile_id,
         employee_name: item.employee_name,
         shift_id: item.shift_id,
-        shift_name: `${item.shift_name} (${item.shift_start_time} - ${item.shift_end_time})`,
+        shift_name: `${item.shift_name} (${ensureGMT7Display(item.shift_start_time)} - ${ensureGMT7Display(item.shift_end_time)})`,
         channels_id: item.channels_id,
         channel_name: item.channel_name,
         currency_code: item.currency_code,

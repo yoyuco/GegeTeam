@@ -64,30 +64,10 @@ Tài liệu này mô tả **cách làm việc chuẩn** cho repo, nhằm tránh 
 - Thư mục chuẩn:
   ```
   supabase/
-    migrations/            # chỉ giữ baseline/consolidate mới nhất (file .sql gần nhất)
-    migrations_archive/    # toàn bộ migrations cũ
+    migrations/            # chỉ giữ các migration files đang hoạt động
   ```
-- **Luôn dùng `git mv`** khi di chuyển file để Git nhận rename (tránh “hồi sinh” file cũ sau merge).
-- Không đặt `__init__.py` trong `migrations_archive/`.
+- **Luôn dùng `git mv`** khi di chuyển file để Git nhận rename (tránh "hồi sinh" file cũ sau merge).
 - Tool chỉ nên quét `supabase/migrations/`.
-
-### 4.1 Di chuyển nhanh (PowerShell)
-
-```powershell
-# sửa tên file baseline cần giữ lại (ví dụ: 20251004011427_remote_schema.sql)
-$keep = @("supabase/migrations/20251004011427_remote_schema.sql")
-
-$files = git ls-files supabase/migrations
-foreach ($f in $files) {
-  if ($keep -contains $f) { continue }
-  $leaf = Split-Path $f -Leaf
-  $dest = "supabase/migrations_archive/$leaf"
-  if (Test-Path $dest) { git rm --quiet $f } else { git mv $f $dest }
-}
-git commit -m "chore: move legacy supabase migrations to migrations_archive; keep latest baseline"
-```
-
-_(bash tương đương có thể bổ sung khi cần)._
 
 ---
 

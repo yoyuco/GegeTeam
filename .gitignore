@@ -94,9 +94,7 @@ mcp-console-logger/
 !/mcp-console-logger/package.json
 
 # Backup folders and archived files
-backup/
 production_full_backup.sql
-supabase/migrations_archive/
 
 # Staging schema exports
 staging-schema-export/
