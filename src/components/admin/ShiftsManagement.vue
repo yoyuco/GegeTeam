@@ -231,7 +231,7 @@
           <div v-if="deletingShift" class="shift-details">
             <div class="detail-item">
               <span class="label">Thời gian:</span>
-              <span class="value">{{ deletingShift.start_time }} - {{ deletingShift.end_time }}</span>
+              <span class="value">{{ ensureGMT7Display(deletingShift.start_time) }} - {{ ensureGMT7Display(deletingShift.end_time) }}</span>
             </div>
             <div class="detail-item">
               <span class="label">Trạng thái:</span>
@@ -295,6 +295,7 @@ import {
 } from '@vicons/ionicons5'
 import { supabase } from '@/lib/supabase'
 import { getShiftDurationDescription } from '@/utils/shiftUtils'
+import { TIMEZONE_OFFSET } from '@/utils/timezoneHelper'
 import type { FormInst, FormRules } from 'naive-ui'
 
 // Props
@@ -449,7 +450,7 @@ const columns = [
     title: 'Thời gian',
     key: 'time_range',
     render: (row: WorkShift) => h('div', { class: 'text-sm' }, [
-      h('div', `${formatTime(row.start_time)} - ${formatTime(row.end_time)}`),
+      h('div', `${ensureGMT7Display(row.start_time)} - ${ensureGMT7Display(row.end_time)}`),
       h('div', { class: 'text-gray-500' }, calculateDuration(row.start_time, row.end_time))
     ])
   },
@@ -517,7 +518,29 @@ const getTimeZone = () => {
 }
 
 const formatTime = (time: string) => {
-  return time.substring(0, 5) // Extract HH:mm from HH:mm:ss
+  // Extract HH:mm from HH:mm:ss format (database time is already in GMT+7)
+  // This ensures consistent display regardless of user's browser timezone
+  return time.substring(0, 5)
+}
+
+/**
+ * Ensure consistent GMT+7 timezone display for time strings
+ * This function guarantees that times are always interpreted as GMT+7
+ * regardless of the user's browser timezone
+ */
+const ensureGMT7Display = (timeString: string) => {
+  // Create a date object with the time, treating it as GMT+7
+  const [hours, minutes] = timeString.split(':').map(Number)
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+
+  // Format with explicit GMT+7 timezone
+  return date.toLocaleTimeString('vi-VN', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
 }
 
 const calculateDuration = (startTime: string, endTime: string) => {
@@ -531,6 +554,8 @@ const loadShifts = async () => {
   try {
     // Try RPC function first to bypass RLS issues
     const { data, error } = await supabase.rpc('get_all_work_shifts_direct')
+
+    // Process the data
 
     if (error) {
       // Fallback to direct query
@@ -573,15 +598,10 @@ const openEditModal = (shift: WorkShift) => {
   const [startHours, startMinutes] = shift.start_time.split(':').map(Number)
   const [endHours, endMinutes] = shift.end_time.split(':').map(Number)
 
-  // Create date objects with GMT+7 timezone
-  const gmt7Date = new Date()
-  const gmt7Offset = 7 * 60 * 60 * 1000 // 7 hours in milliseconds
-
-  const startDate = new Date(gmt7Date.getTime())
-  startDate.setHours(startHours, startMinutes, 0, 0)
-
-  const endDate = new Date(gmt7Date.getTime())
-  endDate.setHours(endHours, endMinutes, 0, 0)
+  // Create date objects with explicit GMT+7 timezone
+  const today = new Date()
+  const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHours, startMinutes, 0, 0)
+  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHours, endMinutes, 0, 0)
 
   formData.value = {
     name: shift.name,
@@ -616,22 +636,32 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    // Convert milliseconds to GMT+7 time strings
+    // Convert milliseconds to time strings for database (24-hour format HH:mm:ss)
     let startTime = ''
     let endTime = ''
 
     if (formData.value.start_time) {
+      // Extract time directly since time-picker with Asia/Bangkok timezone handles it correctly
       const startDate = new Date(formData.value.start_time)
-      // GMT+7 = UTC + 7 hours
-      const gmt7StartTime = new Date(startDate.getTime() + (7 * 60 * 60 * 1000))
-      startTime = gmt7StartTime.toTimeString().substring(0, 8)
+      startTime = startDate.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
     }
 
     if (formData.value.end_time) {
+      // Same approach for end time
       const endDate = new Date(formData.value.end_time)
-      // GMT+7 = UTC + 7 hours
-      const gmt7EndTime = new Date(endDate.getTime() + (7 * 60 * 60 * 1000))
-      endTime = gmt7EndTime.toTimeString().substring(0, 8)
+      endTime = endDate.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
     }
 
     const shiftData = {
