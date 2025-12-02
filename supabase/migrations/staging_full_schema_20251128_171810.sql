@@ -1345,7 +1345,7 @@ CREATE OR REPLACE FUNCTION "public"."call_fetch_exchange_rates_edge_function"() 
     AS $$
 DECLARE
   edge_function_url text := 'https://nxlrnwijsxqalcxyavkj.supabase.co/functions/v1/fetch-exchange-rates';
-  service_role_key text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bHJud2lqc3hxYWxjeGF2a2oiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzM3NTQ2NDE1LCJleHAiOjIwNTMxMjI0MTV9.S2sEaQRGZqTyJ93XZkIXN1tP_8N2Ww1h7G2XNLJXg-c';
+  service_role_key text := 'COMPROMISED_KEY_REMOVED_ROTATE_REQUIRED';
   request_id bigint;
 BEGIN
   -- Call the edge function using pg_net with service role key
@@ -9579,7 +9579,7 @@ CREATE OR REPLACE FUNCTION "public"."simple_exchange_rate_cron"() RETURNS "void"
     AS $$
 DECLARE
     v_edge_function_url TEXT := 'https://nxlrnwijsxqalcxyavkj.supabase.co/functions/v1/fetch-exchange-rates';
-    v_service_role_key TEXT := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bHJud2lqc3hxYWxjeHlhdmtqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDI3Mzc3MiwiZXhwIjoyMDc1ODQ5NzcyfQ.UKUYbw3TOQ1gjq1H5e9N8yRQWEIo7Uuru4UdqhymGuU';
+    v_service_role_key TEXT := 'COMPROMISED_KEY_REMOVED_ROTATE_REQUIRED';
     v_request_id BIGINT;
     v_response TEXT;
     v_status_code INTEGER;
@@ -10415,8 +10415,8 @@ BEGIN
     PERFORM net.http_get(
         'https://nxlrnwijsxqalcxyavkj.supabase.co/functions/v1/fetch-exchange-rates',
         jsonb_build_object(
-            'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bHJud2lqc3hxYWxjeGF2a2oiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzM3NTQ2NDE1LCJleHAiOjIwNTMxMjI0MTV9.S2sEaQRGZqTyJ93XZkIXN1tP_8N2Ww1h7G2XNLJXg-c',
-            'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bHJud2lqc3hxYWxjeGF2a2oiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzM3NTQ2NDE1LCJleHAiOjIwNTMxMjI0MTV9.S2sEaQRGZqTyJ93XZkIXN1tP_8N2Ww1h7G2XNLJXg-c'
+            'Authorization', 'Bearer COMPROMISED_KEY_REMOVED_ROTATE_REQUIRED',
+            'apikey', 'COMPROMISED_KEY_REMOVED_ROTATE_REQUIRED'
         )
     );
     
