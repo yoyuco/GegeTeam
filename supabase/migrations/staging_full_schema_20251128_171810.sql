@@ -1366,7 +1366,7 @@ $$;
 ALTER FUNCTION "public"."call_fetch_exchange_rates_edge_function"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."cancel_order_line_v1"() RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."cancel_order_line_v1"("p_line_id" "uuid", "p_cancellation_proof_urls" "text"[], "p_reason" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1384,8 +1384,8 @@ BEGIN
     target_order_id,
     v_current_status,
     v_context
-  FROM order_lines ol
-  JOIN orders o ON ol.order_id = o.id
+  FROM public.order_lines ol
+  JOIN public.orders o ON ol.order_id = o.id
   WHERE ol.id = p_line_id;
 
   IF target_order_id IS NULL THEN
@@ -1399,19 +1399,19 @@ BEGIN
 
   -- Bước 3: Dừng deadline nếu đang in_progress
   IF v_current_status = 'in_progress' THEN
-    UPDATE order_lines
+    UPDATE public.order_lines
     SET paused_at = NOW()
     WHERE id = p_line_id;
   END IF;
 
   -- Bước 4: Cập nhật trạng thái và lưu bằng chứng
-  UPDATE orders
+  UPDATE public.orders
   SET
     status = 'cancelled',
     notes = p_reason
   WHERE id = target_order_id;
 
-  UPDATE order_lines
+  UPDATE public.order_lines
   SET
     action_proof_urls = p_cancellation_proof_urls
   WHERE id = p_line_id;
@@ -1420,7 +1420,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."cancel_order_line_v1"() OWNER TO "postgres";
+ALTER FUNCTION "public"."cancel_order_line_v1"("p_line_id" "uuid", "p_cancellation_proof_urls" "text"[], "p_reason" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."cancel_purchase_order"("p_order_id" "uuid", "p_user_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("success" boolean, "message" "text")

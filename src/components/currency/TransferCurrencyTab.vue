@@ -113,13 +113,11 @@
                 :placeholder="'Chọn account đích'"
               >
                 <option
-                  v-for="account in availableAccounts"
+                  v-for="account in filteredTargetAccounts"
                   :key="account.id"
                   :value="account.id"
-                  :disabled="account.id === transferForm.sourceAccountId"
                 >
                   {{ account.account_name }}
-                  <span v-if="account.id === transferForm.sourceAccountId" class="text-gray-400"> (không thể chọn)</span>
                 </option>
               </select>
               <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -522,7 +520,7 @@ const props = defineProps<{
 }>()
 
 // Use currency transfer composable
-const { transferCurrency, loading: transferLoading } = useCurrencyTransfer()
+const { transferCurrency } = useCurrencyTransfer()
 
 // Reactive state
 const loading = ref(false)
@@ -643,6 +641,14 @@ const showPreview = computed(() => {
   return canTransfer.value && transferForm.value.quantity > 0
 })
 
+// Filter target accounts to exclude selected source account
+const filteredTargetAccounts = computed(() => {
+  if (!transferForm.value.sourceAccountId) {
+    return []
+  }
+  return availableAccounts.value.filter(account => account.id !== transferForm.value.sourceAccountId)
+})
+
 // Methods
 const formatQuantity = (amount: number) => {
   return new Intl.NumberFormat('vi-VN').format(amount)
@@ -715,78 +721,40 @@ const getPoolQuantity = (poolIndex: number) => {
 
 const loadAccounts = async () => {
   try {
-    // First try to get accounts from game_accounts table
-    const { data: gameAccountsData, error: gameAccountsError } = await supabase
-      .from('game_accounts')
-      .select('*')
-      .eq('game_code', props.gameCode)
-      .eq('server_attribute_code', props.serverCode)
-      .eq('purpose', 'INVENTORY')
-      .eq('is_active', true)
-      .order('account_name')
+    // Use RPC function to get inventory accounts with proper logic
+    // This includes both server-specific accounts and global accounts
+    const { data, error } = await supabase
+      .rpc('get_inventory_accounts', {
+        p_game_code: props.gameCode,
+        p_server_attribute_code: props.serverCode
+      })
 
-    if (gameAccountsError) {
-      console.warn('Error loading game_accounts:', gameAccountsError)
-    }
-
-    if (gameAccountsData && gameAccountsData.length > 0) {
-      availableAccounts.value = gameAccountsData
+    if (error) {
+      console.error('Error loading inventory accounts via RPC:', error)
+      showMessage('Không thể tải danh sách accounts: ' + error.message, 'error')
       return
     }
 
-    // Fallback: Get unique accounts from inventory_pools
-    const { data: inventoryData, error: inventoryError } = await supabase
-      .from('inventory_pools')
-      .select(`
-        game_account_id
-      `)
-      .eq('game_code', props.gameCode)
-      .eq('server_attribute_code', props.serverCode)
-      .not('game_account_id', 'is', null)
-
-    if (inventoryError) throw inventoryError
-
-    // Extract unique accounts from inventory data
-    const uniqueAccounts = new Map()
-    ;(inventoryData || []).forEach((item: any) => {
-      if (item.game_account_id) {
-        uniqueAccounts.set(item.game_account_id, {
-          id: item.game_account_id,
-          account_name: `Account ${item.game_account_id}`, // Fallback name
-          purpose: 'INVENTORY'
-        })
-      }
-    })
-
-    // Try to get actual account names if possible
-    const accountIds = Array.from(uniqueAccounts.keys())
-    if (accountIds.length > 0) {
-      const { data: accountDetails, error: detailsError } = await supabase
-        .from('game_accounts')
-        .select('id, account_name, purpose')
-        .in('id', accountIds)
-
-      if (!detailsError && accountDetails) {
-        accountDetails.forEach(account => {
-          const existing = uniqueAccounts.get(account.id)
-          if (existing) {
-            existing.account_name = account.account_name || existing.account_name
-            existing.purpose = account.purpose || existing.purpose
-          }
-        })
-      }
+    if (!data || data.length === 0) {
+      console.warn('No inventory accounts found for game/server combination')
+      showMessage('Không tìm thấy inventory account nào cho game và server này', 'error')
+      availableAccounts.value = []
+      return
     }
 
-    const accounts = Array.from(uniqueAccounts.values())
-    availableAccounts.value = accounts
+    // Transform data to match expected interface
+    availableAccounts.value = data.map((account: any) => ({
+      id: account.id,
+      account_name: account.account_name,
+      purpose: account.purpose
+    }))
 
-    if (availableAccounts.value.length === 0) {
-      console.warn('No accounts found in game_accounts or inventory_pools')
-      showMessage('Không tìm thấy account nào cho game/server này', 'error')
-    }
+    console.log(`Loaded ${availableAccounts.value.length} inventory accounts:`,
+      availableAccounts.value.map(a => a.account_name))
   } catch (err) {
-    console.error('Error loading accounts:', err)
+    console.error('Unexpected error loading accounts:', err)
     showMessage('Không thể tải danh sách accounts: ' + (err as Error).message, 'error')
+    availableAccounts.value = []
   }
 }
 
@@ -828,8 +796,17 @@ const loadAllInventory = async () => {
 }
 
 const onSourceAccountChange = () => {
+  // Store old source account value before it gets changed
+  const oldSourceAccountId = transferForm.value.sourceAccountId
+
   transferForm.value.currencyId = null
   transferForm.value.quantity = 0
+
+  // Reset target account if it's the same as the OLD source account
+  if (transferForm.value.targetAccountId === oldSourceAccountId) {
+    transferForm.value.targetAccountId = null
+  }
+
   loadAvailableCurrencies()
 }
 
