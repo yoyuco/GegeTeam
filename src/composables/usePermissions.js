@@ -22,6 +22,10 @@ export function usePermissions() {
     return userAssignments.value.some((assignment) => assignment.role_code === 'manager')
   })
 
+  const isMod = computed(() => {
+    return userAssignments.value.some((assignment) => assignment.role_code === 'mod')
+  })
+
   const isTrader = computed(() => {
     return userAssignments.value.some(
       (assignment) =>
@@ -76,7 +80,7 @@ export function usePermissions() {
   // Check if user can access specific game
   const canAccessGame = (gameCode = null) => {
     // Admin/Mod have full access to all games
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     // For specific game access
     if (gameCode) {
@@ -93,7 +97,7 @@ export function usePermissions() {
   // Check if user can manage specific game
   const canManageGame = (gameCode = null) => {
     // Admin/Mod have full management rights
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     // For specific game management
     if (gameCode) {
@@ -108,7 +112,7 @@ export function usePermissions() {
   // Check if user can access business area
   const canAccessBusinessArea = (areaCode) => {
     // Admin/Mod have full access to all areas
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     // Check if user has access to this specific business area
     return userAssignments.value.some(
@@ -145,7 +149,7 @@ export function usePermissions() {
 
   // Get user's accessible games for Currency operations
   const getAccessibleCurrencyGames = () => {
-    if (isAdmin.value || isManager.value) {
+    if (isAdmin.value || isMod.value || isManager.value) {
       // Admin/Mod can access all games
       return ['POE1', 'POE2', 'D4']
     }
@@ -160,7 +164,7 @@ export function usePermissions() {
   // Combined permission check with business area context
   const hasPermissionForCurrency = (permissionCode, gameCode = null) => {
     // Admin/Mod có toàn quyền
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     // Check basic permission
     if (!hasPermission(permissionCode)) return false
@@ -193,14 +197,14 @@ export function usePermissions() {
 
   const canCreateCurrencyTransactions = (gameCode = null) => {
     // Admin/Mod có toàn quyền
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     return hasPermissionForCurrency('currency:create_transaction', gameCode)
   }
 
   const canManageCurrencyInventory = (gameCode = null) => {
     // Admin/Mod có toàn quyền
-    if (isAdmin.value || isManager.value) return true
+    if (isAdmin.value || isMod.value || isManager.value) return true
 
     return hasPermissionForCurrency('currency:manage_inventory', gameCode)
   }
@@ -336,6 +340,7 @@ export function usePermissions() {
   const primaryRole = computed(() => {
     if (isAdmin.value) return { code: 'admin', name: 'Admin' }
     if (isManager.value) return { code: 'manager', name: 'Manager' }
+    if (isMod.value) return { code: 'mod', name: 'Moderator' }
     if (isTrader.value) return { code: 'trader', name: 'Trader' }
     if (isFarmer.value) return { code: 'farmer', name: 'Farmer' }
     return { code: 'default', name: 'User' }
@@ -352,6 +357,7 @@ export function usePermissions() {
     // Computed
     isAdmin,
     isManager,
+    isMod,
     isTrader,
     isFarmer,
     accessibleGames,
