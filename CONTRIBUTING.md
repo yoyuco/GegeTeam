@@ -44,11 +44,38 @@ Tài liệu này mô tả **cách làm việc chuẩn** cho repo, nhằm tránh 
 
 ### 3.2 Đồng bộ khi `develop` bị out-of-date so với `main` ⟵ **rất quan trọng**
 
-> Mục tiêu: tạo **merge commit thật** `main → develop` trên **remote**.
+> Mục tiêu: giữ develop sync với main với **clean history**.
 
+#### Option A: Rebase-based Sync (Recommended nếu có force-push permissions)
+```bash
+git checkout develop
+git fetch origin
+git rebase origin/main
+git push --force-with-lease
+```
+
+#### Option B: Clean PR Sync (GitHub-compliant)
+1. Tạo sync branch:
+   ```bash
+   git checkout -b sync/main-to-develop-$(date +%Y%m%d-%H%M) origin/develop
+   ```
+2. Rebase thay vì merge:
+   ```bash
+   git fetch origin && git rebase origin/main
+   ```
+3. Push sync branch:
+   ```bash
+   git push -u origin sync/main-to-develop-*
+   ```
+4. Mở PR: **base = develop, compare = sync/main-to-develop-***
+5. **SQUASH & MERGE** (tạo 1 commit clean duy nhất)
+
+#### Option C: Legacy Merge (chỉ khi cần)
 1. Mở PR **base = develop, compare = main**
 2. Chọn **Merge pull request (Create a merge commit)** _(không Squash/Rebase)_.
-3. Sau khi merge xong, `develop` đã “nuốt” hết `main`.
+3. Sau khi merge xong, `develop` đã "nuốt" hết `main`.
+
+> **Note**: Option A tạo history clean nhất. Option B balanced giữa clean và GitHub compliance.
 
 ### 3.3 Release lên production
 
@@ -111,12 +138,79 @@ git rev-list --left-right --count origin/main...origin/develop
 
 ### 6.4 Sơ đồ sync chuẩn
 
+**Enhanced Workflow 2025:**
+```
+Feature → (PR squash) → develop → (PR squash) → main
+                    ↑                ↑
+                    |                |
+               (rebase sync)   (production ready)
+                    ↓                ↓
+             develop ←←←←←←←←←←←←←←← main
+```
+
+**Legacy Workflow (chỉ khi cần):**
 ```
 (main)  ——(PR squash)—>  main
   ^                       ^
   |                       |
   |        (PR merge-commit)    (khi develop out-of-date)
   └———— develop  <———————————— main
+```
+
+### 6.5 Enhanced Branch Protection Rules (2025)
+
+#### Main Branch Rules:
+```
+✅ Require PR reviews (2 reviewers)
+✅ Require status checks (strict mode)
+✅ Require linear history
+✅ Require up-to-date branches
+❌ Allow force pushes
+❌ Allow deletions
+✅ Include administrators
+```
+
+#### Develop Branch Rules:
+```
+✅ Require PR reviews (1 reviewer)
+✅ Require status checks (loose mode)
+❌ Require linear history (allows merge commits)
+✅ Allow force pushes (team-only)
+❌ Allow deletions
+❌ Include administrators (allows bypass)
+```
+
+### 6.6 Workflow Automation (Optional)
+
+Team có thể setup GitHub Actions cho auto-sync:
+
+```yaml
+# .github/workflows/sync-develop.yml
+name: Auto-Sync Develop from Main
+on:
+  workflow_dispatch:  # Manual trigger only
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT }}
+
+      - name: Sync develop with main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout develop
+          git fetch origin
+          git rebase origin/main
+          git push --force-with-lease origin develop
 ```
 
 ---
