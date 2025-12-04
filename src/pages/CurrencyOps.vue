@@ -22,7 +22,7 @@
               v-if="permissions.canViewInventory()"
               type="primary"
               size="medium"
-              class="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
+              :style="{ backgroundColor: 'rgba(37, 99, 235, 1)', borderColor: 'rgba(37, 99, 235, 1)', color: 'white' }"
               @click="isInventoryOpen = !isInventoryOpen"
             >
               <template #icon>
@@ -612,9 +612,11 @@ const accountOptions = computed(() => {
 
 
 
-// Assigned orders count for notification badge
+// Active delivery orders count for notification badge
 const assignedOrdersCount = computed(() => {
-  return deliveryOrders.value.filter(order => order.status === 'assigned').length
+  return deliveryOrders.value.filter(order =>
+    ['assigned', 'preparing', 'delivering', 'ready'].includes(order.status)
+  ).length
 })
 
 // --- METHODS ---
@@ -1563,5 +1565,6 @@ onMounted(async () => {
     transform: translateY(0);
   }
 }
+
 
 </style>
