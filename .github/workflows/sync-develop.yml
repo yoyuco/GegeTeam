@@ -1,0 +1,100 @@
+name: Auto-Sync Develop from Main
+
+# Manual trigger only for safety
+on:
+  workflow_dispatch:
+    inputs:
+      sync_method:
+        description: 'Sync method'
+        required: true
+        default: 'rebase'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for rebase
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync develop with main
+        run: |
+          echo "Syncing develop with main using method: ${{ github.event.inputs.sync_method }}"
+
+          # Fetch latest changes
+          git fetch origin main develop
+
+          # Check current divergence
+          DIVERGENCE=$(git rev-list --left-right --count origin/main...origin/develop)
+          echo "Current divergence: $DIVERGENCE"
+
+          if [ "${{ github.event.inputs.sync_method }}" = "rebase" ]; then
+            echo "Using rebase method (clean history)..."
+            git checkout develop
+
+            # Rebase develop onto main
+            git rebase origin/main
+
+            echo "Rebase completed. Force-pushing to develop..."
+            git push --force-with-lease origin develop
+
+          else
+            echo "Using merge method (legacy)..."
+
+            # Create sync branch
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            SYNC_BRANCH="sync/main-to-develop-$TIMESTAMP"
+            git checkout -b $SYNC_BRANCH origin/develop
+
+            # Merge main into sync branch
+            git merge origin/main --no-ff -m "sync: merge main into develop ($TIMESTAMP)"
+
+            echo "Pushing sync branch..."
+            git push -u origin $SYNC_BRANCH
+
+            # Create PR using GitHub CLI (if available)
+            if command -v gh &> /dev/null; then
+              echo "Creating pull request..."
+              gh pr create \
+                --title "Sync: Main to Develop ($TIMESTAMP)" \
+                --body "Automated sync from main to develop using merge method" \
+                --base develop \
+                --head $SYNC_BRANCH \
+                --label "sync,automated"
+            fi
+          fi
+
+      - name: Verify sync
+        run: |
+          echo "Verifying sync completion..."
+          git fetch origin main develop
+
+          DIVERGENCE=$(git rev-list --left-right --count origin/main...origin/develop)
+          echo "Final divergence: $DIVERGENCE"
+
+          # Extract left count (main commits not in develop)
+          LEFT_COUNT=$(echo $DIVERGENCE | cut -d' ' -f1)
+
+          if [ "$LEFT_COUNT" = "0" ]; then
+            echo "✅ Sync successful! Develop is now up-to-date with main."
+          else
+            echo "⚠️ Sync may have issues. Left count: $LEFT_COUNT"
+            exit 1
+          fi
+
+      - name: Clean up (rebase method only)
+        if: github.event.inputs.sync_method == 'rebase'
+        run: |
+          echo "Rebase sync completed successfully!"
+          echo "Develop history has been cleaned up and rebased onto main."
