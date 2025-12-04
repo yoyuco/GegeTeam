@@ -24,10 +24,12 @@ Tài liệu này mô tả **cách làm việc chuẩn** cho repo, nhằm tránh 
 
 ### develop
 
-- Allowed: **Merge commit**, có thể bật thêm Squash (tùy nhóm).
-- Bật: **Require PR**, **Require status checks**, **Require deployments to succeed (Preview)**, **Block force pushes**.
+- Allowed: **Merge commit** and **Squash & merge**.
+- Bật: **Require PR**, **Require status checks** (loose mode), **Require deployments to succeed (Preview)**.
+- Bật: **Allow force pushes** (team-only).
 - Tắt: **Require linear history** (để có merge-commit khi sync `main → develop`).
-- _Có thể tắt_ “Require branches to be up to date” để giảm kẹt khi review.
+- Tắt: **Require branches to be up to date** để giảm kẹt khi review.
+- Tắt: **Include administrators** (cho phép bypass).
 
 ---
 
@@ -118,8 +120,7 @@ git push --force-with-lease
 
 Repo/ruleset đang cấm push trực tiếp. Hãy **làm PR ngược**:
 
-- PR **base = develop, compare = main** → **Create a merge commit**.
-- Xong quay lại PR chính.
+- Sử dụng **Option A, B, hoặc C** trong section 3.2 để sync develop với main.
 
 ### 6.2 “Merging is blocked: Missing successful active Preview deployment”
 
@@ -189,8 +190,11 @@ Team có thể setup GitHub Actions cho auto-sync:
 name: Auto-Sync Develop from Main
 on:
   workflow_dispatch:  # Manual trigger only
-  push:
-    branches: [main]
+    inputs:
+      sync_method:
+        description: 'Sync method'
+        required: true
+        default: 'rebase'
 
 jobs:
   sync:
@@ -242,16 +246,26 @@ git switch develop
 git pull
 git rev-list --left-right --count origin/main...origin/develop # cần 0 N
 
-## nếu ≠ 0: sync main -> develop bằng merge-commit
+## nếu ≠ 0: sync main -> develop
 
+# Option A: Rebase-based (Recommended)
+git checkout develop
+git fetch origin
+git rebase origin/main
+git push --force-with-lease
+
+# Option B: Clean PR Sync (GitHub-compliant)
+git switch -c sync/main-into-develop-$(Get-Date -Format "yyyyMMdd-HHmm") origin/develop
+git fetch origin && git rebase origin/main
+git push -u origin HEAD
+# -> mở PR base=develop, compare=sync/... ; Squash & merge
+
+# Option C: Legacy Merge (nếu cần)
 git switch -c sync/main-into-develop-$(Get-Date -Format "yyyyMMdd-HHmm") origin/develop
 git merge --no-ff origin/main
-
 # giải conflict nếu có -> git add . ; git commit
-
 git push -u origin HEAD
-
-# -> mở PR base=develop, compare=sync/... ; Merge pull request (Create a merge commit)
+# -> mở PR base=develop, compare=sync/... ; Create a merge commit
 
 ## nhánh mới
 

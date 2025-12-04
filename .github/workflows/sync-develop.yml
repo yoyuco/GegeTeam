@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history needed for rebase
-          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT || env.GITHUB_TOKEN }}
 
       - name: Configure Git
         run: |
@@ -32,6 +32,15 @@ jobs:
         run: |
           echo "Syncing develop with main using method: ${{ github.event.inputs.sync_method }}"
 
+          # Check if PAT is available for force-push
+          if [[ -n "${{ secrets.PAT }}" ]]; then
+            echo "✅ PAT detected - force-push enabled"
+            FORCE_PUSH_ALLOWED=true
+          else
+            echo "⚠️ No PAT found - force-push may be blocked"
+            FORCE_PUSH_ALLOWED=false
+          fi
+
           # Fetch latest changes
           git fetch origin main develop
 
@@ -39,15 +48,22 @@ jobs:
           DIVERGENCE=$(git rev-list --left-right --count origin/main...origin/develop)
           echo "Current divergence: $DIVERGENCE"
 
-          if [ "${{ github.event.inputs.sync_method }}" = "rebase" ]; then
+          if [[ "${{ github.event.inputs.sync_method }}" == "rebase" ]]; then
             echo "Using rebase method (clean history)..."
             git checkout develop
 
             # Rebase develop onto main
             git rebase origin/main
 
-            echo "Rebase completed. Force-pushing to develop..."
-            git push --force-with-lease origin develop
+            if [[ "$FORCE_PUSH_ALLOWED" == "true" ]]; then
+              echo "Rebase completed. Force-pushing to develop..."
+              git push --force-with-lease origin develop
+            else
+              echo "⚠️ Force-push not allowed. You may need to:"
+              echo "1. Setup PAT secret (see CONTRIBUTING.md)"
+              echo "2. Use Option B (PR-based sync) instead"
+              exit 1
+            fi
 
           else
             echo "Using merge method (legacy)..."
