@@ -56,17 +56,83 @@ jobs:
             echo "Using rebase method (clean history)..."
             git checkout develop
 
-            # Rebase develop onto main
-            git rebase origin/main
+            # Rebase develop onto main with conflict resolution
+            if git rebase origin/main; then
+              echo "✅ Rebase completed successfully!"
+              if [[ "$FORCE_PUSH_ALLOWED" == "true" ]]; then
+                echo "Force-pushing to develop..."
+                git push --force-with-lease origin develop
+              else
+                echo "⚠️ Force-push not allowed. Falling back to merge method..."
+                TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                SYNC_BRANCH="sync/main-to-develop-$TIMESTAMP"
+                git checkout -b $SYNC_BRANCH origin/main
+                git merge origin/develop --no-ff -m "sync: merge develop into main ($TIMESTAMP)"
+                git push -u origin $SYNC_BRANCH
 
-            if [[ "$FORCE_PUSH_ALLOWED" == "true" ]]; then
-              echo "Rebase completed. Force-pushing to develop..."
-              git push --force-with-lease origin develop
+                if command -v gh &> /dev/null; then
+                  echo "Creating fallback PR..."
+                  gh pr create \
+                    --title "Sync: Main to Develop ($TIMESTAMP) - Fallback" \
+                    --body "Automated sync using merge method due to force-push restrictions" \
+                    --base develop \
+                    --head $SYNC_BRANCH \
+                    --label "sync,fallback"
+                fi
+              fi
             else
-              echo "⚠️ Force-push not allowed. You may need to:"
-              echo "1. Setup PAT secret (see CONTRIBUTING.md)"
-              echo "2. Use Option B (PR-based sync) instead"
-              exit 1
+              echo "⚠️ Rebase failed due to conflicts. Switching to merge method..."
+              git rebase --abort
+
+              # Fallback to merge method with conflict resolution
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              SYNC_BRANCH="sync/main-to-develop-$TIMESTAMP"
+              git checkout -b $SYNC_BRANCH origin/develop
+
+              # Attempt merge with conflict resolution
+              if ! git merge origin/main --no-ff -m "sync: merge main into develop with conflict resolution ($TIMESTAMP)"; then
+                echo "⚠️ Merge conflicts detected. Auto-resolving known conflicts..."
+
+                # Auto-resolve workflow conflicts (prefer our version)
+                if [[ -f ".github/workflows/sync-develop.yml" ]]; then
+                  git checkout --ours .github/workflows/sync-develop.yml
+                  git add .github/workflows/sync-develop.yml
+                  echo "✅ Resolved sync-develop.yml conflict"
+                fi
+
+                # Auto-resolve CONTRIBUTING.md conflicts (prefer our version)
+                if [[ -f "CONTRIBUTING.md" ]]; then
+                  git checkout --ours CONTRIBUTING.md
+                  git add CONTRIBUTING.md
+                  echo "✅ Resolved CONTRIBUTING.md conflict"
+                fi
+
+                # Commit conflict resolution
+                git commit -m "resolve: auto-fix merge conflicts in workflow files
+
+                - Prefer develop branch versions for workflow files
+                - Maintain enhanced GitHub Actions functionality
+                - Auto-resolved by sync workflow
+
+                🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+                Co-Authored-By: Claude <noreply@anthropic.com>"
+
+                echo "✅ Conflicts auto-resolved and committed!"
+              fi
+
+              echo "Pushing sync branch..."
+              git push -u origin $SYNC_BRANCH
+
+              if command -v gh &> /dev/null; then
+                echo "Creating PR for conflict resolution..."
+                gh pr create \
+                  --title "Sync: Main to Develop ($TIMESTAMP) - Conflicts" \
+                  --body "Automated sync with conflicts. Please review and resolve merge conflicts." \
+                  --base develop \
+                  --head $SYNC_BRANCH \
+                  --label "sync,conflicts"
+              fi
             fi
 
           else
