@@ -1,0 +1,27 @@
+name: Simple Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Sync message'
+        required: false
+        default: 'Manual sync trigger'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print info
+        run: |
+          echo "GitHub Actions is working!"
+          echo "Event: ${{ github.event_name }}"
+          echo "Message: ${{ github.event.inputs.message }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
