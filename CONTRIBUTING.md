@@ -1,166 +1,202 @@
 # Contributing Guide
 
-Tài liệu này mô tả **cách làm việc chuẩn** cho repo, nhằm tránh kẹt PR/CI (đặc biệt với Vercel Preview) và xử lý migratons của Supabase.
+Tài liệu này mô tả **quy trình làm việc chuẩn (Standard Workflow)** của dự án, nhằm đảm bảo lịch sử code sạch đẹp, hạn chế conflict và an toàn khi deploy lên Production.
 
 ---
 
-## 1) Nhánh & vai trò
+## 1. Chiến lược nhánh (Branch Strategy)
 
-- **main**: production. lịch sử **tuyến tính**. **Squash & merge only**.
-- **develop**: nhánh tích hợp. **Cho phép merge commit** (để đồng bộ `main → develop`).
-- Nhánh làm việc: `feature/*`, `fix/*`, `chore/*`, `docs/*`, …
+Chúng ta sử dụng mô hình 3 lớp nhánh. Vui lòng tuân thủ nghiêm ngặt quy tắc merge dưới đây:
 
-> **Không push trực tiếp** vào `main`/`develop`. Mọi thay đổi đều qua Pull Request (PR).
+| Nhánh | Vai trò | Môi trường (Vercel) | Quy tắc Merge vào nhánh này |
+| :--- | :--- | :--- | :--- |
+| **`main`** | **Production**. Chứa code chính thức, ổn định. | Production | **Create a Merge Commit**<br>*(Tuyệt đối không Squash)* |
+| **`develop`** | **Staging**. Nhánh tích hợp để kiểm thử. | Preview/Dev | **Squash & Merge**<br>*(Gộp thành 1 commit sạch)* |
+| **`feature/*`**| **Development**. Nhánh làm việc cá nhân. | Preview | N/A |
 
----
-
-## 2) Quy tắc merge theo nhánh
-
-### main
-
-- Allowed: **Squash & merge** (duy nhất).
-- Bật: **Require linear history**, **Require PR**, **Require status checks**, **Require up-to-date**, **Block force pushes**, **Require deployments to succeed (Preview)**.
-- Required checks: **Vercel** (đủ), _không bắt buộc_ “Vercel Preview Comments”.
-
-### develop
-
-- Allowed: **Merge commit** and **Squash & merge**.
-- Bật: **Require PR**, **Require status checks** (loose mode), **Require deployments to succeed (Preview)**.
-- Bật: **Allow force pushes** (team-only).
-- Tắt: **Require linear history** (để có merge-commit khi sync `main → develop`).
-- Tắt: **Require branches to be up to date** để giảm kẹt khi review.
-- Tắt: **Include administrators** (cho phép bypass).
+> **Nguyên tắc cốt lõi:**
+> 1. `develop`: Lịch sử **tuyến tính (Linear history)**, mỗi commit là một tính năng hoàn chỉnh.
+> 2. `main`: Lịch sử **theo vết (Traceable history)**, lưu giữ các dấu mốc release.
 
 ---
 
-## 3) Quy trình làm việc hằng ngày
+## 2. Quy trình làm việc (Workflow)
 
-### 3.1 Tạo tính năng/sửa lỗi
+### Bước 1: Khởi tạo nhánh làm việc
 
-1. Tạo nhánh: `feature/xxx` (hoặc `fix/xxx`, `chore/xxx`).
-2. Commit theo **Conventional Commits**:  
-   `feat: …`, `fix: …`, `chore: …`, `docs: …`
-3. Mở PR **base = develop, compare = feature/xxx**
-   - Chờ checks xanh (Vercel Preview).
-   - Merge: **Squash** hoặc **Create a merge commit** (tùy nhóm; khuyến nghị _Squash_ để gọn lịch sử).
+Luôn bắt đầu từ `develop` mới nhất.
 
-### 3.2 Đồng bộ khi `develop` bị out-of-date so với `main` ⟵ **rất quan trọng**
-
-> Mục tiêu: giữ develop sync với main với **clean history**.
-
-#### Option A: Rebase-based Sync (Recommended nếu có force-push permissions)
 ```bash
 git checkout develop
+git pull origin develop
+git checkout -b feature/ten-tinh-nang  # Ví dụ: feature/login-page, fix/header-bug
+```
+
+### Bước 2: Commit & Push
+
+Tuân thủ **Conventional Commits** để lịch sử rõ ràng:
+
+- `feat: ...` (Tính năng mới)
+- `fix: ...` (Sửa lỗi)
+- `chore: ...` (Việc vặt: update deps, config...)
+- `refactor: ...` (Sửa code nhưng không đổi logic)
+
+```bash
+git add .
+git commit -m "feat: thêm trang đăng nhập"
+git push -u origin feature/ten-tinh-nang
+```
+
+### Bước 3: Merge vào Develop (Tích hợp)
+
+Tạo Pull Request (PR):
+
+- **Base**: `develop` ⟵ **Compare**: `feature/...`
+- Chờ **Vercel CI** báo xanh và **Reviewer** approve.
+- **Bấm Merge**: Chọn chế độ **SQUASH AND MERGE**.
+
+**Lý do**: Để gom gọn các commit nháp của bạn thành 1 dòng duy nhất trên develop.
+
+### Bước 4: Release lên Main (Deploy Production)
+
+Khi develop đã ổn định và sẵn sàng phát hành:
+
+Tạo Pull Request (PR):
+
+- **Base**: `main` ⟵ **Compare**: `develop`
+- **Bấm Merge**: Chọn chế độ **CREATE A MERGE COMMIT**.
+
+**Lưu ý**: Không chọn Squash. Chúng ta cần giữ dấu mốc merge để đồng bộ ngược sau này.
+
+### 5. Đồng bộ ngược (Sync Back) - BẮT BUỘC
+
+Sau mỗi lần Release (develop → main), lịch sử của main sẽ có thêm một "Merge Commit" mà develop không có. Cần đồng bộ ngay để tránh conflict tương lai.
+
+**Cách thực hiện:**
+
+```bash
+# 1. Về develop và cập nhật
+git checkout develop
+git pull origin develop
+
+# 2. Lấy code mới nhất từ server main
 git fetch origin
-git rebase origin/main
+
+# 3. Merge main về develop (Tạo merge commit)
+git merge origin/main
+
+# 4. Đẩy lên server
+git push origin develop
+```
+
+**Nếu GitHub chặn push trực tiếp vào develop**: Hãy tạo PR **Base**: `develop` ⟵ **Compare**: `main` và chọn **Create a merge commit**.
+
+---
+
+## 3. Supabase & Database
+
+**Vị trí**: Tất cả migration file phải nằm trong `supabase/migrations/`.
+
+**Đổi tên file**: Bắt buộc dùng lệnh `git mv` để Git nhận diện việc đổi tên, tránh mất lịch sử hoặc tạo file trùng lặp.
+
+```bash
+git mv supabase/migrations/old_name.sql supabase/migrations/new_name.sql
+```
+
+**Không sửa file cũ**: Tuyệt đối không sửa nội dung file migration đã merge vào main. Hãy tạo file migration mới để thay đổi DB.
+
+---
+
+## 4. Troubleshooting (Sự cố thường gặp)
+
+### 4.1 CI Vercel không chạy (Pending/Error)
+
+Thử đẩy một commit rỗng để kích hoạt lại:
+
+```bash
+git commit --allow-empty -m "ci: trigger build"
+git push
+```
+
+### 4.2 Nút Merge bị mờ / "This branch is out-of-date"
+
+Nhánh của bạn đã cũ so với develop. Hãy cập nhật nhánh của bạn:
+
+```bash
+git checkout feature/cua-ban
+git fetch origin
+git rebase origin/develop
 git push --force-with-lease
 ```
 
-#### Option B: Clean PR Sync (GitHub-compliant)
-1. Tạo sync branch:
-   ```bash
-   git checkout -b sync/main-to-develop-$(date +%Y%m%d-%H%M) origin/develop
-   ```
-2. Rebase thay vì merge:
-   ```bash
-   git fetch origin && git rebase origin/main
-   ```
-3. Push sync branch:
-   ```bash
-   git push -u origin sync/main-to-develop-*
-   ```
-4. Mở PR: **base = develop, compare = sync/main-to-develop-***
-5. **SQUASH & MERGE** (tạo 1 commit clean duy nhất)
+### 4.3 Lỡ tay commit thẳng vào develop/main?
 
-#### Option C: Legacy Merge (chỉ khi cần)
-1. Mở PR **base = develop, compare = main**
-2. Chọn **Merge pull request (Create a merge commit)** _(không Squash/Rebase)_.
-3. Sau khi merge xong, `develop` đã "nuốt" hết `main`.
-
-> **Note**: Option A tạo history clean nhất. Option B balanced giữa clean và GitHub compliance.
-
-### 3.3 Release lên production
-
-1. Mở PR **base = main, compare = develop**.
-2. Đợi checks & Preview xanh.
-3. **Squash & merge**.
-4. (tuỳ chọn) Tag phiên bản: `vX.Y.Z`.
-
----
-
-## 4) Supabase Migrations (chuẩn hoá)
-
-- Thư mục chuẩn:
-  ```
-  supabase/
-    migrations/            # chỉ giữ các migration files đang hoạt động
-  ```
-- **Luôn dùng `git mv`** khi di chuyển file để Git nhận rename (tránh "hồi sinh" file cũ sau merge).
-- Tool chỉ nên quét `supabase/migrations/`.
-
----
-
-## 5) CI/Preview (Vercel)
-
-- Required check: **Vercel**.
-- Nếu Preview không chạy:
-  - mở tab **Checks** → **Re-run** (nếu có), hoặc
-  - đẩy commit rỗng để trigger:
-    ```bash
-    git commit --allow-empty -m "ci: trigger preview"
-    git push
-    ```
-- Tránh dùng “Vercel Preview Comments” như required check (dễ flake).
-
----
-
-## 6) Troubleshooting nhanh
-
-### 6.1 “Update branch” bị chặn / “Changes must be made through a pull request”
-
-Repo/ruleset đang cấm push trực tiếp. Hãy **làm PR ngược**:
-
-- Sử dụng **Option A, B, hoặc C** trong section 3.2 để sync develop với main.
-
-### 6.2 “Merging is blocked: Missing successful active Preview deployment”
-
-Preview chưa chạy/đỏ:
-
-- Mở tab **Checks → Vercel** xem log.
-- Sửa lỗi build hoặc trigger lại CI (commit rỗng như trên).
-
-### 6.3 Kiểm tra develop đã “nuốt” hết main chưa?
+Đừng push. Hãy dùng lệnh sau để lùi commit nhưng giữ lại code (đưa code về trạng thái staged):
 
 ```bash
-git fetch origin
-git rev-list --left-right --count origin/main...origin/develop
-# Kỳ vọng: 0   N   (bên trái = 0)
+git reset --soft HEAD~1
 ```
 
-### 6.4 Sơ đồ sync chuẩn
+Sau đó chuyển sang nhánh mới và commit lại.
 
-**Enhanced Workflow 2025:**
-```
-Feature → (PR squash) → develop → (PR squash) → main
-                    ↑                ↑
-                    |                |
-               (rebase sync)   (production ready)
-                    ↓                ↓
-             develop ←←←←←←←←←←←←←←← main
+---
+
+## 5. Sơ đồ quy trình (Cheat Sheet)
+
+```mermaid
+gitGraph
+   commit id: "init"
+   branch develop
+   checkout develop
+   commit id: "start"
+
+   %% Feature Flow
+   branch feature/A
+   checkout feature/A
+   commit id: "code..."
+   checkout develop
+   merge feature/A type: SQUASH id: "feat: A (Squash)"
+
+   %% Release Flow
+   checkout main
+   merge develop id: "Release v1.0 (Merge Commit)"
+
+   %% Sync Back Flow
+   checkout develop
+   merge main id: "chore: sync back"
 ```
 
-**Legacy Workflow (chỉ khi cần):**
-```
-(main)  ——(PR squash)—>  main
-  ^                       ^
-  |                       |
-  |        (PR merge-commit)    (khi develop out-of-date)
-  └———— develop  <———————————— main
+---
+
+## 6. Quick Reference Commands
+
+```bash
+# Bắt đầu feature mới
+git checkout develop && git pull && git checkout -b feature/ten-feature
+
+# Push và tạo PR
+git add . && git commit -m "feat: mo ta tinh năng" && git push -u origin feature/ten-feature
+
+# Sync back sau release
+git checkout develop && git pull && git fetch origin && git merge origin/main && git push
+
+# Rebase feature với develop mới
+git checkout feature/ten-feature && git fetch origin && git rebase origin/develop
 ```
 
-### 6.5 Enhanced Branch Protection Rules (2025)
+---
 
-#### Main Branch Rules:
+## 7. Môi trường
+
+- **Production**: `main` branch → Production URL
+- **Staging/Preview**: `develop` branch → Preview URL
+- **Development**: `feature/*` branches → Feature preview URLs
+
+---
+
+## 8. Branch Protection Rules
+
+### Main Branch Rules:
 ```
 ✅ Require PR reviews (2 reviewers)
 ✅ Require status checks (strict mode)
@@ -171,7 +207,7 @@ Feature → (PR squash) → develop → (PR squash) → main
 ✅ Include administrators
 ```
 
-#### Develop Branch Rules:
+### Develop Branch Rules:
 ```
 ✅ Require PR reviews (1 reviewer)
 ✅ Require status checks (loose mode)
@@ -181,114 +217,41 @@ Feature → (PR squash) → develop → (PR squash) → main
 ❌ Include administrators (allows bypass)
 ```
 
-### 6.6 Workflow Automation (Optional)
+---
 
-Team có thể setup GitHub Actions cho auto-sync:
+## 9. GitHub Actions Automation
 
-```yaml
-# .github/workflows/sync-develop.yml
-name: Auto-Sync Develop from Main
-on:
-  workflow_dispatch:  # Manual trigger only
-    inputs:
-      sync_method:
-        description: 'Sync method'
-        required: true
-        default: 'rebase'
+Team có thể sử dụng GitHub Actions cho auto-sync:
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT }}
+**Cách sử dụng:**
+1. Vào **Actions tab** → **"Sync Develop From Main"**
+2. **Use workflow from**: `main`
+3. **Sync method**: `rebase` (khuyến nghị) hoặc `merge`
+4. Click **Run workflow**
 
-      - name: Sync develop with main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+**Features:**
+- ✅ PAT validation và force-push support
+- ✅ Automatic conflict resolution
+- ✅ Fallback mechanisms
+- ✅ PR creation với detailed labels
 
-          git checkout develop
-          git fetch origin
-          git rebase origin/main
-          git push --force-with-lease origin develop
+---
+
+## 10. Pre-flight Check
+
+Luôn kiểm tra trước khi bắt đầu tính năng mới:
+
+```bash
+# Kiểm tra divergence status
+git fetch origin
+git switch develop
+git pull
+git rev-list --left-right --count origin/main...origin/develop
+# Expected: 0 N (main không ahead của develop)
+
+# Nếu left > 0: cần sync develop với main trước
 ```
 
 ---
 
-## 7) Thiết lập khuyến nghị
-
-- `.gitattributes`
-  ```
-  * text=auto eol=lf
-  *.sql diff
-  ```
-- Commit nhỏ, mô tả rõ; PR có tiêu đề ngắn gọn:  
-  `feat: …`, `fix: …`, `chore: consolidate migrations`, …
-- Không commit secrets; dùng môi trường/Secrets của Vercel/GitHub.
-
----
-
-## 8) Liên hệ
-
-- Chủ repo/Reviewers: @…
-- CI/Deploy: Vercel (project: `gege-team`).
-
-### Lệnh làm việc nhanh
-
-## pre-flight
-
-git fetch origin
-git switch develop
-git pull
-git rev-list --left-right --count origin/main...origin/develop # cần 0 N
-
-## nếu ≠ 0: sync main -> develop
-
-# Option A: Rebase-based (Recommended)
-git checkout develop
-git fetch origin
-git rebase origin/main
-git push --force-with-lease
-
-# Option B: Clean PR Sync (GitHub-compliant)
-git switch -c sync/main-into-develop-$(Get-Date -Format "yyyyMMdd-HHmm") origin/develop
-git fetch origin && git rebase origin/main
-git push -u origin HEAD
-# -> mở PR base=develop, compare=sync/... ; Squash & merge
-
-# Option C: Legacy Merge (nếu cần)
-git switch -c sync/main-into-develop-$(Get-Date -Format "yyyyMMdd-HHmm") origin/develop
-git merge --no-ff origin/main
-# giải conflict nếu có -> git add . ; git commit
-git push -u origin HEAD
-# -> mở PR base=develop, compare=sync/... ; Create a merge commit
-
-## nhánh mới
-
-git switch develop
-$ts = Get-Date -Format "yyyyMMdd-HHmm"
-git switch -c feature/<slug>-$ts
-
-## làm việc
-
-git add -A
-git commit -m "feat: <mô tả>"
-git push -u origin $(git branch --show-current)
-
-## mở PR base=develop ; nếu preview không chạy:
-
-git commit --allow-empty -m "ci: trigger preview"
-git push
-
-## tạm cất (stash) thay đổi rồi làm feature
-
-git stash push -m "wip: contributing" -- CONTRIBUTING.md
-
-# bắt đầu nhánh mới
-
-$ts = Get-Date -Format "yyyyMMdd-HHmm"
-git switch -c feature/<slug>-$ts
+**Lưu ý quan trọng**: Luôn thực hiện **sync back** sau mỗi release để đảm bảo develop branch luôn up-to-date với main và tránh conflicts trong tương lai.
