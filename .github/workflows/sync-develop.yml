@@ -1,21 +1,29 @@
-name: Sync Develop From Main
+# ARCHIVED: GitHub Actions sync workflow
+#
+# This workflow has been archived in favor of Standard Workflow manual sync.
+# Keeping for reference and potential future reactivation.
+#
+# To use manual sync, see CONTRIBUTING.md section 5: "Đồng bộ ngược (Sync Back)"
+#
+# If reactivation needed in future:
+# 1. Remove this comment block
+# 2. Change 'if: false' to 'if: github.event_name == "workflow_dispatch"'
+# 3. Update workflow to match current branch protection rules
 
-# Manual trigger only for safety
+name: Archived Sync Develop From Main
+
 on:
   workflow_dispatch:
     inputs:
       sync_method:
-        description: 'Sync method'
+        description: 'Sync method (archived - use manual sync)'
         required: true
         default: 'rebase'
-  push:
-    branches: [ main ]
-    paths: [ '.github/workflows/sync-develop.yml' ]
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: false  # Workflow disabled - use manual sync instead
     permissions:
       contents: write
       pull-requests: write
