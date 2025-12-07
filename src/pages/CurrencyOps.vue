@@ -1197,10 +1197,11 @@ const handleProcessInventory = async (data: { order: any; targetStatus: string }
       throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
     }
 
-    // Call confirm_purchase_order_receiving_v2 to create inventory pools (temporary fix for caching issue)
+    // Call confirm_purchase_order_receiving_v2 with proofs from frontend
     const { data: rpcData, error: rpcError } = await supabase.rpc('confirm_purchase_order_receiving_v2', {
       p_order_id: order.id,
-      p_completed_by: profileData
+      p_completed_by: profileData,
+      p_proofs: order.proofs  // Pass proofs directly from frontend
     })
 
     if (rpcError) {
@@ -1218,21 +1219,23 @@ const handleProcessInventory = async (data: { order: any; targetStatus: string }
     if (rpcData && rpcData.length > 0 && rpcData[0].success) {
       const dataInfo = rpcData[0].data || {}
       // Inventory processed successfully
+      // confirm_purchase_order_receiving_v2 already updates status to 'delivered'
       message.success(`✅ Xử lý inventory thành công! Chi phí trung bình: ${dataInfo.new_average_cost || 0}, Tồn kho: ${dataInfo.new_quantity || 0}`)
     } else {
-
       throw new Error(rpcData?.[0]?.message || 'Xử lý inventory thất bại')
     }
 
-    // Update status to delivered after successful inventory processing
-    await updateOrderStatus(order.id, targetStatus)
+    // Note: confirm_purchase_order_receiving_v2 already updates status to 'delivered'
+    // No need to call updateOrderStatus again
+
+    // Reload data to show updated status
+    await loadDeliveryOrders()
 
   } catch (error: any) {
-
     message.error(`Lỗi xử lý inventory: ${error.message}`)
 
-    // Fallback: update status despite inventory processing error
-    await updateOrderStatus(order.id, targetStatus)
+    // Note: Don't update status here as it might override what confirm_purchase_order_receiving_v2 already set
+    // The user can retry if needed
   }
 }
 

@@ -36,6 +36,8 @@ export const useAuth = defineStore('auth', {
     loading: true,
     userPermissions: new Set<string>(),
     assignments: [] as RoleForUI[],
+    // Add raw permissions array for usePermissions composable
+    rawPermissions: [] as { permission_code: string; game_code: string | null; business_area_code: string | null }[],
   }),
 
   getters: {
@@ -55,6 +57,7 @@ export const useAuth = defineStore('auth', {
           this.user = null
           this.userPermissions.clear()
           this.assignments = [] // CẬP NHẬT
+          this.rawPermissions = [] // Reset raw permissions
         }
         supabase.auth.onAuthStateChange(async (_event, newSession) => {
           const userChanged = this.user?.id !== newSession?.user?.id
@@ -64,6 +67,7 @@ export const useAuth = defineStore('auth', {
           } else if (!this.user) {
             this.userPermissions.clear()
             this.assignments = [] // CẬP NHẬT
+            this.rawPermissions = [] // Reset raw permissions
           }
         })
       } catch (error) {
@@ -71,6 +75,7 @@ export const useAuth = defineStore('auth', {
         this.user = null
         this.userPermissions.clear()
         this.assignments = [] // CẬP NHẬT
+        this.rawPermissions = [] // Reset raw permissions
       } finally {
         this.loading = false
       }
@@ -95,13 +100,17 @@ export const useAuth = defineStore('auth', {
         console.error('Không thể lấy context phân quyền:', contextError)
         this.userPermissions.clear()
         this.assignments = []
+        this.rawPermissions = []
       } else {
         const payload = contextData as AuthContextPayload
 
         // 1. Lưu assignments để hiển thị UI
         this.assignments = payload?.roles || []
 
-        // 2. Xử lý permissions để kiểm tra quyền
+        // 2. Store raw permissions for usePermissions composable
+        this.rawPermissions = payload?.permissions || []
+
+        // 3. Xử lý permissions để kiểm tra quyền (backward compatibility)
         const newPermissions = new Set<string>()
         if (payload?.permissions) {
           payload.permissions.forEach((p) => {
@@ -136,6 +145,7 @@ export const useAuth = defineStore('auth', {
       this.profile = null // <<< RESET PROFILE KHI ĐĂNG XUẤT
       this.userPermissions.clear()
       this.assignments = []
+      this.rawPermissions = [] // Reset raw permissions on signout
     },
 
     hasPermission(
