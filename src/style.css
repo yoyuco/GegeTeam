@@ -20,3 +20,17 @@
 .sv-pre {
   white-space: pre-line;
 }
+
+/* Fix for color display issues */
+.bg-blue-100 {
+  background-color: rgb(219 234 254) !important;
+}
+.bg-green-100 {
+  background-color: rgb(220 252 231) !important;
+}
+.bg-purple-100 {
+  background-color: rgb(243 232 255) !important;
+}
+.bg-orange-100 {
+  background-color: rgb(254 236 179) !important;
+}

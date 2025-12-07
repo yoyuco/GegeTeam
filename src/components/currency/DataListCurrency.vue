@@ -693,7 +693,7 @@
           <n-button
             type="error"
             size="large"
-            :disabled="!cancelReason.trim() || !cancelConfirmed || cancellingOrder"
+            :disabled="!cancelReason.trim() || !cancelConfirmed || cancellingOrder || !canConfirmCancel"
             :loading="cancellingOrder"
             @click="handleConfirmCancel"
             class="flex-1"
@@ -716,6 +716,7 @@ import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
 import { supabase } from '@/lib/supabase'
 import { NButton, NDataTable, NDatePicker, NInput, NModal, NSelect, useMessage } from 'naive-ui'
 import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
+import { usePermissions } from '@/composables/usePermissions'
 
 // Props
 interface Props {
@@ -774,6 +775,14 @@ const showDetailModal = ref(false)
 const selectedItem = ref<any>(null)
 const selectedProofFiles = ref<any[]>([])
 const uploading = ref(false)
+
+// Permissions
+const {
+  canReceiveCurrencyOrders,
+  canDeliverCurrencyOrders,
+  canCancelCurrencyOrders,
+  canCompleteCurrencyOrders
+} = usePermissions()
 
 // Cancel order modal state
 const showCancelModal = ref(false)
@@ -979,22 +988,26 @@ const tableColumns = computed(() => {
             onClick: () => onViewDetail(row)
           }, () => 'Xem'))
 
-          // For delivered status: show "Hoàn tất" button
+          // For delivered status: show "Hoàn tất" button with permission check
           if (row.status === 'delivered') {
-            buttons.push(h(NButton, {
-              size: 'small',
-              type: 'success',
-              onClick: () => onFinalizeOrder(row)
-            }, () => 'Hoàn tất'))
+            if (canCompleteCurrencyOrders(row.game_code)) {
+              buttons.push(h(NButton, {
+                size: 'small',
+                type: 'success',
+                onClick: () => onFinalizeOrder(row)
+              }, () => 'Hoàn tất'))
+            }
           }
-          // For all other statuses (except completed/cancelled/delivered): show "Hủy bỏ" button
+          // For all other statuses (except completed/cancelled/delivered): show "Hủy bỏ" button with permission check
           else if (row.status !== 'completed' && row.status !== 'cancelled' && row.status !== 'delivered') {
-            buttons.push(h(NButton, {
-              size: 'small',
-              type: 'error',
-              ghost: true,
-              onClick: () => handleCancelOrder(row)
-            }, () => 'Hủy bỏ'))
+            if (canCancelCurrencyOrders(row.game_code)) {
+              buttons.push(h(NButton, {
+                size: 'small',
+                type: 'error',
+                ghost: true,
+                onClick: () => handleCancelOrder(row)
+              }, () => 'Hủy bỏ'))
+            }
           }
 
           return h('div', { class: 'flex gap-1' }, buttons.filter(Boolean))
@@ -1241,7 +1254,29 @@ const canConfirmDelivery = computed(() => {
 
   // Only allow confirmation for specific statuses
   const allowedStatuses = ['assigned', 'preparing', 'ready', 'delivering']
-  return allowedStatuses.includes(selectedItem.value.status)
+  if (!allowedStatuses.includes(selectedItem.value.status)) {
+    return false
+  }
+
+  // Check permissions based on order type
+  if (selectedItem.value.order_type === 'PURCHASE') {
+    // For purchase orders: "Xác nhận đã nhận hàng" requires currency:receive_orders permission
+    return canReceiveCurrencyOrders(selectedItem.value.game_code)
+  } else if (selectedItem.value.order_type === 'SALE') {
+    // For sale orders: "Xác nhận đã giao hàng" requires currency:deliver_orders permission
+    return canDeliverCurrencyOrders(selectedItem.value.game_code)
+  }
+
+  // For other order types (like EXCHANGE), default to false for now
+  return false
+})
+
+// Computed property for cancel confirmation button
+const canConfirmCancel = computed(() => {
+  if (!selectedOrderToCancel.value) return false
+
+  // Check if user has permission to cancel currency orders
+  return canCancelCurrencyOrders(selectedOrderToCancel.value.game_code)
 })
 
 
@@ -1353,14 +1388,12 @@ const getGameNameFromCode = async (gameCode: string): Promise<string> => {
       .single()
 
     if (error || !data) {
-      console.warn('Failed to fetch game name:', error)
       gameNameCache.value.set(gameCode, gameCode) // Cache fallback
       return gameCode
     }
     gameNameCache.value.set(gameCode, data.name)
     return data.name
   } catch (error) {
-    console.error('Error fetching game name:', error)
     gameNameCache.value.set(gameCode, gameCode) // Cache fallback
     return gameCode
   }
@@ -1384,7 +1417,6 @@ const getServerNameFromCode = async (serverCode: string): Promise<string> => {
       .single()
 
     if (error || !data) {
-      console.warn('Failed to fetch server name:', error)
       serverNameCache.value.set(serverCode, serverCode) // Cache fallback
       return serverCode
     }
@@ -1392,7 +1424,6 @@ const getServerNameFromCode = async (serverCode: string): Promise<string> => {
     serverNameCache.value.set(serverCode, data.name)
     return data.name
   } catch (error) {
-    console.error('Error fetching server name:', error)
     serverNameCache.value.set(serverCode, serverCode) // Cache fallback
     return serverCode
   }
@@ -1886,7 +1917,6 @@ const updateOrderStatusAndShowMessage = async (copiedText: string, textType: str
     message.success(`Đã copy ${textType}${allowedStatuses.includes(selectedItem.value?.status) ? ` và chuyển sang trạng thái "${deliveringText}"` : ''}`)
 
   } catch (error) {
-    console.error('Error copying:', error)
     message.error(`Không thể copy ${textType}`)
   }
 }
@@ -1910,10 +1940,6 @@ const handleCopyDeliveryInfo = handleCopyNotes
 
 
 
-// Handle proof upload completion
-const handleProofUploadComplete = async () => {
-  // Files are uploaded and cached by SimpleProofUpload component
-}
 
 const handleConfirmDelivery = async () => {
   if (!selectedItem.value || selectedProofFiles.value.length === 0) {
@@ -1969,89 +1995,96 @@ const handleConfirmDelivery = async () => {
 
     const newProofFiles = await Promise.all(uploadPromises)
 
-    // Prepare proof data for database - handle different proof formats
+    // IMPORTANT: Update selectedProofFiles with the uploaded URLs
+    // This ensures UI shows correct state and future operations have access to URLs
+    selectedProofFiles.value = newProofFiles.map((proof, index) => ({
+      id: `uploaded_${Date.now()}_${index}`,
+      name: proof.filename,
+      url: proof.url,
+      path: proof.path,
+      type: proof.type,
+      uploaded_at: proof.uploaded_at,
+      status: 'finished'
+    }))
+
+    // Prepare existing proofs for merging
     let existingProofs: any[] = []
 
     if (order.proofs) {
       try {
-        // Handle case where proofs is a stringified JSON
         if (typeof order.proofs === 'string') {
           existingProofs = JSON.parse(order.proofs)
-        }
-        // Handle case where proofs is an array but might be corrupted
-        else if (Array.isArray(order.proofs)) {
-          // Check if array contains corrupted character data
+        } else if (Array.isArray(order.proofs)) {
+          // Check for corrupted data
           if (order.proofs.length > 0 && typeof order.proofs[0] === 'string' && order.proofs[0].length === 1) {
-            // Corrupted array - skip it and start fresh
             existingProofs = []
-            console.warn('Found corrupted proofs array, starting fresh')
           } else {
             existingProofs = order.proofs
           }
         }
       } catch (error) {
-        console.error('Error parsing existing proofs:', error)
         existingProofs = []
       }
     }
 
-    // Merge proofs by type to preserve all proof types
+    // Merge proofs, removing duplicates of same type
     let mergedProofs = [...existingProofs]
-
-    // Remove any existing proofs of the same type to avoid duplicates
     const newProofType = order.order_type === 'PURCHASE' ? 'receiving' : 'delivery'
     mergedProofs = mergedProofs.filter(proof => proof.type !== newProofType)
 
     // Add new proofs
-    const newProofs = [...mergedProofs, ...newProofFiles]
+    const finalProofs = [...mergedProofs, ...newProofFiles]
 
-    // For SELL orders: Don't update proofs here - let the backend function handle it
-    // For PURCHASE orders: Update proofs normally
-    if (order.order_type !== 'SALE') {
-      // Upload proofs first
-      const updateData: any = {
-        proofs: newProofs,
-        updated_at: new Date().toISOString()
-      }
-
+  
+    // Process PURCHASE orders - update proofs then handle inventory
+    if (order.order_type === 'PURCHASE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
+      // Update proofs in database first
       const { error: proofUpdateError } = await supabase
         .from('currency_orders')
-        .update(updateData)
+        .update({
+          proofs: finalProofs,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', order.id)
 
       if (proofUpdateError) {
-        console.error('Error updating order with proofs:', proofUpdateError)
         throw proofUpdateError
       }
 
-      // Update local data
+      // Update local state
       if (selectedItem.value) {
-        selectedItem.value.proofs = newProofs
+        selectedItem.value.proofs = finalProofs
+      }
+
+      message.success(`✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber}!`)
+
+      // Emit inventory processing event with updated proofs
+      const operationId = `delivery_${order.id}_${Date.now()}`
+      emit('process-inventory', {
+        order: { ...order, proofs: finalProofs, operationId },
+        currentStatus: order.status,
+        targetStatus: 'delivered'
+      })
+
+      showDetailModal.value = false
+      return
+    }
+
+    // For SELL orders: Update proofs normally
+    if (order.order_type === 'SALE') {
+      if (selectedItem.value) {
+        selectedItem.value.proofs = finalProofs
       }
 
       const successMessage = `✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber} thành công!`
       message.success(successMessage)
 
       // Emit event to refresh parent data
-      emit('proof-uploaded', { orderId: order.id, proofs: newProofs })
+      emit('proof-uploaded', { orderId: order.id, proofs: finalProofs })
     }
 
     // Reset files (for all order types)
     selectedProofFiles.value = []
-
-    // Step 2: Process inventory BEFORE changing status (only for purchase orders)
-    if (order.order_type === 'PURCHASE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
-      // Emit a special event for inventory processing
-      emit('process-inventory', {
-        order: { ...order, proofs: newProofs },
-        currentStatus: order.status,
-        targetStatus: 'delivered'
-      })
-
-      // Close modal after processing
-      showDetailModal.value = false
-      return
-    }
 
     // For SELL orders: Use delivery processing with profit calculation
     if (order.order_type === 'SALE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
@@ -2063,9 +2096,14 @@ const handleConfirmDelivery = async () => {
           throw new Error('Unable to get current user profile')
         }
 
-        // Get delivery proof URL from new proofs
+        // Get delivery proof data from new proofs
         const deliveryProof = newProofFiles.find(proof => proof.type === 'delivery')
         const deliveryProofUrl = deliveryProof?.url || newProofFiles[newProofFiles.length - 1]?.url
+        const deliveryProofData = deliveryProof ? {
+          filename: deliveryProof.filename,
+          type: deliveryProof.type,
+          uploaded_at: deliveryProof.uploaded_at
+        } : null
 
         if (!deliveryProofUrl) {
           throw new Error('Vui lòng tải lên bằng chứng giao hàng (bắt buộc)')
@@ -2077,7 +2115,8 @@ const handleConfirmDelivery = async () => {
           {
             p_order_id: order.id,
             p_delivery_proof_url: deliveryProofUrl,
-            p_user_id: profileId
+            p_user_id: profileId,
+            p_delivery_proof_data: deliveryProofData
           }
         )
 
@@ -2119,12 +2158,10 @@ const handleConfirmDelivery = async () => {
         showDetailModal.value = false
 
       } catch (deliveryError: any) {
-        console.error('Error processing delivery:', deliveryError)
         throw new Error(`Lỗi xử lý giao hàng: ${deliveryError.message}`)
       }
     }
-    // For non-purchase orders or orders not eligible for inventory processing
-    // Just update status normally
+    // For non-purchase orders, just update status
     else if (['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
 
       const { error: statusUpdateError } = await supabase
@@ -2136,7 +2173,6 @@ const handleConfirmDelivery = async () => {
         .eq('id', order.id)
 
       if (statusUpdateError) {
-        console.error('Error updating order status:', statusUpdateError)
         throw statusUpdateError
       }
 
@@ -2153,7 +2189,6 @@ const handleConfirmDelivery = async () => {
     showDetailModal.value = false
 
   } catch (error: any) {
-    console.error('Error confirming delivery:', error)
     message.error(error.message || 'Không thể xác nhận giao/nhận hàng. Vui lòng thử lại.')
   } finally {
     uploading.value = false
@@ -2162,6 +2197,12 @@ const handleConfirmDelivery = async () => {
 
 // Cancel order functions
 const handleCancelOrder = (item: any) => {
+  // Check if user has permission to cancel currency orders
+  if (!canCancelCurrencyOrders(item.game_code)) {
+    message.error('Bạn không có quyền hủy đơn hàng này')
+    return
+  }
+
   selectedOrderToCancel.value = item
   cancelReason.value = ''
   cancelProofFiles.value = []
@@ -2265,7 +2306,6 @@ const handleConfirmCancel = async () => {
     selectedOrderToCancel.value = null
 
   } catch (error: any) {
-    console.error('Error cancelling order:', error)
     message.error(error.message || 'Không thể hủy đơn hàng. Vui lòng thử lại.')
   } finally {
     cancellingOrder.value = false
@@ -2352,19 +2392,10 @@ const viewImage = (url: string) => {
         } else {
           // Not an image or error, get the actual response content
           const responseText = await response.text()
-          let errorDetails = {
-            url: imageUrl,
-            status: response.status,
-            contentType: response.headers.get('content-type'),
-            response: responseText
-          }
-
-          console.error('Invalid image response:', errorDetails)
 
           // Check if response is empty - file likely doesn't exist in storage
           if (!responseText || responseText.trim() === '') {
             message.error('File bằng chứng không tồn tại trong storage. Cần upload lại bằng chứng cho đơn hàng này.')
-            console.error('File not found in storage. The upload may have failed but URL was saved to database.')
           } else {
             // Try to parse as JSON to get meaningful error message
             try {
@@ -2373,10 +2404,6 @@ const viewImage = (url: string) => {
               // Check if it's SimpleProofUpload component data
               if (jsonResponse.id && jsonResponse.name && jsonResponse.status === 'pending' && jsonResponse.url === null) {
                 message.error('URL đang trỏ đến component data thay vì image file. Có thể có routing hoặc CORS issue.')
-                console.error('URL routing issue - getting SimpleProofUpload data instead of image:', {
-                  url: imageUrl,
-                  componentData: jsonResponse
-                })
               } else {
                 const errorMessage = jsonResponse?.error?.message || jsonResponse?.message || 'Lỗi không xác định'
                 message.error(`Không thể tải hình ảnh: ${errorMessage}`)
@@ -2390,7 +2417,6 @@ const viewImage = (url: string) => {
       })
       .catch(error => {
         message.error(`Lỗi khi tải hình ảnh: ${error.message}`)
-        console.error('Error fetching image:', error)
       })
   } else {
     message.error('URL hình ảnh không hợp lệ')
