@@ -473,6 +473,7 @@ import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
 import { useCurrency } from '@/composables/useCurrency.js'
 import { useGameContext } from '@/composables/useGameContext.js'
 import { loadPartyByNameType, createSupplierOrCustomer } from '@/composables/useSupplierCustomer'
+import { useAuth } from '@/stores/auth'
 import { NButton, NInput, NRadio, NRadioGroup, useMessage } from 'naive-ui'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { supabase, uploadFile } from '@/lib/supabase'
@@ -603,6 +604,7 @@ const filteredCurrencies = computed(() => {
 })
 // UI State
 const message = useMessage()
+const auth = useAuth()
 const isInventoryOpen = ref(false)
 const saving = ref(false)
 const currencyFormRef = ref()
@@ -1449,8 +1451,8 @@ const saveSale = async () => {
       throw new Error('Không thể lấy profile ID của người dùng. Vui lòng đảm bảo bạn đã đăng nhập và có profile hợp lệ.')
     }
 
-    // Add created_by_id to payload (function returns UUID directly)
-    payload.p_created_by_id = profileData
+    // Add user_id to payload (function expects p_user_id parameter)
+    payload.p_user_id = profileData
 
     // Step 1: Create sell order draft
         const { data, error } = await supabase.rpc('create_currency_sell_order_draft', payload)
@@ -2059,7 +2061,8 @@ const _handlePurchaseSubmit = async () => {
         }
         return parts.join(' | ')
       })(), // Notes | Thông tin liên hệ nếu có
-      p_priority_level: 3 // Default priority level
+      p_priority_level: 3, // Default priority level
+      p_user_id: auth.profile?.id // Proper authentication: pass profiles.id from frontend
     })
 
     if (draftError) {

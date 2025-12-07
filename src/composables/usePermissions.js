@@ -8,9 +8,9 @@ export function usePermissions() {
   // Use auth store assignments instead of querying separately
   const userAssignments = computed(() => authStore.assignments || [])
 
-  // Reactive state
-  const permissions = ref([])
-  const loading = ref(false)
+  // Use auth store permissions instead of local state
+  const permissions = computed(() => authStore.rawPermissions || [])
+  const loading = computed(() => authStore.loading)
   const error = ref(null)
 
   // Computed properties
@@ -74,7 +74,7 @@ export function usePermissions() {
 
   // Check if user has specific permission
   const hasPermission = (permissionCode) => {
-    return permissions.value.some((permission) => permission.code === permissionCode)
+    return permissions.value.some((permission) => permission.permission_code === permissionCode)
   }
 
   // Check if user can access specific game
@@ -155,8 +155,12 @@ export function usePermissions() {
     }
 
     // For other roles, return games they have access to AND have Currency business area
+    // Allow NULL business_area_attribute (full access) OR specific CURRENCY business area
     return userAssignments.value
-      .filter((assignment) => assignment.business_area_attribute?.code === 'CURRENCY')
+      .filter((assignment) =>
+        assignment.business_area_attribute?.code === 'CURRENCY' ||
+        assignment.business_area_attribute === null  // NULL = full access
+      )
       .map((assignment) => assignment.game_attribute?.code || '*')
       .filter((code, index, arr) => arr.indexOf(code) === index) // Remove duplicates
   }
@@ -166,6 +170,7 @@ export function usePermissions() {
     // Admin/Mod có toàn quyền
     if (isAdmin.value || isMod.value || isManager.value) return true
 
+    
     // Check basic permission
     if (!hasPermission(permissionCode)) return false
 
@@ -285,8 +290,11 @@ export function usePermissions() {
 
   // Completion permissions (existing)
   const canCompleteCurrencyOrders = (gameCode = null) => {
-    if (isAdmin.value || isManager.value) return true
-    return hasPermissionForCurrency('currency:complete', gameCode)
+    if (isAdmin.value || isManager.value) {
+      return true
+    }
+    // Fix: Use 'currency:complete_orders' instead of 'currency:complete' to match database
+    return hasPermissionForCurrency('currency:complete_orders', gameCode)
   }
 
   // Management permissions

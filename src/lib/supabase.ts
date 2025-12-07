@@ -20,6 +20,9 @@ export const supabase = createClient(url, anon, {
   },
 })
 
+// Export createClient for admin operations
+export { createClient }
+
 // File upload helper
 export const uploadFile = async (file: File, path: string, bucket = 'uploads') => {
   try {
@@ -42,6 +45,99 @@ export const uploadFile = async (file: File, path: string, bucket = 'uploads') =
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Upload failed',
+    }
+  }
+}
+
+// Work proofs upload helper - specialized for currency proof files
+export const uploadWorkProof = async (
+  file: File,
+  path: string,
+  metadata: Record<string, any> = {},
+  ownerId?: string
+) => {
+  try {
+    // Check if work-proofs bucket exists and is accessible (note: with dash)
+    const { data: bucketData, error: bucketError } = await supabase.storage
+      .getBucket('work-proofs')
+      .catch(() => ({ data: null, error: { message: 'Bucket not found' } }))
+
+    if (bucketError || !bucketData) {
+      console.error('Work proofs bucket not accessible:', bucketError)
+      return {
+        success: false,
+        error: 'Work proofs storage not available. Please contact administrator.',
+      }
+    }
+
+    // Prepare metadata with required fields
+    const enhancedMetadata = {
+      ...metadata,
+      owner_id: ownerId || supabase.auth.getUser()?.data.user?.id,
+      uploaded_at: new Date().toISOString(),
+      file_size: file.size,
+      mime_type: file.type,
+      file_name: file.name,
+    }
+
+    // Upload to work-proofs bucket with enhanced metadata (note: with dash)
+    const { data, error } = await supabase.storage
+      .from('work-proofs')
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        metadata: enhancedMetadata,
+      })
+
+    if (error) {
+      console.error('Work proof upload failed:', error)
+      return {
+        success: false,
+        error: error.message,
+      }
+    }
+
+    // Get public URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('work-proofs').getPublicUrl(data.path)
+
+    return {
+      success: true,
+      path: data.path,
+      publicUrl,
+      metadata: enhancedMetadata,
+    }
+  } catch (error) {
+    console.error('Work proof upload error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Work proof upload failed',
+    }
+  }
+}
+
+// Get work proof public URL (note: with dash)
+export const getWorkProofUrl = (path: string) => {
+  return supabase.storage
+    .from('work-proofs')
+    .getPublicUrl(path)
+}
+
+// Delete work proof (note: with dash)
+export const deleteWorkProof = async (path: string) => {
+  try {
+    const { error } = await supabase.storage.from('work-proofs').remove([path])
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Delete failed',
     }
   }
 }
