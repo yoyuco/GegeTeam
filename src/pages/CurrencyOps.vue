@@ -56,8 +56,8 @@
       </div>
     </div>
 
-    <!-- Inventory Summary -->
-    <div class="mb-6" v-if="activeTab === 'exchange'">
+    <!-- Game Server Selector - Active for exchange and delivery tabs (needed for both exchange and inventory access) -->
+    <div class="mb-6" :class="{ 'hidden': activeTab !== 'exchange' && activeTab !== 'delivery' }">
       <GameServerSelector
         ref="gameServerSelectorRef"
         :key="`game-server-${currentGame?.value}-${currentServer?.value}`"

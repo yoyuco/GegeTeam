@@ -100,10 +100,9 @@
                   <n-time-picker
                     v-model:value="formData.start_time"
                     format="HH:mm"
-                    placeholder="🌅 Chọn thời gian bắt đầu (GMT+7)"
+                    placeholder="🌅 Chọn thời gian bắt đầu"
                     style="width: 100%"
                     size="large"
-                    :time-zone="getTimeZone()"
                     value-format="x"
                   />
                 </n-form-item>
@@ -114,10 +113,9 @@
                   <n-time-picker
                     v-model:value="formData.end_time"
                     format="HH:mm"
-                    placeholder="🌙 Chọn thời gian kết thúc (GMT+7)"
+                    placeholder="🌙 Chọn thời gian kết thúc"
                     style="width: 100%"
                     size="large"
-                    :time-zone="getTimeZone()"
                     value-format="x"
                   />
                 </n-form-item>
@@ -295,7 +293,6 @@ import {
 } from '@vicons/ionicons5'
 import { supabase } from '@/lib/supabase'
 import { getShiftDurationDescription } from '@/utils/shiftUtils'
-import { TIMEZONE_OFFSET } from '@/utils/timezoneHelper'
 import type { FormInst, FormRules } from 'naive-ui'
 
 // Props
@@ -513,9 +510,7 @@ const columns = [
 ]
 
 // Methods
-const getTimeZone = () => {
-  return 'Asia/Bangkok' // GMT+7 timezone
-}
+
 
 const formatTime = (time: string) => {
   // Extract HH:mm from HH:mm:ss format (database time is already in GMT+7)
@@ -524,23 +519,11 @@ const formatTime = (time: string) => {
 }
 
 /**
- * Ensure consistent GMT+7 timezone display for time strings
- * This function guarantees that times are always interpreted as GMT+7
- * regardless of the user's browser timezone
+ * Display time in HH:mm format - database time is already in GMT+7
  */
 const ensureGMT7Display = (timeString: string) => {
-  // Create a date object with the time, treating it as GMT+7
-  const [hours, minutes] = timeString.split(':').map(Number)
-  const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
-
-  // Format with explicit GMT+7 timezone
-  return date.toLocaleTimeString('vi-VN', {
-    timeZone: 'Asia/Bangkok',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  })
+  // Simply extract HH:mm from database time (already in GMT+7)
+  return timeString.substring(0, 5)
 }
 
 const calculateDuration = (startTime: string, endTime: string) => {
@@ -594,11 +577,12 @@ const openCreateModal = () => {
 const openEditModal = (shift: WorkShift) => {
   editingShift.value = shift
 
-  // Convert time strings to milliseconds for n-time-picker (GMT+7)
+  // Parse time strings from database (already in GMT+7)
   const [startHours, startMinutes] = shift.start_time.split(':').map(Number)
   const [endHours, endMinutes] = shift.end_time.split(':').map(Number)
 
-  // Create date objects with explicit GMT+7 timezone
+  // Create date objects for n-time-picker - use the parsed hours/minutes directly
+  // Since database time is GMT+7 and we want to display the same time, no conversion needed
   const today = new Date()
   const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHours, startMinutes, 0, 0)
   const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHours, endMinutes, 0, 0)
@@ -637,31 +621,22 @@ const handleSubmit = async () => {
     submitting.value = true
 
     // Convert milliseconds to time strings for database (24-hour format HH:mm:ss)
+    // Time picker value represents local time, but we want the same time in GMT+7 database
     let startTime = ''
     let endTime = ''
 
     if (formData.value.start_time) {
-      // Extract time directly since time-picker with Asia/Bangkok timezone handles it correctly
       const startDate = new Date(formData.value.start_time)
-      startTime = startDate.toLocaleTimeString('en-GB', {
-        timeZone: 'Asia/Bangkok',
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      })
+      const hours = startDate.getHours().toString().padStart(2, '0')
+      const minutes = startDate.getMinutes().toString().padStart(2, '0')
+      startTime = `${hours}:${minutes}:00`
     }
 
     if (formData.value.end_time) {
-      // Same approach for end time
       const endDate = new Date(formData.value.end_time)
-      endTime = endDate.toLocaleTimeString('en-GB', {
-        timeZone: 'Asia/Bangkok',
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      })
+      const hours = endDate.getHours().toString().padStart(2, '0')
+      const minutes = endDate.getMinutes().toString().padStart(2, '0')
+      endTime = `${hours}:${minutes}:00`
     }
 
     const shiftData = {
