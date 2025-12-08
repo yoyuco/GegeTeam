@@ -1843,9 +1843,8 @@ const checkOrderFeasibility = async (
   message: string
 }> => {
   try {
-    const now = new Date()
-    const hcmcTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}))
-    const currentTime = hcmcTime.toTimeString().slice(0, 5)
+    // Database is already GMT+7, no conversion needed
+    const currentTime = new Date().toTimeString().slice(0, 5)
 
     const { data: activeShifts, error: shiftError } = await supabase
       .from('work_shifts')
