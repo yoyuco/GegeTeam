@@ -626,21 +626,23 @@ const loadData = async () => {
     isDataLoading.value = true
     areCurrenciesLoading.value = true // Start currency loading
 
+    // ALWAYS initialize game context (needed for inventory panel access from any tab)
+    await initializeFromStorage()
+    let retries = 0
+    while ((!currentGame.value || !currentServer.value) && retries < 10) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      retries++
+    }
+
+    // Now initialize currency composable properly (same pattern as GameLeagueSelector)
+    await initializeCurrency()
+
     // Only load exchange-related data if we're on exchange tab
     if (activeTab.value === 'exchange') {
-      // Initialize and wait for game context
-      await initializeFromStorage()
-      let retries = 0
-      while ((!currentGame.value || !currentServer.value) && retries < 10) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        retries++
-      }
       if (!currentGame.value || !currentServer.value) {
         throw new Error('Game context not available')
       }
 
-      // Now initialize currency composable properly (same pattern as GameLeagueSelector)
-      await initializeCurrency()
       // Load currencies and accounts for exchange
       await loadCurrenciesForCurrentGame()
       await new Promise(resolve => setTimeout(resolve, 100)) // Allow reactive updates
