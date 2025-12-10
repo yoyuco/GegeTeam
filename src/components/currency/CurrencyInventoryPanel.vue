@@ -340,6 +340,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { NScrollbar, NTag } from 'naive-ui'
 import { supabase } from '@/lib/supabase'
 import { useInventory } from '@/composables/useInventory.js'
@@ -370,9 +371,40 @@ defineEmits<{
   close: []
 }>()
 
+// Router and route for URL state management
+const router = useRouter()
+const route = useRoute()
+
 // Tab state
 const activeTab = ref('inventory')
+
+// Modal state with URL persistence
 const showInventoryOverview = ref(false)
+
+// Initialize modal state from URL
+const initializeModalState = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const overviewModal = urlParams.get('overviewModal')
+  showInventoryOverview.value = overviewModal === 'true'
+}
+
+// Update URL when modal state changes
+const updateModalStateInUrl = (isOpen: boolean) => {
+  const url = new URL(window.location.href)
+  if (isOpen) {
+    url.searchParams.set('overviewModal', 'true')
+  } else {
+    url.searchParams.delete('overviewModal')
+  }
+
+  // Update URL without page reload
+  window.history.replaceState({}, '', url.toString())
+}
+
+// Watch for modal state changes and update URL
+watch(showInventoryOverview, (newValue) => {
+  updateModalStateInUrl(newValue)
+})
 
 // Track expanded state for currencies
 const expandedCurrencies = ref<Set<string>>(new Set())
@@ -505,13 +537,84 @@ const calculateCurrencyAveragePrice = async (currencyName: string) => {
   }
 }
 
+// Realtime subscription for currency inventory
+let currencyInventorySubscription: any = null
+
+// Setup realtime subscription for currency inventory changes
+const setupInventoryRealtimeSubscription = () => {
+  // Clean up existing subscription
+  if (currencyInventorySubscription) {
+    currencyInventorySubscription.unsubscribe()
+  }
+
+  // Subscribe to currency inventory changes
+  currencyInventorySubscription = supabase
+    .channel('currency-inventory-panel-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'currency_inventory'
+      },
+      async (payload) => {
+        console.log('Currency inventory panel change detected:', payload)
+
+        // Reload inventory data when panel is open
+        if (props.isOpen) {
+          await loadInventoryData()
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime subscription established for currency inventory panel')
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('Realtime subscription error for currency inventory panel')
+      }
+    })
+}
+
+// Cleanup realtime subscription
+const cleanupInventoryRealtimeSubscription = () => {
+  if (currencyInventorySubscription) {
+    supabase.removeChannel(currencyInventorySubscription)
+    currencyInventorySubscription = null
+    console.log('Currency inventory panel realtime subscription cleaned up')
+  }
+}
+
 // Ensure exchange rates are loaded on mount
 onMounted(async () => {
   try {
+    // Initialize modal state from URL
+    initializeModalState()
+
     await loadExchangeRates()
+
+    // Setup realtime subscription when panel opens
+    if (props.isOpen) {
+      setupInventoryRealtimeSubscription()
+    }
   } catch (error) {
     console.error('CurrencyInventoryPanel: Failed to load exchange rates:', error)
   }
+})
+
+// Watch for panel open/close
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen) {
+    // Setup realtime subscription when panel opens
+    setupInventoryRealtimeSubscription()
+  } else {
+    // Cleanup when panel closes
+    cleanupInventoryRealtimeSubscription()
+  }
+})
+
+// Cleanup on component unmount
+onUnmounted(() => {
+  cleanupInventoryRealtimeSubscription()
 })
 
 // Generate different colors for different currencies

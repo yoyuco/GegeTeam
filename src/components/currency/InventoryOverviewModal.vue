@@ -290,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useExchangeRates } from '@/composables/useExchangeRates'
 
@@ -948,11 +948,77 @@ watch(() => props.isOpen, (isOpen) => {
   }
 })
 
+// Realtime subscription for currency inventory
+let currencyInventorySubscription: any = null
+
+// Setup realtime subscription for currency inventory changes
+const setupInventoryRealtimeSubscription = () => {
+  // Clean up existing subscription
+  if (currencyInventorySubscription) {
+    currencyInventorySubscription.unsubscribe()
+  }
+
+  // Subscribe to currency inventory changes
+  currencyInventorySubscription = supabase
+    .channel('currency-inventory-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'currency_inventory'
+      },
+      async (payload) => {
+        console.log('Currency inventory change detected:', payload)
+
+        // Reload inventory data when modal is open
+        if (props.isOpen) {
+          await loadInventoryData()
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime subscription established for currency inventory')
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('Realtime subscription error for currency inventory')
+      }
+    })
+}
+
+// Cleanup realtime subscription
+const cleanupInventoryRealtimeSubscription = () => {
+  if (currencyInventorySubscription) {
+    supabase.removeChannel(currencyInventorySubscription)
+    currencyInventorySubscription = null
+    console.log('Currency inventory realtime subscription cleaned up')
+  }
+}
+
 // Load data on mount if modal is opened immediately
 onMounted(() => {
   if (props.isOpen) {
     loadInventoryData()
+    // Setup realtime subscription
+    setupInventoryRealtimeSubscription()
   }
+})
+
+// Watch for modal open/close
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen) {
+    loadInventoryData()
+    // Setup realtime subscription when modal opens
+    setupInventoryRealtimeSubscription()
+  } else {
+    // Cleanup when modal closes
+    cleanupInventoryRealtimeSubscription()
+  }
+})
+
+// Cleanup on component unmount
+onUnmounted(() => {
+  cleanupInventoryRealtimeSubscription()
 })
 </script>
 
