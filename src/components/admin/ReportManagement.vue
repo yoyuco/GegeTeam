@@ -104,7 +104,7 @@
                       disabled
                     />
                   </n-form-item>
-                  <n-form-item label="Tiến độ đúng là (Actual Done Qty)">
+                  <n-form-item label="Tiến độ đúng là (Actual Done Qty)"> <!-- cspell:disable-line -->
                     <n-input-number
                       v-model:value="itemEditForm.corrected_end_value"
                       class="w-full"
@@ -203,11 +203,11 @@
                   />
                 </n-form-item>
                 <n-alert title="Lưu ý" type="warning" class="mt-4">
-                  Hành động này sẽ thiết lập lại tiến độ của hạng mục về giá trị "Tiến độ đúng là"
+                  Hành động này sẽ thiết lập lại tiến độ của hạng mục về giá trị "Tiến độ đúng là" <!-- cspell:disable-line -->
                   và vô hiệu hóa lịch sử làm việc cũ.
                 </n-alert>
                 <n-button type="primary" block class="mt-4" @click="handleSaveItemChanges">
-                  Chuẩn hóa Tiến độ
+                  Chuẩn hóa Tiến độ <!-- cspell:disable-line -->
                 </n-button>
               </n-form>
             </n-tab-pane>
@@ -558,7 +558,7 @@ const openReportModal = (row: ReportRow) => {
 const handleSaveItemChanges = async () => {
   if (!selectedReport.value?.reported_item?.id) return
   if (itemEditForm.corrected_end_value === null) {
-    message.error('Vui lòng nhập "Tiến độ đúng là".')
+    message.error('Vui lòng nhập "Tiến độ đúng là".') // cspell:disable-line
     return
   }
   if (!itemEditForm.correction_reason.trim()) {
@@ -657,7 +657,7 @@ onMounted(() => {
 
 <style scoped>
 .reports-management {
-  /* Component-specific styles can be added here */
+  padding: 1rem;
 }
 
 .report-modal {

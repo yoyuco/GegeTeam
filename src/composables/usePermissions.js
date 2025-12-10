@@ -86,7 +86,10 @@ export function usePermissions() {
     if (gameCode) {
       // Check if user has access to this specific game
       return userAssignments.value.some(
-        (assignment) => assignment.game_name === gameCode || assignment.game_code === null // null means access to all games
+        (assignment) =>
+          assignment.game_name === gameCode ||
+          assignment.game_code === gameCode ||
+          assignment.game_code === null // null means access to all games
       )
     }
 
@@ -102,7 +105,10 @@ export function usePermissions() {
     // For specific game management
     if (gameCode) {
       return userAssignments.value.some(
-        (assignment) => assignment.game_name === gameCode || assignment.game_code === null
+        (assignment) =>
+          assignment.game_name === gameCode ||
+          assignment.game_code === gameCode ||
+          assignment.game_code === null
       )
     }
 

@@ -775,6 +775,7 @@ const showDetailModal = ref(false)
 const selectedItem = ref<any>(null)
 const selectedProofFiles = ref<any[]>([])
 const uploading = ref(false)
+const simpleProofUploadRef = ref()
 
 // Permissions
 const {
@@ -1868,6 +1869,16 @@ const onViewDetail = (item: any) => {
   showDetailModal.value = true
   emit('view-detail', item)
 
+  // Clear proof files when opening a different order
+  selectedProofFiles.value = []
+
+  // Reset the upload component to clear any cached files
+  nextTick(() => {
+    if (simpleProofUploadRef.value) {
+      simpleProofUploadRef.value.resetFiles()
+    }
+  })
+
   // Fix aria-hidden warning by focusing modal content after it opens
   nextTick(() => {
     const modalElement = document.querySelector('[role="dialog"]')
@@ -2056,7 +2067,7 @@ const handleConfirmDelivery = async () => {
         selectedItem.value.proofs = finalProofs
       }
 
-      message.success(`✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber}!`)
+      message.success(`Đã tải lên bằng chứng cho đơn ${orderNumber}`)
 
       // Emit inventory processing event with updated proofs
       const operationId = `delivery_${order.id}_${Date.now()}`
@@ -2076,8 +2087,8 @@ const handleConfirmDelivery = async () => {
         selectedItem.value.proofs = finalProofs
       }
 
-      const successMessage = `✅ Đã tải lên ${newProofFiles.length} bằng chứng cho đơn ${orderNumber} thành công!`
-      message.success(successMessage)
+      // Simple success message for proof upload
+      message.success(`Đã tải lên bằng chứng cho đơn ${orderNumber}`)
 
       // Emit event to refresh parent data
       emit('proof-uploaded', { orderId: order.id, proofs: finalProofs })
@@ -2128,20 +2139,11 @@ const handleConfirmDelivery = async () => {
           throw new Error(processResult[0]?.message || 'Delivery processing failed')
         }
 
-        // Show profit information if available
+        // Get profit information for local update
         const profitInfo = processResult[0]
-        let successMessage = `✅ Đã xử lý giao hàng đơn ${orderNumber} thành công`
 
-        if (profitInfo.profit_amount) {
-          successMessage += `\n💰 Lợi nhuận: $${Number(profitInfo.profit_amount).toFixed(2)} USD`
-        }
-
-        // Show fees breakdown if available
-        if (profitInfo.fees_breakdown && Array.isArray(profitInfo.fees_breakdown)) {
-          successMessage += `\n📊 Phí áp dụng: ${profitInfo.fees_breakdown.length} khoản phí`
-        }
-
-        message.success(successMessage)
+        // Simple success message for delivery processing
+        message.success(`Xác nhận giao hàng thành công cho đơn ${orderNumber}`)
 
         // Update local status
         if (selectedItem.value) {
