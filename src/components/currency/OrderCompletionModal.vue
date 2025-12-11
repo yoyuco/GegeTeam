@@ -497,23 +497,27 @@ const handleCompleteOrder = async () => {
 
   // Validation logic based on order type and status
   if (props.order.order_type === 'SALE') {
-    // For SALE orders: must have delivery proof
-    if (!hasDeliveryProof.value) {
-      message.error('Đơn bán cần có bằng chứng giao hàng để hoàn tất')
-      return
-    }
+    // 📥 ĐƠN BÁN: Chỉ cần ở trạng thái delivered và có delivery proof
+    // Delivery proof đã có từ khi trader xác nhận giao hàng
 
     // Check if sale order is in correct status for completion
     if (props.order.status !== 'delivered') {
       message.error('Đơn bán phải ở trạng thái "đã giao hàng" để hoàn tất')
       return
     }
+
+    // Check if delivery proof exists (should already be there from trader confirmation)
+    if (!hasDeliveryProof.value) {
+      message.error('Thiếu bằng chứng giao hàng. Vui lòng kiểm tra lại.')
+      return
+    }
   } else if (props.order.order_type === 'PURCHASE') {
-    // For PURCHASE orders: standard validation
+    // 🛒 ĐƠN MUA: Cần payment proof để hoàn tất
+
     if (props.order.status === 'delivered') {
-      // Already delivered, only need payment proof
-      if (!hasPaymentProof.value && newPaymentProofs.value.length === 0) {
-        message.error('Vui lòng tải lên bằng chứng thanh toán để hoàn tất đơn hàng')
+      // Already delivered, need NEW payment proof
+      if (newPaymentProofs.value.length === 0) {
+        message.error('Đơn mua cần bằng chứng thanh toán để hoàn tất. Vui lòng tải lên.')
         return
       }
     } else {
@@ -571,15 +575,73 @@ const handleCompleteOrder = async () => {
       }
     }
 
-    // Handle different scenarios based on order status
-    if (props.order.status === 'delivered' && props.order.order_type === 'PURCHASE') {
-      // For delivered purchase orders: add payment proofs and complete the order
-      if (newPaymentProofs.value.length > 0) {
+    // Handle different scenarios based on order status and type
+    if (props.order.status === 'delivered') {
+      // For delivered orders waiting final completion
+      if (props.order.order_type === 'SALE') {
+        // 📥 ĐƠN BÁN: delivered → completed
+        // Chỉ cần chuyển trạng thái, không cần thêm proofs (delivery proofs đã có)
+        const { data: profileId } = await supabase.rpc('get_current_profile_id')
+
+        if (!profileId) {
+          throw new Error('Không thể xác định profile người dùng')
+        }
+
+        const { callRPC } = await import('@/lib/supabase')
+        const result = await callRPC('complete_sale_order_v2', {
+          p_order_id: props.order.id,
+          p_user_id: profileId
+        })
+
+        if (!result.success) {
+          const errorMessage = result.data?.message || result.error || 'Không thể hoàn tất đơn bán'
+          throw new Error(errorMessage)
+        }
+
+        message.success(`✅ Đã hoàn tất đơn bán #${props.order.order_number}`)
+        emit('completed')
+        handleClose()
+
+      } else if (props.order.order_type === 'PURCHASE') {
+        // 🛒 ĐƠN MUA: delivered → completed
+        // CẦN upload payment proofs + cập nhật trạng thái
+
+        if (newPaymentProofs.value.length === 0) {
+          message.warning('Đơn mua cần có bằng chứng thanh toán để hoàn tất')
+          loading.value = false
+          return
+        }
+
+        // Upload payment proofs before completing
+        const uploadedProofs = []
+        for (const fileInfo of newPaymentProofs.value) {
+          const filename = createUniqueFilename(fileInfo.file.name)
+          const filePath = `currency/purchase/${props.order.order_number}/completion/${filename}`
+
+          const { uploadFile } = await import('@/lib/supabase')
+          const uploadResult = await uploadFile(fileInfo.file, filePath, 'work-proofs')
+
+          if (!uploadResult.success) {
+            throw new Error(`Upload failed for ${fileInfo.file.name}: ${uploadResult.error}`)
+          }
+
+          uploadedProofs.push({
+            url: uploadResult.publicUrl,
+            path: uploadResult.path,
+            filename: fileInfo.file.name,
+            type: 'payment',
+            uploaded_at: new Date().toISOString()
+          })
+        }
+
+        // Merge new payment proofs with existing proofs
+        const allProofs = [...props.order.proofs || [], ...uploadedProofs]
+
         // Update order with new proofs and change status to completed
         const { error: updateError } = await supabase
           .from('currency_orders')
           .update({
-            proofs: finalProofs,
+            proofs: allProofs,
             status: 'completed',
             completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -587,14 +649,12 @@ const handleCompleteOrder = async () => {
           .eq('id', props.order.id)
 
         if (updateError) {
-                    throw updateError
+          throw updateError
         }
 
-                message.success(`✅ Đã hoàn tất đơn #${props.order.order_number} với ${newPaymentProofs.value.length} bằng chứng thanh toán`)
+        message.success(`✅ Đã hoàn tất đơn mua #${props.order.order_number} với ${uploadedProofs.length} bằng chứng thanh toán`)
         emit('completed')
         handleClose()
-      } else {
-        message.info('Không có bằng chứng thanh toán mới để thêm')
       }
     } else {
       // For non-delivered orders: use standard completion flow
