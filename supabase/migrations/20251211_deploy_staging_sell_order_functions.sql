@@ -240,10 +240,7 @@ BEGIN
         v_existing_proofs := '[]'::JSONB;
     END IF;
 
-    -- 6. Start transaction
-    BEGIN;
-
-    -- 7. Calculate profit metrics
+    -- 6. Calculate profit metrics
     v_cost_amount_usd := v_order.quantity * v_pool.average_cost;
     v_sale_amount_usd := v_order.quantity * v_order.unit_price;
     v_profit_amount := v_sale_amount_usd - v_cost_amount_usd;
@@ -317,10 +314,7 @@ BEGIN
         proofs = v_existing_proofs || v_new_proof
     WHERE id = p_order_id;
 
-    -- 11. Commit transaction
-    COMMIT;
-
-    -- 12. Return success result
+    -- 11. Return success result
     RETURN QUERY SELECT
         true,
         'Delivery processed successfully',
@@ -330,9 +324,6 @@ BEGIN
 
 EXCEPTION
     WHEN OTHERS THEN
-        -- Rollback on error
-        ROLLBACK;
-
         -- Return error information
         RETURN QUERY SELECT
             false,
