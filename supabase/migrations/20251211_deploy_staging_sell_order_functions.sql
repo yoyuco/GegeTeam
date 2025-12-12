@@ -247,19 +247,44 @@ BEGIN
         v_existing_proofs := '[]'::JSONB;
     END IF;
 
-    -- 6. Calculate profit metrics
-    v_cost_amount_usd := v_order.quantity * v_pool.average_cost;
-    v_sale_amount_usd := v_order.quantity * v_order.unit_price;
-    v_profit_amount := v_sale_amount_usd - v_cost_amount_usd;
+    -- 6. Get exchange rates (from staging)
+    BEGIN
+        IF v_order.cost_currency_code = 'USD' THEN
+            v_cost_amount_usd := v_order.cost_amount;
+            v_exchange_rate_cost := 1;
+        ELSIF v_order.cost_currency_code = 'CNY' THEN
+            v_exchange_rate_cost := get_exchange_rate_for_delivery('CNY', 'USD', CURRENT_DATE);
+            v_cost_amount_usd := v_order.cost_amount * v_exchange_rate_cost;
+        ELSIF v_order.cost_currency_code = 'VND' THEN
+            v_exchange_rate_cost := get_exchange_rate_for_delivery('VND', 'USD', CURRENT_DATE);
+            v_cost_amount_usd := v_order.cost_amount * v_exchange_rate_cost;
+        ELSE
+            v_exchange_rate_cost := get_exchange_rate_for_delivery(v_order.cost_currency_code, 'USD', CURRENT_DATE);
+            v_cost_amount_usd := v_order.cost_amount * v_exchange_rate_cost;
+        END IF;
 
-    -- Calculate transaction unit price (what we actually sold at)
-    v_transaction_unit_price := v_order.unit_price;
+        IF v_order.sale_currency_code = 'USD' THEN
+            v_sale_amount_usd := v_order.sale_amount;
+            v_exchange_rate_sale := 1;
+        ELSE
+            v_exchange_rate_sale := get_exchange_rate_for_delivery(v_order.sale_currency_code, 'USD', CURRENT_DATE);
+            v_sale_amount_usd := v_order.sale_amount * v_exchange_rate_sale;
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        RETURN QUERY SELECT false, 'Exchange rate not available: ' || SQLERRM, NULL::UUID, NULL::NUMERIC, NULL::JSONB;
+        RETURN;
+    END;
 
-    -- Calculate exchange rates
-    v_exchange_rate_cost := v_pool.average_cost;  -- Cost per unit (using average_cost)
-    v_exchange_rate_sale := v_order.unit_price;  -- Sale price per unit in VND
+    -- 7. Calculate unit price with NULL safety (from staging)
+    IF v_cost_amount_usd IS NOT NULL AND v_cost_amount_usd > 0 AND v_order.quantity > 0 THEN
+        v_transaction_unit_price := v_cost_amount_usd / v_order.quantity;
+    ELSE
+        v_transaction_unit_price := 0;
+    END IF;
 
-    IF v_cost_amount_usd > 0 THEN
+    v_profit_amount := v_sale_amount_usd - COALESCE(v_cost_amount_usd, 0);
+
+    IF v_cost_amount_usd IS NOT NULL AND v_cost_amount_usd > 0 THEN
         v_profit_margin := (v_profit_amount / v_cost_amount_usd) * 100;
     ELSE
         v_profit_margin := 0;
@@ -273,7 +298,7 @@ BEGIN
         last_updated_by = p_user_id
     WHERE id = v_pool.id;
 
-    -- 9. Create transaction record - FIX: Remove inventory_pool_id column (doesn't exist)
+    -- 9. Create transaction record with COALESCE for unit_price (from staging)
     INSERT INTO currency_transactions (
         game_account_id,
         game_code,
@@ -283,12 +308,12 @@ BEGIN
         quantity,
         unit_price,
         currency_code,
+        channel_id,
         currency_order_id,
         proofs,
         created_by,
         created_at,
-        exchange_rate_usd,
-        channel_id
+        exchange_rate_usd
     ) VALUES (
         v_pool.game_account_id,
         v_order.game_code,
@@ -296,14 +321,14 @@ BEGIN
         'sale_delivery',
         v_order.currency_attribute_id,
         v_order.quantity,
-        v_transaction_unit_price,
-        v_order.cost_currency_code,  -- Use cost_currency from order
+        COALESCE(v_transaction_unit_price, 0),  -- CRITICAL: Never NULL
+        'USD',
+        v_pool.channel_id,
         p_order_id,
         jsonb_build_array(v_new_proof),
         p_user_id,
         NOW(),
-        v_exchange_rate_cost,
-        v_pool.channel_id
+        v_exchange_rate_cost
     );
 
     -- 10. Update currency order with delivery information - FIX: Properly handle proofs
