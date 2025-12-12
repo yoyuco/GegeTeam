@@ -141,7 +141,7 @@ BEGIN
         last_updated_by = p_user_id
     WHERE id = v_pool.id;
 
-    -- 9. Create transaction record - FIX: Remove inventory_pool_id and fix column order
+    -- 9. Create transaction record - FIX: Fix column order and include inventory_pool_id
     INSERT INTO currency_transactions (
         game_account_id,
         game_code,
@@ -151,6 +151,7 @@ BEGIN
         quantity,
         unit_price,
         currency_code,
+        inventory_pool_id,
         currency_order_id,
         proofs,
         created_by,
@@ -166,6 +167,7 @@ BEGIN
         v_order.quantity,
         v_transaction_unit_price,
         'USD',
+        v_pool.id,
         p_order_id,
         jsonb_build_array(v_new_proof),
         p_user_id,
