@@ -3,12 +3,19 @@
 -- Purpose: Sync all sell order related functions from staging to fix production issues
 
 -- 1. Drop existing functions to ensure clean recreation
-DROP FUNCTION IF EXISTS complete_sell_order_with_profit_calculation(p_order_id UUID, p_user_id UUID);
-DROP FUNCTION IF EXISTS complete_sale_order_v2(p_order_id UUID, p_user_id UUID);
-DROP FUNCTION IF EXISTS process_sell_order_delivery(p_order_id UUID, p_delivery_proof_url TEXT, p_user_id UUID);
-DROP FUNCTION IF EXISTS process_sell_order_delivery(p_order_id UUID, p_delivery_proof_url TEXT, p_user_id UUID, p_delivery_proof_data JSONB);
-DROP FUNCTION IF EXISTS process_delivery_confirmation_v2(p_order_id UUID, p_user_id UUID);
-DROP FUNCTION IF EXISTS get_delivery_summary(p_order_id UUID);
+-- Drop functions with CASCADE to remove all overloads
+DROP FUNCTION IF EXISTS complete_sell_order_with_profit_calculation CASCADE;
+DROP FUNCTION IF EXISTS complete_sell_order_with_profit_calculation(p_order_id UUID) CASCADE;
+DROP FUNCTION IF EXISTS complete_sell_order_with_profit_calculation(p_order_id UUID, p_user_id UUID) CASCADE;
+DROP FUNCTION IF EXISTS complete_sale_order_v2 CASCADE;
+DROP FUNCTION IF EXISTS complete_sale_order_v2(p_order_id UUID, p_user_id UUID) CASCADE;
+DROP FUNCTION IF EXISTS process_sell_order_delivery CASCADE;
+DROP FUNCTION IF EXISTS process_sell_order_delivery(p_order_id UUID, p_delivery_proof_url TEXT, p_user_id UUID) CASCADE;
+DROP FUNCTION IF EXISTS process_sell_order_delivery(p_order_id UUID, p_delivery_proof_url TEXT, p_user_id UUID, p_delivery_proof_data JSONB) CASCADE;
+DROP FUNCTION IF EXISTS process_delivery_confirmation_v2 CASCADE;
+DROP FUNCTION IF EXISTS process_delivery_confirmation_v2(p_order_id UUID, p_user_id UUID) CASCADE;
+DROP FUNCTION IF EXISTS get_delivery_summary CASCADE;
+DROP FUNCTION IF EXISTS get_delivery_summary(p_order_id UUID) CASCADE;
 
 -- 2. Create/Recreate complete_sell_order_with_profit_calculation function (from staging)
 CREATE OR REPLACE FUNCTION complete_sell_order_with_profit_calculation(
