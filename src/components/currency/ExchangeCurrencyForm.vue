@@ -439,7 +439,7 @@ const onReset = () => {
     }
   }
 
-  emit('reset')
+  // Don't emit reset event to avoid infinite loop with parent
 }
 
 // Watch for currency changes to update exchange rates
