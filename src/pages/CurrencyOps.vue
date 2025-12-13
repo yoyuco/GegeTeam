@@ -1227,11 +1227,16 @@ const handleProcessInventory = async (data: { order: any; targetStatus: string }
       throw new Error(`Không thể lấy thông tin người dùng: ${profileError.message}`)
     }
 
-    // Call confirm_purchase_order_receiving_v2 with proofs from frontend
+    // Call confirm_purchase_order_receiving_v2 with only receiving proofs
+    // Filter out negotiation proofs as they should remain unchanged
+    const receivingProofs = order.proofs?.filter((proof: any) =>
+      proof.type === 'receiving' || proof.type === 'delivery'
+    ) || []
+
     const { data: rpcData, error: rpcError } = await supabase.rpc('confirm_purchase_order_receiving_v2', {
       p_order_id: order.id,
       p_completed_by: profileData,
-      p_proofs: order.proofs  // Pass proofs directly from frontend
+      p_proofs: receivingProofs  // Only pass receiving proofs
     })
 
     if (rpcError) {
