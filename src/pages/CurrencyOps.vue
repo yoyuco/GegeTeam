@@ -56,8 +56,8 @@
       </div>
     </div>
 
-    <!-- Inventory Summary -->
-    <div class="mb-6" v-if="activeTab === 'exchange'">
+    <!-- Game Server Selector - Active for exchange and delivery tabs (needed for both exchange and inventory access) -->
+    <div class="mb-6" :class="{ 'hidden': activeTab !== 'exchange' && activeTab !== 'delivery' }">
       <GameServerSelector
         ref="gameServerSelectorRef"
         :key="`game-server-${currentGame?.value}-${currentServer?.value}`"
@@ -314,7 +314,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import {
   NButton,
   useMessage,
@@ -496,6 +496,31 @@ const loadCurrenciesForCurrentGame = async () => {
 const isInventoryOpen = ref(false)
 const activeTab = ref('delivery')
 
+// Initialize inventory panel state from URL
+const initializeInventoryState = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const inventoryOpen = urlParams.get('inventoryOpen')
+  isInventoryOpen.value = inventoryOpen === 'true'
+}
+
+// Update URL when inventory panel state changes
+const updateInventoryStateInUrl = (isOpen: boolean) => {
+  const url = new URL(window.location.href)
+  if (isOpen) {
+    url.searchParams.set('inventoryOpen', 'true')
+  } else {
+    url.searchParams.delete('inventoryOpen')
+  }
+
+  // Update URL without page reload
+  window.history.replaceState({}, '', url.toString())
+}
+
+// Watch for inventory panel state changes and update URL
+watch(isInventoryOpen, (newValue) => {
+  updateInventoryStateInUrl(newValue)
+})
+
 // Function to get first available tab based on permissions
 const getFirstAvailableTab = () => {
   if (permissions.canExchangeCurrencyOrders()) return 'exchange'
@@ -626,21 +651,23 @@ const loadData = async () => {
     isDataLoading.value = true
     areCurrenciesLoading.value = true // Start currency loading
 
+    // ALWAYS initialize game context (needed for inventory panel access from any tab)
+    await initializeFromStorage()
+    let retries = 0
+    while ((!currentGame.value || !currentServer.value) && retries < 10) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      retries++
+    }
+
+    // Now initialize currency composable properly (same pattern as GameLeagueSelector)
+    await initializeCurrency()
+
     // Only load exchange-related data if we're on exchange tab
     if (activeTab.value === 'exchange') {
-      // Initialize and wait for game context
-      await initializeFromStorage()
-      let retries = 0
-      while ((!currentGame.value || !currentServer.value) && retries < 10) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        retries++
-      }
       if (!currentGame.value || !currentServer.value) {
         throw new Error('Game context not available')
       }
 
-      // Now initialize currency composable properly (same pattern as GameLeagueSelector)
-      await initializeCurrency()
       // Load currencies and accounts for exchange
       await loadCurrenciesForCurrentGame()
       await new Promise(resolve => setTimeout(resolve, 100)) // Allow reactive updates
@@ -665,6 +692,9 @@ const loadData = async () => {
 
 const initializeComponent = async () => {
   try {
+    // Initialize inventory panel state from URL
+    initializeInventoryState()
+
     // Use the same loading pattern as CurrencyCreateOrders
     await loadData()
   } catch (error) {
@@ -1546,9 +1576,91 @@ const handleHistoryFilterChange = async (filters: any) => {
   await loadTransactionHistory()
 }
 
+// Realtime subscription
+let currencyOrdersSubscription: any = null
+
+// Setup realtime subscription for currency orders
+const setupRealtimeSubscription = () => {
+  // Clean up existing subscription
+  if (currencyOrdersSubscription) {
+    currencyOrdersSubscription.unsubscribe()
+  }
+
+  // Subscribe to currency orders changes
+  currencyOrdersSubscription = supabase
+    .channel('currency-orders-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to all changes (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'currency_orders'
+      },
+      async (payload) => {
+        console.log('Currency order change detected:', payload)
+
+        // Determine which data to reload based on the change
+        const { eventType, new: newRecord, old: oldRecord } = payload
+
+        // For delivery orders - reload if status matches delivery criteria
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          const record = newRecord || oldRecord
+
+          // Check if this affects delivery orders
+          const deliveryStatuses = ['draft', 'pending', 'assigned', 'preparing', 'ready', 'delivering']
+          if (deliveryStatuses.includes(record?.status)) {
+            console.log('Reloading delivery orders due to change')
+            await loadDeliveryOrders()
+          }
+
+          // Check if this affects history orders
+          const historyStatuses = ['completed', 'cancelled', 'delivered', 'failed']
+          if (historyStatuses.includes(record?.status)) {
+            console.log('Reloading transaction history due to change')
+            if (activeTab.value === 'history') {
+              await loadTransactionHistory()
+            }
+          }
+        }
+
+        // For DELETE events, reload both to be safe
+        if (eventType === 'DELETE') {
+          console.log('Order deleted, reloading both datasets')
+          await loadDeliveryOrders()
+          if (activeTab.value === 'history') {
+            await loadTransactionHistory()
+          }
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime subscription established for currency orders')
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('Realtime subscription error')
+      }
+    })
+}
+
+// Cleanup realtime subscription
+const cleanupRealtimeSubscription = () => {
+  if (currencyOrdersSubscription) {
+    supabase.removeChannel(currencyOrdersSubscription)
+    currencyOrdersSubscription = null
+    console.log('Realtime subscription cleaned up')
+  }
+}
+
 // --- LIFECYCLE ---
 onMounted(async () => {
   await initializeComponent()
+  // Setup realtime subscription after initial data load
+  setupRealtimeSubscription()
+})
+
+onUnmounted(() => {
+  // Clean up subscription when component is destroyed
+  cleanupRealtimeSubscription()
 })
 
 </script>

@@ -489,7 +489,7 @@ interface Profile {
   // Joined fields from auth.users
   username: string // Extracted from raw_user_meta_data or email
   email: string // From auth.users
-  last_sign_in_at?: string | null // From auth.users, will be converted to GMT+7
+  last_sign_in_at?: string | null // From auth.users (database is already GMT+7)
   avatar_url?: string | null // User avatar URL
   // Computed fields for display
   role_name: string // Computed from role_assignments
@@ -751,7 +751,7 @@ const columns: DataTableColumns<Profile> = [
     }
   },
   {
-    title: 'Lần cuối đăng nhập (GMT+7)',
+    title: 'Lần cuối đăng nhập',
     key: 'last_sign_in_at',
     render(row) {
       return row.last_sign_in_at
@@ -891,12 +891,11 @@ const loadProfiles = async () => {
         // Extract username from email or use default
         const username = email !== 'N/A' ? email.split('@')[0] : 'User'
 
-        // Convert last_sign_in_at to GMT+7
+        // Use last_sign_in_at as-is (database is already GMT+7)
         let lastSignInGmt7 = null
         if (userInfo.last_sign_in_at) {
-          const lastSignIn = new Date(userInfo.last_sign_in_at)
-          // GMT+7 = UTC + 7 hours
-          lastSignInGmt7 = new Date(lastSignIn.getTime() + (7 * 60 * 60 * 1000))
+          // Database is already GMT+7, no conversion needed
+          lastSignInGmt7 = new Date(userInfo.last_sign_in_at)
         }
 
         return {

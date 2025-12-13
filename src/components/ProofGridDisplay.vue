@@ -25,7 +25,7 @@
     <n-modal
       v-model:show="showViewer"
       :mask-closable="true"
-      size="fullscreen"
+      size="huge"
       :show-icon="false"
       @close="closeViewer"
     >
@@ -161,7 +161,7 @@ const isImageFile = (proof: Proof): boolean => {
   if (!proof.filename) {
     // Try to determine if it's an image from the URL
     const url = proof.url || ''
-    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'jfif', 'bmp']
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'jfif', 'bmp'] // cspell:disable-line
     const urlExtension = url.toLowerCase().split('.').pop()?.split('?')[0]
     if (urlExtension && imageExtensions.includes(urlExtension)) {
       return true
@@ -172,9 +172,9 @@ const isImageFile = (proof: Proof): boolean => {
     }
     return false
   }
-  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'jfif', 'bmp']
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'jfif', 'bmp'] // cspell:disable-line
   const extension = proof.filename.toLowerCase().split('.').pop()
-  return imageExtensions.includes(extension)
+  return extension ? imageExtensions.includes(extension) : false
 }
 
 

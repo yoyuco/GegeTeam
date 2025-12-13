@@ -233,18 +233,17 @@ import {
 import { supabase } from '@/lib/supabase'
 import type { DataTableColumns, FormRules } from 'naive-ui'
 import FilterPanel from './FilterPanel.vue'
-import { TIMEZONE_OFFSET } from '@/utils/timezoneHelper'
 
-// Helper function for consistent GMT+7 time display
+// Helper function for consistent time display
 const ensureGMT7Display = (timeString: string) => {
   if (!timeString) return ''
 
-  // Create a date object with the time, treating it as GMT+7
+  // Create a date object with the time (database is already GMT+7)
   const [hours, minutes] = timeString.split(':').map(Number)
   const date = new Date()
   date.setHours(hours, minutes, 0, 0)
 
-  // Format with explicit GMT+7 timezone
+  // Format with consistent timezone display
   return date.toLocaleTimeString('vi-VN', {
     timeZone: 'Asia/Bangkok',
     hour: '2-digit',
