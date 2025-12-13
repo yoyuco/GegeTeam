@@ -154,7 +154,8 @@ BEGIN
         v_profit_margin := 0;
     END IF;
 
-    -- 8. Deduct from inventory pool (use CASCADE for delivery fee calculation later)
+    -- 8. Update inventory pool - reduce both quantity and reserved_quantity on delivery
+    -- quantity was reserved when order was assigned, now we actually consume it
     UPDATE inventory_pools SET
         quantity = quantity - v_order.quantity,
         reserved_quantity = reserved_quantity - v_order.quantity,
@@ -172,27 +173,23 @@ BEGIN
         quantity,
         unit_price,
         currency_code,
-        inventory_pool_id,
         currency_order_id,
         proofs,
         created_by,
-        created_at,
-        transaction_unit_price
+        created_at
     ) VALUES (
         v_pool.game_account_id,
         v_order.game_code,
+        v_order.server_attribute_code,
         'sale_delivery',
         v_order.currency_attribute_id,
         v_order.quantity,
-        p_order_id,
         v_transaction_unit_price,
         'USD',
-        v_exchange_rate_cost,
-        v_pool.channel_id,
+        p_order_id,
         jsonb_build_array(v_new_proof),
         p_user_id,
-        NOW(),
-        v_order.server_attribute_code
+        NOW()
     );
 
     -- 10. Update currency order with delivery information - FIX: Properly handle proofs
