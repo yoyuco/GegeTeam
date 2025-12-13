@@ -2271,23 +2271,38 @@ const handleConfirmCancel = async () => {
     const existingProofs = Array.isArray(order.proofs) ? order.proofs : []
     const updatedProofs = [...existingProofs, ...newProofsData]
 
-    // Update order in a single query
-    const { error: orderError } = await supabase
-      .from('currency_orders')
-      .update({
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
-        notes: order.notes ? `${order.notes}\n\n${cancelNote}` : cancelNote,
-        proofs: updatedProofs,
-        updated_at: new Date().toISOString()
+    // Step 2: Call RPC function to rollback inventory for SELL orders
+    if (order.order_type === 'SALE') {
+      const { data: cancelResult, error: cancelError } = await supabase.rpc('cancel_sell_order_with_inventory_rollback', {
+        p_order_id: order.id
       })
-      .eq('id', order.id)
 
-    if (orderError) {
-      throw new Error(`Lỗi cập nhật trạng thái đơn: ${orderError.message}`)
+      if (cancelError) {
+        throw new Error(`Lỗi rollback inventory: ${cancelError.message}`)
+      }
+
+      if (cancelResult && cancelResult[0] && !cancelResult[0].success) {
+        throw new Error(`Cancel failed: ${cancelResult[0].message}`)
+      }
+    } else {
+      // For PURCHASE orders, just update status
+      const { error: orderError } = await supabase
+        .from('currency_orders')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          notes: order.notes ? `${order.notes}\n\n${cancelNote}` : cancelNote,
+          proofs: updatedProofs,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      if (orderError) {
+        throw new Error(`Lỗi cập nhật trạng thái đơn: ${orderError.message}`)
+      }
     }
 
-    // Step 3: Emit refresh event to parent (no status processing needed)
+    // Step 3: Emit refresh event to parent
     emit('refresh-data')
 
     // Show success message
