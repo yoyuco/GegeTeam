@@ -80,10 +80,10 @@ BEGIN
         RETURN;
     END IF;
 
-    -- 4. Handle existing proofs - Keep existing logic
+    -- 4. Initialize proofs - Start with existing proofs
     v_existing_proofs := COALESCE(v_order.proofs, '[]'::JSONB);
 
-    -- If proofs is an object, convert to array
+    -- Ensure it's an array
     IF jsonb_typeof(v_existing_proofs) = 'object' THEN
         v_existing_proofs := jsonb_build_array(v_existing_proofs);
     ELSIF jsonb_typeof(v_existing_proofs) != 'array' THEN
@@ -92,13 +92,6 @@ BEGIN
 
     -- 5. Build delivery proof objects for each URL
     v_new_proofs := '[]'::JSONB;
-
-    -- Remove existing delivery proofs to avoid duplicates
-    v_existing_proofs := (
-        SELECT jsonb_agg(proof)
-        FROM jsonb_array_elements(v_existing_proofs) AS proof
-        WHERE proof->>'type' != 'delivery'
-    );
 
     -- Process each delivery proof URL
     FOR v_index IN 0..jsonb_array_length(p_delivery_proof_urls) - 1 LOOP
@@ -114,7 +107,30 @@ BEGIN
         v_new_proofs := v_new_proofs || jsonb_build_array(v_new_proof);
     END LOOP;
 
-    -- 6. Get current exchange rates
+    -- 6. Combine existing proofs with new delivery proofs
+    -- Keep all non-delivery proofs and add new delivery proofs
+    v_existing_proofs := (
+        SELECT jsonb_agg(proof)
+        FROM (
+            -- Keep existing proofs that are not delivery
+            SELECT proof
+            FROM jsonb_array_elements(v_existing_proofs) AS proof
+            WHERE proof->>'type' != 'delivery'
+
+            UNION ALL
+
+            -- Add new delivery proofs
+            SELECT proof
+            FROM jsonb_array_elements(v_new_proofs) AS proof
+        ) AS all_proofs
+    );
+
+    -- Ensure we have a valid JSONB array
+    IF v_existing_proofs IS NULL THEN
+        v_existing_proofs := v_new_proofs;
+    END IF;
+
+    -- 7. Get current exchange rates
     BEGIN
         -- Convert cost to USD if needed
         IF v_order.cost_currency_code = 'USD' THEN
@@ -144,22 +160,22 @@ BEGIN
         RETURN;
     END;
 
-    -- 7. Calculate profit
+    -- 8. Calculate profit
     v_profit_amount := v_sale_amount_usd - v_cost_amount_usd;
     v_profit_margin := CASE WHEN v_cost_amount_usd > 0 THEN (v_profit_amount / v_cost_amount_usd) * 100 ELSE 0 END;
 
-    -- 8. Calculate transaction unit price
+    -- 9. Calculate transaction unit price
     v_transaction_unit_price := v_cost_amount_usd / v_order.quantity;
 
-    -- 9. Update inventory pool
+    -- 10. Update inventory pool - ONLY update reserved_quantity for delivery confirmation
+    -- The actual quantity reduction happens when the sale is completed/finalized
     UPDATE inventory_pools SET
-        quantity = quantity - v_order.quantity,
         reserved_quantity = reserved_quantity - v_order.quantity,
         last_updated_at = NOW(),
         last_updated_by = p_user_id
     WHERE id = v_order.inventory_pool_id;
 
-    -- 10. Create currency transaction record
+    -- 11. Create currency transaction record
     INSERT INTO currency_transactions (
         game_account_id,
         game_code,
@@ -185,14 +201,14 @@ BEGIN
         v_transaction_unit_price,
         'USD',
         v_exchange_rate_cost,
-        v_pool.channel_id,
+        COALESCE(v_pool.channel_id, v_order.channel_id),
         v_new_proofs,
         p_user_id,
         NOW(),
         v_order.server_attribute_code
     );
 
-    -- 11. Update currency order
+    -- 12. Update currency order
     UPDATE currency_orders SET
         status = 'completed',
         completed_at = NOW(),
@@ -204,10 +220,10 @@ BEGIN
         cost_to_sale_exchange_rate = v_exchange_rate_cost,
         exchange_rate_date = CURRENT_DATE,
         exchange_rate_source = 'system',
-        proofs = v_existing_proofs || v_new_proofs
+        proofs = v_existing_proofs  -- Already contains combined proofs
     WHERE id = p_order_id;
 
-    -- 12. Return success result
+    -- 13. Return success result
     RETURN QUERY SELECT
         true,
         format('Delivery processed successfully with %s proof(s)', jsonb_array_length(v_new_proofs)),
