@@ -1455,6 +1455,7 @@ const saveSale = async () => {
     payload.p_user_id = profileData
 
     // Step 1: Create sell order draft
+    // Note: Inventory validation will be handled by backend during assignment phase
         const { data, error } = await supabase.rpc('create_currency_sell_order_draft', payload)
     if (error) {
       console.error('Backend error:', error)
@@ -1549,11 +1550,29 @@ const saveSale = async () => {
 
         if (assignmentError) {
           console.error('Assignment error:', assignmentError)
-          message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công`)
+          message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công: ${assignmentError.message}`)
         }
-      } catch (assignError) {
+
+        // Check assignment result
+        if (assignmentResult && assignmentResult.length > 0 && !assignmentResult[0].success) {
+          console.error('Assignment failed:', assignmentResult[0].message)
+
+          // Check if it's an inventory-related error
+          const errorMsg = assignmentResult[0].message.toLowerCase()
+          if (errorMsg.includes('no suitable inventory') || errorMsg.includes('inventory pool')) {
+            // This is an inventory availability error - show more user-friendly message
+            message.error(`❌ Không tìm thấy inventory phù hợp cho đơn #${orderNumber}. Vui lòng kiểm tra lại kho hàng hoặc thêm inventory mới.`)
+
+            // Optionally, we could delete the draft order here if inventory is not available
+            // await supabase.from('currency_orders').delete().eq('id', orderId)
+            // message.info(`Đơn draft #${orderNumber} đã bị xóa do không có inventory phù hợp`)
+          } else {
+            message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công: ${assignmentResult[0].message}`)
+          }
+        }
+      } catch (assignError: any) {
         console.error('Assignment failed:', assignError)
-        // Silently handle assignment errors
+        message.error(`❌ Lỗi khi phân công đơn #${orderNumber}: ${assignError.message}`)
       }
 
       // Single success message at the end
