@@ -2107,27 +2107,22 @@ const handleConfirmDelivery = async () => {
           throw new Error('Unable to get current user profile')
         }
 
-        // Get delivery proof data from new proofs
-        const deliveryProof = newProofFiles.find(proof => proof.type === 'delivery')
-        const deliveryProofUrl = deliveryProof?.url || newProofFiles[newProofFiles.length - 1]?.url
-        const deliveryProofData = deliveryProof ? {
-          filename: deliveryProof.filename,
-          type: deliveryProof.type,
-          uploaded_at: deliveryProof.uploaded_at
-        } : null
+        // Get all delivery proof URLs from uploaded files
+        const deliveryProofUrls = newProofFiles
+          .filter(proof => proof.type === 'delivery')
+          .map(proof => proof.url)
 
-        if (!deliveryProofUrl) {
+        if (deliveryProofUrls.length === 0) {
           throw new Error('Vui lòng tải lên bằng chứng giao hàng (bắt buộc)')
         }
 
-        // Call the delivery processing function
+        // Call the delivery processing function with multiple proofs
         const { data: processResult, error: processError } = await supabase.rpc(
           'process_sell_order_delivery',
           {
             p_order_id: order.id,
-            p_delivery_proof_url: deliveryProofUrl,
-            p_user_id: profileId,
-            p_delivery_proof_data: deliveryProofData
+            p_delivery_proof_urls: deliveryProofUrls,
+            p_user_id: profileId
           }
         )
 
