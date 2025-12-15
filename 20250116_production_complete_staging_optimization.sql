@@ -160,6 +160,25 @@ BEGIN
         mv_active_farmers.last_updated
       FROM mv_active_farmers
     ),
+    line_items AS (
+      -- Aggregate service items for each order line (from v3)
+      SELECT
+        osi.order_line_id,
+        jsonb_agg(
+          jsonb_build_object(
+            'id', osi.id,
+            'kind_code', a_kind.code,
+            'kind_name', a_kind.name,
+            'params', osi.params,
+            'plan_qty', osi.plan_qty,
+            'done_qty', osi.done_qty,
+            'active_report_id', (SELECT sr.id FROM service_reports sr WHERE sr.order_service_item_id = osi.id AND sr.status = 'new' LIMIT 1)
+          ) ORDER BY a_kind.name
+        ) AS items
+      FROM order_service_items osi
+      JOIN attributes a_kind ON osi.service_kind_id = a_kind.id
+      GROUP BY osi.order_line_id
+    ),
     base_query AS (
       SELECT
         ol.id,
@@ -176,9 +195,10 @@ BEGIN
         pv.display_name as service_type,
         o.package_type,
         o.package_note,
-        COALESCE(af.farmer_names, '') as assignees_text,
-        NULL::jsonb as service_items,
-        NULL::uuid as review_id,
+        -- Only show assignees if there are actually active sessions
+        af.farmer_names as assignees_text,
+        COALESCE(li.items, '[]'::jsonb) as service_items,
+        (SELECT r.id FROM order_reviews r WHERE r.order_line_id = ol.id LIMIT 1) as review_id,
         ol.machine_info,
         ol.paused_at,
         o.delivered_at,
@@ -193,13 +213,30 @@ BEGIN
       LEFT JOIN channels ch ON o.channel_id = ch.id
       LEFT JOIN customer_accounts ca ON ol.customer_account_id = ca.id
       LEFT JOIN active_farmers af ON ol.id = af.order_line_id
+      LEFT JOIN line_items li ON ol.id = li.order_line_id
       WHERE o.game_code = 'DIABLO_4' AND o.status <> 'draft'
         AND (p_channels IS NULL OR o.channel_id = ANY(p_channels))
         AND (p_statuses IS NULL OR o.status = ANY(p_statuses))
         AND (p_service_types IS NULL OR pv.display_name = ANY(p_service_types))
         AND (p_package_types IS NULL OR o.package_type = ANY(p_package_types))
         AND (p_customer_name IS NULL OR LOWER(p.name) LIKE LOWER('%' || TRIM(p_customer_name) || '%'))
-        AND (p_assignee IS NULL OR LOWER(af.farmer_names) LIKE LOWER('%' || TRIM(p_assignee) || '%'))
+        AND (p_assignee IS NULL OR (af.farmer_names IS NOT NULL AND LOWER(af.farmer_names) LIKE LOWER('%' || TRIM(p_assignee) || '%')))
+    ),
+    filtered_query AS (
+      SELECT * FROM base_query
+      -- Additional filtering for delivery status if specified
+      WHERE
+        CASE
+          WHEN p_delivery_status = 'delivered' THEN base_query.delivered_at IS NOT NULL
+          WHEN p_delivery_status = 'not_delivered' THEN base_query.delivered_at IS NULL
+          ELSE TRUE
+        END
+        -- Additional filtering for review status if specified
+        AND CASE
+          WHEN p_review_status = 'reviewed' THEN base_query.review_id IS NOT NULL
+          WHEN p_review_status = 'not_reviewed' THEN base_query.review_id IS NULL
+          ELSE TRUE
+        END
     )
     SELECT
       bq.id,
@@ -227,7 +264,7 @@ BEGIN
       bq.pilot_is_blocked,
       bq.pilot_cycle_start_at,
       COUNT(*) OVER() as total_count
-    FROM base_query bq
+    FROM filtered_query bq
     ORDER BY
       CASE bq.status
         WHEN 'new' THEN 1
