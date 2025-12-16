@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-xl font-semibold tracking-tight">Service – Boosting</h1>
       <div class="flex items-center gap-2">
-        <n-button size="small" :loading="loading" @click="loadOrders">Làm mới</n-button>
+        <n-button size="small" :loading="loading" @click="() => loadOrders(true)">Làm mới</n-button>
       </div>
     </div>
 
@@ -1419,12 +1419,12 @@ const pagination = reactive({
   },
   onUpdatePage: (page: number) => {
     pagination.page = page
-    loadOrders()
+    loadOrders(true) // Force refresh for pagination
   },
   onUpdatePageSize: (pageSize: number) => {
     pagination.pageSize = pageSize
     pagination.page = 1
-    loadOrders()
+    loadOrders(true) // Force refresh for page size change
   },
 })
 const isDescCollapsed = ref(true)
@@ -2721,11 +2721,50 @@ async function copyToClipboard(text: string) {
 // =================================================================
 // API & DATA FETCHING
 // =================================================================
-async function loadOrders() {
+// Performance optimizations
+// Utility debounce function
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
+  let timeout: NodeJS.Timeout
+  return ((...args: any[]) => {
+    clearTimeout(timeout)
+timeout = setTimeout(() => func.apply(func, args), wait)
+  }) as T
+}
+
+const loadOrdersDebounced = debounce(loadOrders, 500)
+const CACHE_TTL = 15 * 1000 // 15 seconds client-side cache
+let lastLoadTime = 0
+let cacheData: unknown[] = []
+
+async function loadOrders(forceRefresh = false) {
+  // Client-side caching - avoid redundant requests
+  const now = Date.now()
+  if (!forceRefresh && (now - lastLoadTime) < CACHE_TTL && cacheData.length > 0) {
+    const firstRow = cacheData[0] as Record<string, unknown>
+    pagination.itemCount = Number(firstRow.total_count) || 0
+    rows.value = cacheData.map((r) => {
+      const row = r as Record<string, unknown>
+      let serviceType = row.service_type as string
+      if (serviceType) {
+        const typeStr = String(serviceType).toLowerCase()
+        if (typeStr.includes('pilot')) {
+          serviceType = 'Pilot'
+        } else if (typeStr.includes('selfplay')) {
+          serviceType = 'Selfplay'
+        }
+      }
+      return { ...row, line_id: row.id, service_type: serviceType } as OrderRow
+    })
+    return
+  }
+
   loading.value = true
+  const startTime = performance.now()
+
   try {
     const offset = (pagination.page - 1) * pagination.pageSize
-    const { data, error } = await supabase.rpc('get_boosting_orders_v3', {
+    // Use optimized v4 function with correct parameter order
+    const { data, error } = await supabase.rpc('get_boosting_orders_v4', {
       p_limit: pagination.pageSize,
       p_offset: offset,
       p_channels: filters.channels?.length ? filters.channels : null,
@@ -2740,6 +2779,10 @@ async function loadOrders() {
     if (error) throw error
 
     const dataArray = (data as unknown[]) ?? []
+
+    // Cache the results
+    cacheData = dataArray
+    lastLoadTime = now
 
     // Extract total_count from first row (all rows have same total_count)
     if (dataArray.length > 0) {
@@ -2765,6 +2808,11 @@ async function loadOrders() {
       // Return normalized object as OrderRow
       return { ...row, line_id: row.id, service_type: serviceType } as OrderRow
     })
+
+    // Performance monitoring
+    const loadTime = performance.now() - startTime
+    console.log(`[ServiceBoosting] Loaded ${dataArray.length} orders in ${loadTime.toFixed(2)}ms`)
+
   } catch (e: unknown) {
     const error = e as Error
     console.error('[loadOrders]', error)
@@ -3542,7 +3590,17 @@ async function startSession() {
     message.success('Bắt đầu phiên làm việc thành công!')
 
     // Manual reload because SECURITY DEFINER may not trigger realtime immediately
-    await loadOrders()
+    await loadOrders(true) // Force refresh to bypass cache after session operations
+
+    // Refresh materialized view to ensure latest farmer assignments
+    try {
+      await supabase.rpc('refresh_active_farmers')
+    } catch (error) {
+      console.warn('Failed to refresh materialized view:', error)
+    }
+
+    // Add small delay to ensure database consistency before reopening detail
+    await new Promise(resolve => setTimeout(resolve, 500))
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
@@ -3690,7 +3748,17 @@ async function finishSession() {
     ws2.value.sessionId = null
 
     // Manual reload because SECURITY DEFINER may not trigger realtime immediately
-    await loadOrders()
+    await loadOrders(true) // Force refresh to bypass cache after session operations
+
+    // Refresh materialized view to ensure latest farmer assignments
+    try {
+      await supabase.rpc('refresh_active_farmers')
+    } catch (error) {
+      console.warn('Failed to refresh materialized view:', error)
+    }
+
+    // Add small delay to ensure database consistency before reopening detail
+    await new Promise(resolve => setTimeout(resolve, 500))
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
@@ -4107,7 +4175,7 @@ watch(
   ],
   () => {
     pagination.page = 1
-    loadOrders()
+    loadOrdersDebounced()
   },
   { deep: true }
 )
@@ -4156,10 +4224,10 @@ function debouncedReload() {
     clearTimeout(reloadDebounceTimer)
   }
 
-  // Set new timer to reload after 500ms of inactivity
+  // Optimized realtime debouncing: 300ms instead of 500ms
   reloadDebounceTimer = window.setTimeout(() => {
-    loadOrders()
-  }, 500)
+    loadOrders() // Will use cache if recent
+  }, 300)
 }
 
 function setupRealtimeSubscriptions() {
@@ -4194,13 +4262,13 @@ function cleanupRealtimeSubscriptions() {
 
 function startBackgroundPoll() {
   stopBackgroundPoll()
-  // Poll every 30s to catch changes from other users (for SECURITY DEFINER operations)
+  // Optimized polling: every 15s instead of 30s with client-side caching
   // Only poll when tab is active (user is watching)
   backgroundPollTimer = window.setInterval(() => {
     if (!document.hidden) {
-      loadOrders()
+      loadOrders() // Will use cache if available
     }
-  }, 30000)
+  }, 15000)
 }
 
 function stopBackgroundPoll() {
