@@ -1,382 +1,308 @@
--- Migration: Integration Triggers with Existing System
--- Description: Create triggers to integrate accounting system with currency orders and transactions
--- Created: 2025-12-18 15:30:00
+-- Migration: Integration Triggers with Existing System (Fixed)
+-- Description: Triggers for automatic journal entries and integration with currency orders
+-- Created: 2025-12-18 16:30:00
 -- Author: Claude Code
 
--- Function to create journal entry for completed currency order
-CREATE OR REPLACE FUNCTION create_journal_entry_for_currency_order()
+-- 1. Trigger to create journal entry when currency order is completed
+CREATE OR REPLACE FUNCTION create_journal_entry_on_currency_order_completion()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_journal_entry_id uuid;
-    v_entry_number text;
-    v_cash_account_id uuid;
-    v_revenue_account_id uuid;
-    v_cogs_account_id uuid;
-    v_inventory_account_id uuid;
-    v_receivable_account_id uuid;
-    v_je_lines JSONB;
+    v_journal_entry_id UUID;
+    v_entry_number TEXT;
+    v_cash_account_id UUID;
+    v_revenue_account_id UUID;
+    v_cogs_account_id UUID;
+    v_inventory_account_id UUID;
+    v_party_name TEXT;
+    v_description TEXT;
 BEGIN
-    -- Only create journal entry when order is completed and not already posted
-    IF NEW.status != 'completed' OR (OLD.status = 'completed' AND NEW.is_posted_to_gl = true) THEN
-        RETURN NEW;
+    -- Only process when status changes to 'completed'
+    IF TG_OP = 'UPDATE' AND OLD.status != 'completed' AND NEW.status = 'completed' THEN
+
+        -- Get party name for description
+        SELECT name INTO v_party_name FROM parties WHERE id = NEW.party_id;
+
+        v_description := CASE
+            WHEN NEW.order_type = 'SALE' THEN
+                'Sales to ' || COALESCE(v_party_name, 'Customer') || ' - Order #' || NEW.order_number
+            WHEN NEW.order_type = 'PURCHASE' THEN
+                'Purchase from ' || COALESCE(v_party_name, 'Supplier') || ' - Order #' || NEW.order_number
+            ELSE
+                'Currency transaction - Order #' || NEW.order_number
+        END;
+
+        -- Generate entry number
+        v_entry_number := generate_journal_entry_number();
+
+        -- Get account IDs based on currency
+        v_cash_account_id := CASE
+            WHEN NEW.sale_currency_code = 'USD' THEN (SELECT id FROM chart_of_accounts WHERE account_code = '102')
+            ELSE (SELECT id FROM chart_of_accounts WHERE account_code = '101')
+        END;
+
+        v_revenue_account_id := (SELECT id FROM chart_of_accounts WHERE account_code = '500');
+        v_cogs_account_id := (SELECT id FROM chart_of_accounts WHERE account_code = '600');
+        v_inventory_account_id := (SELECT id FROM chart_of_accounts WHERE account_code = '400');
+
+        -- Create journal entry header
+        INSERT INTO journal_entries (
+            entry_number, entry_date, description,
+            reference_type, reference_id, total_amount,
+            status, created_by, posted_at, posted_by
+        ) VALUES (
+            v_entry_number, NEW.completed_at::DATE, v_description,
+            'currency_order', NEW.id, NEW.sale_amount,
+            'POSTED', NEW.assigned_to, now(), NEW.assigned_to
+        ) RETURNING id INTO v_journal_entry_id;
+
+        -- Create journal entry lines based on order type
+        IF NEW.order_type = 'SALE' THEN
+            -- Sales transaction: Debit Cash, Credit Revenue
+            INSERT INTO journal_entry_lines (entry_id, line_number, account_id, entity_type, entity_id, debit_amount, credit_amount, description)
+            VALUES
+                (v_journal_entry_id, 1, v_cash_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', NEW.sale_amount, 0, 'Cash received from customer'),
+                (v_journal_entry_id, 2, v_revenue_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', 0, NEW.sale_amount, 'Sales revenue');
+
+            -- If there's cost, also record COGS and inventory reduction
+            IF NEW.cost_amount > 0 THEN
+                INSERT INTO journal_entry_lines (entry_id, line_number, account_id, entity_type, entity_id, debit_amount, credit_amount, description)
+                VALUES
+                    (v_journal_entry_id, 3, v_cogs_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', NEW.cost_amount, 0, 'Cost of goods sold'),
+                    (v_journal_entry_id, 4, v_inventory_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', 0, NEW.cost_amount, 'Inventory reduction');
+            END IF;
+
+        ELSIF NEW.order_type = 'PURCHASE' THEN
+            -- Purchase transaction: Debit Inventory, Credit Cash
+            INSERT INTO journal_entry_lines (entry_id, line_number, account_id, entity_type, entity_id, debit_amount, credit_amount, description)
+            VALUES
+                (v_journal_entry_id, 1, v_inventory_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', NEW.cost_amount, 0, 'Inventory purchased'),
+                (v_journal_entry_id, 2, v_cash_account_id, 'COMPANY', '00000000-0000-0000-0000-000000000000', 0, NEW.cost_amount, 'Cash paid to supplier');
+        END IF;
+
     END IF;
 
-    -- Generate journal entry number
-    v_entry_number := 'JE-' || EXTRACT(YEAR FROM NEW.created_at) || '-' ||
-                    LPAD(nextval('journal_entry_seq')::text, 5, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-    -- Get appropriate accounts
-    SELECT id INTO v_cash_account_id
-    FROM chart_of_accounts
-    WHERE account_code = CASE NEW.cost_currency_code
-        WHEN 'VND' THEN '101'
-        WHEN 'USD' THEN '102'
-        WHEN 'CNY' THEN '103'
-        ELSE '101'
-    END;
+-- Create the trigger
+DROP TRIGGER IF EXISTS tr_currency_order_completion ON currency_orders;
+CREATE TRIGGER tr_currency_order_completion
+    AFTER UPDATE ON currency_orders
+    FOR EACH ROW EXECUTE FUNCTION create_journal_entry_on_currency_order_completion();
 
-    SELECT id INTO v_revenue_account_id
-    FROM chart_of_accounts
-    WHERE account_code = '400' -- Sales Revenue
-    LIMIT 1;
+-- 2. Function to handle employee fund allocation from purchase order completion (FIXED)
+CREATE OR REPLACE FUNCTION handle_employee_fund_on_purchase_completion()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_employee_id UUID;
+    v_allocation_amount DECIMAL(20,4);
+    v_result JSON;
+BEGIN
+    -- Only process when purchase order is completed and assigned to employee
+    IF TG_OP = 'UPDATE'
+       AND OLD.status != 'completed'
+       AND NEW.status = 'completed'
+       AND NEW.order_type = 'PURCHASE'
+       AND NEW.assigned_to IS NOT NULL THEN
 
-    SELECT id INTO v_cogs_account_id
-    FROM chart_of_accounts
-    WHERE account_code = '500' -- Cost of Goods Sold
-    LIMIT 1;
+        v_employee_id := NEW.assigned_to;
+        v_allocation_amount := NEW.cost_amount;
 
-    SELECT id INTO v_inventory_account_id
-    FROM chart_of_accounts
-    WHERE account_code = '110' -- Inventory
-    LIMIT 1;
+        -- Allocate funds to employee if amount > 0
+        IF v_allocation_amount > 0 THEN
+            v_result := allocate_employee_fund(
+                v_employee_id,
+                v_allocation_amount,
+                NEW.cost_currency_code,
+                'Purchase Order #' || NEW.order_number || ' completion',
+                'purchase_order',
+                NEW.id,
+                false -- Don't auto-approve for large amounts
+            );
 
-    SELECT id INTO v_receivable_account_id
-    FROM chart_of_accounts
-    WHERE account_code = '130' -- Accounts Receivable
-    LIMIT 1;
-
-    -- Create journal entry
-    INSERT INTO journal_entries (
-        entry_number, entry_date, description, reference_type, reference_id,
-        total_amount, currency_code, status, created_by
-    ) VALUES (
-        v_entry_number, NEW.created_at::date,
-        'Currency Order: ' || NEW.order_number || ' - ' || NEW.order_type,
-        'currency_order', NEW.id,
-        COALESCE(NEW.sale_amount, NEW.cost_amount), -- Use sale amount if available, else cost
-        NEW.cost_currency_code, 'posted', NEW.created_by
-    ) RETURNING id INTO v_journal_entry_id;
-
-    -- Create journal lines based on order type
-    IF NEW.order_type = 'SALE' THEN
-        -- SALE ORDER: Customer buys from company
-
-        -- Debit: Accounts Receivable (if not cash sale) or Cash
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id, entity_type, entity_id,
-            debit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 1, v_receivable_account_id, 'customer', NEW.party_id,
-            NEW.sale_amount, 'Sale to customer: ' || NEW.order_number
-        );
-
-        -- Credit: Sales Revenue
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            credit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 2, v_revenue_account_id, NEW.sale_amount,
-            'Sales revenue: ' || NEW.order_number
-        );
-
-        -- Debit: Cost of Goods Sold
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            debit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 3, v_cogs_account_id, NEW.cost_amount,
-            'Cost of goods sold: ' || NEW.order_number
-        );
-
-        -- Credit: Inventory
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            credit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 4, v_inventory_account_id, NEW.cost_amount,
-            'Inventory reduction: ' || NEW.order_number
-        );
-
-    ELSIF NEW.order_type = 'PURCHASE' THEN
-        -- PURCHASE ORDER: Company buys from supplier
-
-        -- Debit: Inventory
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            debit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 1, v_inventory_account_id, NEW.cost_amount,
-            'Inventory purchase: ' || NEW.order_number
-        );
-
-        -- Credit: Cash or Accounts Payable
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id, entity_type, entity_id,
-            credit_amount, description
-        ) VALUES (
-            v_journal_entry_id, 2, v_cash_account_id, 'supplier', NEW.party_id,
-            NEW.cost_amount, 'Payment to supplier: ' || NEW.order_number
-        );
-
-    ELSIF NEW.order_type = 'EXCHANGE' THEN
-        -- EXCHANGE ORDER: Currency exchange
-
-        -- This is more complex - simplified version for now
-        -- Debit: Cash (new currency)
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            debit_amount, description
-        ) SELECT v_journal_entry_id, 1, id, NEW.sale_amount,
-               'Exchange - Received: ' || NEW.order_number
-        FROM chart_of_accounts
-        WHERE account_code = CASE NEW.cost_currency_code
-            WHEN 'VND' THEN '101'
-            WHEN 'USD' THEN '102'
-            WHEN 'CNY' THEN '103'
-            ELSE '101'
-        END;
-
-        -- Credit: Cash (old currency)
-        INSERT INTO journal_entry_lines (
-            journal_entry_id, line_number, account_id,
-            credit_amount, description
-        ) SELECT v_journal_entry_id, 2, id, NEW.cost_amount,
-               'Exchange - Given: ' || NEW.order_number
-        FROM chart_of_accounts
-        WHERE account_code = CASE NEW.foreign_currency_code
-            WHEN 'VND' THEN '101'
-            WHEN 'USD' THEN '102'
-            WHEN 'CNY' THEN '103'
-            ELSE '101'
-        END;
-
-        -- Record gain/loss if any
-        IF NEW.profit_amount != 0 THEN
-            INSERT INTO journal_entry_lines (
-                journal_entry_id, line_number, account_id,
-                CASE WHEN NEW.profit_amount > 0 THEN credit_amount ELSE debit_amount END,
-                description
-            ) SELECT v_journal_entry_id, 3, id, ABS(NEW.profit_amount),
-                   CASE WHEN NEW.profit_amount > 0 THEN 'Exchange Gain' ELSE 'Exchange Loss' END || ': ' || NEW.order_number
-            FROM chart_of_accounts
-            WHERE account_code = '420'; -- Exchange Gain/Loss
+            -- If allocation requires approval, create approval request
+            IF NOT (v_result->>'success')::BOOLEAN THEN
+                DECLARE
+                    v_approval_request_id UUID;
+                BEGIN
+                    v_approval_request_id := create_approval_request(
+                        'employee_fund',
+                        (v_result->>'approval_request_id')::UUID,
+                        'Employee Fund Allocation - Purchase #' || NEW.order_number,
+                        'Fund allocation for completing purchase order: ' || NEW.order_number,
+                        v_allocation_amount,
+                        NEW.cost_currency_code,
+                        json_build_object(
+                            'currency_order_id', NEW.id,
+                            'employee_id', v_employee_id,
+                            'allocation_result', v_result
+                        ),
+                        'NORMAL',
+                        72
+                    );
+                END;
+            END IF;
         END IF;
     END IF;
 
-    -- Update currency order with journal entry reference
-    UPDATE currency_orders
-    SET is_posted_to_gl = true,
-        journal_entry_id = v_journal_entry_id
-    WHERE id = NEW.id;
-
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically create journal entries for completed currency orders
-CREATE TRIGGER tr_currency_order_gl_integration
+-- Create the trigger
+DROP TRIGGER IF EXISTS tr_employee_fund_purchase_completion ON currency_orders;
+CREATE TRIGGER tr_employee_fund_purchase_completion
     AFTER UPDATE ON currency_orders
-    FOR EACH ROW EXECUTE FUNCTION create_journal_entry_for_currency_order();
+    FOR EACH ROW EXECUTE FUNCTION handle_employee_fund_on_purchase_completion();
 
--- Function to track inventory transactions with before/after quantities
-CREATE OR REPLACE FUNCTION track_inventory_transaction_quantities()
+-- 3. Function to handle employee fund return on sales order completion
+CREATE OR REPLACE FUNCTION handle_employee_fund_return_on_sale_completion()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_before_quantity numeric(20,4);
-    v_after_quantity numeric(20,4);
-    v_pool_quantity numeric(20,4);
+    v_employee_id UUID;
+    v_return_amount DECIMAL(20,4);
+    v_result JSON;
 BEGIN
-    -- Get current quantity from inventory pool
-    SELECT COALESCE(quantity, 0) INTO v_pool_quantity
-    FROM inventory_pools
-    WHERE id = NEW.inventory_pool_id;
+    -- Only process when sale order is completed and assigned to employee
+    IF TG_OP = 'UPDATE'
+       AND OLD.status != 'completed'
+       AND NEW.status = 'completed'
+       AND NEW.order_type = 'SALE'
+       AND NEW.assigned_to IS NOT NULL THEN
 
-    -- Calculate before and after based on transaction type
-    IF NEW.transaction_type IN ('sale_delivery', 'exchange_out', 'transfer_out', 'payout') THEN
-        -- Outgoing transaction
-        v_before_quantity := v_pool_quantity;
-        v_after_quantity := v_pool_quantity - NEW.quantity;
-    ELSIF NEW.transaction_type IN ('purchase', 'exchange_in', 'transfer_in', 'farm_in') THEN
-        -- Incoming transaction
-        v_before_quantity := v_pool_quantity;
-        v_after_quantity := v_pool_quantity + NEW.quantity;
-    ELSE
-        -- Manual adjustment or other
-        v_before_quantity := v_pool_quantity;
-        v_after_quantity := v_pool_quantity; -- Will be calculated based on actual impact
-    END IF;
+        v_employee_id := NEW.assigned_to;
+        v_return_amount := NEW.sale_amount;
 
-    -- Update transaction with quantities
-    UPDATE currency_transactions
-    SET before_quantity = v_before_quantity,
-        after_quantity = v_after_quantity
-    WHERE id = NEW.id;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to track inventory quantities
-CREATE TRIGGER tr_track_inventory_quantities
-    AFTER INSERT ON currency_transactions
-    FOR EACH ROW EXECUTE FUNCTION track_inventory_transaction_quantities();
-
--- Function to create accounting entry for large employee fund transactions
-CREATE OR REPLACE FUNCTION check_employee_fund_approval()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_needs_approval boolean;
-    v_approval_request_id uuid;
-    v_message text;
-BEGIN
-    -- Check if transaction needs approval
-    SELECT requires_approval, approval_request_id, message
-    INTO v_needs_approval, v_approval_request_id, v_message
-    FROM create_approval_if_needed(
-        'employee_fund',
-        NEW.id,
-        NEW.amount,
-        NEW.currency_code,
-        NEW.description,
-        NEW.created_by,
-        jsonb_build_object(
-            'transaction_number', NEW.transaction_number,
-            'employee_id', NEW.employee_id,
-            'balance_before', NEW.balance_before,
-            'balance_after', NEW.balance_after
-        )
-    );
-
-    -- Update transaction status based on approval needs
-    IF v_needs_approval THEN
-        -- Mark as pending approval
-        UPDATE employee_fund_transactions
-        SET approval_status = 'pending'
-        WHERE id = NEW.id;
-
-        -- Set the balance back to before amount since not yet approved
-        UPDATE employee_fund_accounts
-        SET current_balance = NEW.balance_before
-        WHERE employee_id = NEW.employee_id
-          AND currency_code = NEW.currency_code;
+        -- Return funds from employee if amount > 0
+        IF v_return_amount > 0 THEN
+            v_result := return_employee_fund(
+                v_employee_id,
+                v_return_amount,
+                NEW.sale_currency_code,
+                'Sales Order #' || NEW.order_number || ' completion',
+                'sales_order',
+                NEW.id
+            );
+        END IF;
     END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to check approval for employee fund transactions
-CREATE TRIGGER tr_employee_fund_approval_check
-    AFTER INSERT ON employee_fund_transactions
-    FOR EACH ROW EXECUTE FUNCTION check_employee_fund_approval();
+-- Create the trigger
+DROP TRIGGER IF EXISTS tr_employee_fund_sale_completion ON currency_orders;
+CREATE TRIGGER tr_employee_fund_sale_completion
+    AFTER UPDATE ON currency_orders
+    FOR EACH ROW EXECUTE FUNCTION handle_employee_fund_return_on_sale_completion();
 
--- Function to update average cost when inventory changes
-CREATE OR REPLACE FUNCTION update_inventory_average_cost()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_total_cost numeric(20,4);
-    v_total_quantity numeric(20,4);
-    v_new_average_cost numeric(20,4);
-BEGIN
-    -- Only update for incoming transactions (purchase, farm_in)
-    IF NEW.transaction_type NOT IN ('purchase', 'farm_in', 'transfer_in') THEN
-        RETURN NEW;
-    END IF;
-
-    -- Calculate new average cost
-    SELECT
-        SUM(quantity * unit_price),
-        SUM(quantity)
-    INTO v_total_cost, v_total_quantity
-    FROM currency_transactions ct
-    JOIN inventory_pools ip ON ct.inventory_pool_id = ip.id
-    WHERE ct.transaction_type IN ('purchase', 'farm_in', 'transfer_in')
-      AND ct.inventory_pool_id = NEW.inventory_pool_id
-      AND ct.id <= NEW.id;
-
-    -- Update inventory pool average cost
-    IF v_total_quantity > 0 THEN
-        v_new_average_cost := v_total_cost / v_total_quantity;
-
-        UPDATE inventory_pools
-        SET average_cost = v_new_average_cost,
-            last_updated_at = now()
-        WHERE id = NEW.inventory_pool_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to update inventory average cost
-CREATE TRIGGER tr_update_inventory_average_cost
-    AFTER INSERT ON currency_transactions
-    FOR EACH ROW EXECUTE FUNCTION update_inventory_average_cost();
-
--- View for financial transaction summary
-CREATE OR REPLACE VIEW financial_transaction_summary AS
+-- 4. Create reconciliation view between employee funds and accounting
+CREATE OR REPLACE VIEW employee_fund_reconciliation AS
 SELECT
-    -- Currency Orders
-    co.order_type,
-    COUNT(*) as order_count,
-    COALESCE(SUM(co.cost_amount), 0) as total_cost,
-    COALESCE(SUM(co.sale_amount), 0) as total_sale,
-    COALESCE(SUM(co.profit_amount), 0) as total_profit,
-
-    -- Currency Transactions
-    COUNT(ct.id) as transaction_count,
-    COALESCE(SUM(ct.quantity), 0) as total_quantity_transacted,
-
-    -- Employee Funds
-    COALESCE(SUM(CASE WHEN eft.transaction_type = 'FUND_ALLOCATION' THEN eft.amount ELSE 0 END), 0) as total_allocated,
-    COALESCE(SUM(CASE WHEN eft.transaction_type = 'FUND_RETURN' THEN eft.amount ELSE 0 END), 0) as total_returned,
-
-    -- Journal Entries
-    COUNT(DISTINCT je.id) as journal_entry_count,
-    COUNT(jel.id) as journal_line_count
-
-FROM currency_orders co
-FULL OUTER JOIN currency_transactions ct ON 1=1  -- Cross join for summary
-FULL OUTER JOIN employee_fund_transactions eft ON 1=1
-FULL OUTER JOIN journal_entries je ON 1=1
-FULL OUTER JOIN journal_entry_lines jel ON 1=1
-GROUP BY co.order_type;
-
--- View for reconciliation between employee funds and accounting
-CREATE OR REPLACE VIEW employee_funds_reconciliation AS
-SELECT
-    p.display_name as employee_name,
+    efa.employee_id,
     efa.currency_code,
-    efa.current_balance as accounting_balance,
-    SUM(CASE WHEN eft.approval_status = 'approved' THEN eft.amount ELSE 0 END) as approved_balance,
-    efa.total_allocated as total_allocated_from_company,
-    efa.total_returned as total_returned_to_company,
-    (efa.total_allocated - efa.total_returned) as net_amount_with_company,
-    COUNT(eft.id) as total_transactions,
-    MAX(eft.created_at) as last_transaction_date
+    efa.current_balance as employee_fund_balance,
+    COALESCE(ab.current_balance, 0) as accounting_balance,
+    COALESCE(eft.total_allocated, 0) as total_allocated,
+    COALESCE(eft.total_returned, 0) as total_returned,
+    efa.current_balance - COALESCE(ab.current_balance, 0) as variance,
+    CASE
+        WHEN efa.current_balance = COALESCE(ab.current_balance, 0) THEN 'BALANCED'
+        WHEN efa.current_balance > COALESCE(ab.current_balance, 0) THEN 'EMPLOYEE_HIGHER'
+        ELSE 'ACCOUNTING_HIGHER'
+    END as reconciliation_status,
+    p.display_name as employee_name,
+    efa.updated_at as last_updated
 FROM employee_fund_accounts efa
 JOIN profiles p ON efa.employee_id = p.id
-LEFT JOIN employee_fund_transactions eft ON efa.employee_id = eft.employee_id
-                                    AND efa.currency_code = eft.currency_code
-WHERE efa.is_active = true
-GROUP BY efa.id, p.display_name, efa.currency_code, efa.current_balance,
-         efa.total_allocated, efa.total_returned
-ORDER BY p.display_name, efa.currency_code;
+LEFT JOIN account_balances ab ON efa.employee_id = ab.entity_id
+    AND ab.account_id = (SELECT id FROM chart_of_accounts WHERE account_code = CASE
+        WHEN efa.currency_code = 'USD' THEN '202'
+        ELSE '201'
+    END)
+    AND ab.currency_code = efa.currency_code
+LEFT JOIN (
+    SELECT
+        employee_id,
+        currency_code,
+        SUM(CASE WHEN transaction_type = 'ALLOCATION' THEN amount ELSE 0 END) as total_allocated,
+        SUM(CASE WHEN transaction_type = 'RETURN' THEN amount ELSE 0 END) as total_returned
+    FROM employee_fund_transactions
+    WHERE status = 'COMPLETED'
+    GROUP BY employee_id, currency_code
+) eft ON efa.employee_id = eft.employee_id AND efa.currency_code = eft.currency_code
+WHERE efa.is_active = true;
 
--- Add comments for documentation
-COMMENT ON FUNCTION create_journal_entry_for_currency_order() IS 'Creates journal entries when currency orders are completed';
-COMMENT ON FUNCTION track_inventory_transaction_quantities() IS 'Tracks before/after quantities for inventory transactions';
-COMMENT ON FUNCTION check_employee_fund_approval() IS 'Checks if employee fund transactions require approval';
-COMMENT ON FUNCTION update_inventory_average_cost() IS 'Updates inventory average cost for new purchases';
-COMMENT ON VIEW financial_transaction_summary IS 'Summary view of all financial transactions';
-COMMENT ON VIEW employee_funds_reconciliation IS 'Reconciliation view between employee fund accounts and transactions';
+-- 5. Create comprehensive financial dashboard view
+CREATE OR REPLACE VIEW financial_dashboard AS
+SELECT
+    -- Cash balances
+    (SELECT COALESCE(SUM(current_balance), 0)
+     FROM account_balances ab
+     JOIN chart_of_accounts ca ON ab.account_id = ca.id
+     WHERE ca.account_code IN ('101', '102')
+       AND ab.currency_code = 'VND') as cash_vnd_balance,
+
+    (SELECT COALESCE(SUM(current_balance), 0)
+     FROM account_balances ab
+     JOIN chart_of_accounts ca ON ab.account_id = ca.id
+     WHERE ca.account_code IN ('101', '102')
+       AND ab.currency_code = 'USD') as cash_usd_balance,
+
+    -- Employee funds
+    (SELECT COALESCE(SUM(current_balance), 0)
+     FROM employee_fund_accounts
+     WHERE currency_code = 'VND') as employee_funds_vnd,
+
+    (SELECT COALESCE(SUM(current_balance), 0)
+     FROM employee_fund_accounts
+     WHERE currency_code = 'USD') as employee_funds_usd,
+
+    -- Today's summaries
+    (SELECT COUNT(*) FROM currency_orders WHERE DATE(created_at) = CURRENT_DATE) as orders_today,
+    (SELECT COUNT(*) FROM currency_orders WHERE status = 'completed' AND DATE(completed_at) = CURRENT_DATE) as completed_today,
+    (SELECT COALESCE(SUM(sale_amount), 0) FROM currency_orders WHERE status = 'completed' AND DATE(completed_at) = CURRENT_DATE) as sales_today,
+
+    -- Pending approvals
+    (SELECT COUNT(*) FROM approval_requests WHERE status = 'PENDING') as pending_approvals,
+    (SELECT COUNT(*) FROM approval_requests WHERE status = 'PENDING' AND expires_at < now() + interval '24 hours') as urgent_approvals,
+
+    -- Employee fund metrics
+    (SELECT COUNT(*) FROM employee_fund_accounts WHERE current_balance > credit_limit * 0.8) as employees_near_limit,
+    (SELECT COUNT(*) FROM employee_fund_accounts WHERE current_balance > 0) as active_employee_accounts;
+
+-- 6. Create function to get financial summary for date range
+CREATE OR REPLACE FUNCTION get_financial_summary(
+    p_start_date DATE DEFAULT CURRENT_DATE - INTERVAL '30 days',
+    p_end_date DATE DEFAULT CURRENT_DATE
+)
+RETURNS JSON AS $$
+DECLARE
+    v_result JSON;
+BEGIN
+    SELECT json_build_object(
+        'period', json_build_object('start_date', p_start_date, 'end_date', p_end_date),
+        'cash_balances', json_build_object(
+            'vnd', (SELECT COALESCE(SUM(current_balance), 0) FROM account_balances ab JOIN chart_of_accounts ca ON ab.account_id = ca.id WHERE ca.account_code IN ('101', '102') AND ab.currency_code = 'VND'),
+            'usd', (SELECT COALESCE(SUM(current_balance), 0) FROM account_balances ab JOIN chart_of_accounts ca ON ab.account_id = ca.id WHERE ca.account_code IN ('101', '102') AND ab.currency_code = 'USD')
+        ),
+        'employee_funds', json_build_object(
+            'vnd', (SELECT COALESCE(SUM(current_balance), 0) FROM employee_fund_accounts WHERE currency_code = 'VND'),
+            'usd', (SELECT COALESCE(SUM(current_balance), 0) FROM employee_fund_accounts WHERE currency_code = 'USD'),
+            'active_accounts', (SELECT COUNT(*) FROM employee_fund_accounts WHERE current_balance > 0)
+        ),
+        'orders_summary', json_build_object(
+            'total_orders', (SELECT COUNT(*) FROM currency_orders WHERE DATE(created_at) BETWEEN p_start_date AND p_end_date),
+            'completed_orders', (SELECT COUNT(*) FROM currency_orders WHERE status = 'completed' AND DATE(completed_at) BETWEEN p_start_date AND p_end_date),
+            'total_sales', (SELECT COALESCE(SUM(sale_amount), 0) FROM currency_orders WHERE status = 'completed' AND DATE(completed_at) BETWEEN p_start_date AND p_end_date),
+            'total_costs', (SELECT COALESCE(SUM(cost_amount), 0) FROM currency_orders WHERE status = 'completed' AND DATE(completed_at) BETWEEN p_start_date AND p_end_date)
+        ),
+        'pending_approvals', (SELECT COUNT(*) FROM approval_requests WHERE status = 'PENDING')
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT 'Integration triggers migration completed successfully!' as success_message;

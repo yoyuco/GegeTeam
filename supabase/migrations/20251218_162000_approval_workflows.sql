@@ -1,419 +1,379 @@
--- Migration: Approval Workflow System
--- Description: Create approval system for high-value financial transactions
--- Created: 2025-12-18 15:20:00
+-- Migration: Approval Workflow System (Fixed)
+-- Description: Approval rules and workflow management for financial transactions
+-- Created: 2025-12-18 16:20:00
 -- Author: Claude Code
 
--- Approval request status
-CREATE TYPE approval_status_type AS ENUM (
-    'pending',    -- Waiting for approval
-    'approved',   -- Approved
-    'rejected',   -- Rejected
-    'expired'     -- Expired (timeout)
+-- 1. Approval Rules
+CREATE TABLE IF NOT EXISTS approval_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rule_name VARCHAR(200) NOT NULL UNIQUE,
+    entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('employee_fund', 'expense', 'purchase')),
+    condition_type VARCHAR(50) NOT NULL CHECK (condition_type IN ('amount_above', 'amount_below', 'amount_equals', 'custom')),
+    condition_value JSONB NOT NULL, -- e.g., {"currency": "VND", "amount": 50000000}
+    approval_limit DECIMAL(20,4) NOT NULL,
+    description TEXT,
+    approver_roles UUID[], -- Array of role IDs that can approve
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    created_by UUID REFERENCES profiles(id),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    updated_by UUID REFERENCES profiles(id)
 );
 
--- Approval rules - defines when approval is needed
-CREATE TABLE approval_rules (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    rule_name text NOT NULL,
-    entity_type text NOT NULL, -- 'employee_fund', 'journal_entry', 'payment'
-    condition_type text NOT NULL CHECK (condition_type IN (
-        'amount_above',           -- Amount exceeds threshold
-        'amount_range',          -- Amount in specific range
-        'employee_level',        -- Specific employee level
-        'currency_type',         -- Specific currency
-        'time_based',            -- Time-based rules
-        'manual_review'          -- Always requires review
-    )),
-    condition_value jsonb, -- JSON object with condition parameters
-    approval_required boolean NOT NULL DEFAULT true,
-    approvers uuid[], -- Array of user IDs who can approve
-    approval_limit numeric(20,4), -- Maximum amount this rule can approve
-    timeout_hours integer DEFAULT 72, -- Hours before request expires
-    is_active boolean DEFAULT true,
-    description text,
-    created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
+-- 2. Approval Requests
+CREATE TABLE IF NOT EXISTS approval_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('employee_fund', 'expense', 'purchase')),
+    entity_id UUID NOT NULL, -- ID of the entity being approved
+    request_data JSONB NOT NULL, -- Complete data about the request
+    approval_rule_id UUID REFERENCES approval_rules(id),
+    requested_by UUID NOT NULL REFERENCES profiles(id),
+    current_approver UUID REFERENCES profiles(id),
+    status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED')),
+    priority VARCHAR(20) DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
+    amount DECIMAL(20,4),
+    currency_code VARCHAR(10) DEFAULT 'VND',
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    expires_at TIMESTAMPTZ DEFAULT (now() + interval '72 hours'), -- 72-hour timeout
+    approved_at TIMESTAMPTZ,
+    approved_by UUID REFERENCES profiles(id),
+    rejection_reason TEXT,
+    approval_chain JSONB, -- Store the approval chain if multiple levels needed
+    current_level INTEGER DEFAULT 1,
+    total_levels INTEGER DEFAULT 1
 );
 
--- Create default approval rules
-INSERT INTO approval_rules (rule_name, entity_type, condition_type, condition_value, approval_limit) VALUES
-('Employee Fund > 50M VND', 'employee_fund', 'amount_above',
- '{"currency": "VND", "amount": 50000000}', 1000000000),
-('Employee Fund > 2K USD', 'employee_fund', 'amount_above',
- '{"currency": "USD", "amount": 2000}', 10000),
-('Employee Fund > 35K CNY', 'employee_fund', 'amount_above',
- '{"currency": "CNY", "amount": 35000}', 100000),
-('Large Journal Entries', 'journal_entry', 'amount_above',
- '{"amount": 100000000}', 1000000000);
-
--- Approval requests
-CREATE TABLE approval_requests (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    request_number text UNIQUE NOT NULL, -- AR-2025-00001
-    entity_type text NOT NULL, -- 'employee_fund', 'journal_entry'
-    entity_id uuid NOT NULL, -- ID of the entity being approved
-    requester_id uuid NOT NULL REFERENCES profiles(id),
-    amount numeric(20,4) NOT NULL,
-    currency_code text NOT NULL DEFAULT 'VND',
-    description text,
-    reference_data jsonb, -- Additional data about the request
-    status approval_status_type DEFAULT 'pending',
-    approver_id uuid REFERENCES profiles(id),
-    approval_notes text,
-    rejection_reason text,
-    requested_at timestamptz DEFAULT now(),
-    approved_at timestamptz,
-    expires_at timestamptz,
-    created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
+-- 3. Approval Actions (Audit trail)
+CREATE TABLE IF NOT EXISTS approval_actions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    approval_request_id UUID NOT NULL REFERENCES approval_requests(id),
+    action VARCHAR(20) NOT NULL CHECK (action IN ('CREATED', 'APPROVED', 'REJECTED', 'CANCELLED', 'FORWARDED', 'ESCALATED')),
+    actor_id UUID NOT NULL REFERENCES profiles(id),
+    actor_role VARCHAR(50),
+    notes TEXT,
+    action_data JSONB, -- Additional data about the action
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Create indexes
-CREATE INDEX idx_approval_requests_number ON approval_requests(request_number);
-CREATE INDEX idx_approval_requests_entity ON approval_requests(entity_type, entity_id);
-CREATE INDEX idx_approval_requests_status ON approval_requests(status);
-CREATE INDEX idx_approval_requests_requester ON approval_requests(requester_id);
-CREATE INDEX idx_approval_requests_approver ON approval_requests(approver_id);
-CREATE INDEX idx_approval_requests_expires ON approval_requests(expires_at);
+CREATE INDEX IF NOT EXISTS idx_approval_rules_entity_type ON approval_rules(entity_type);
+CREATE INDEX IF NOT EXISTS idx_approval_rules_is_active ON approval_rules(is_active);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_entity ON approval_requests(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_requested_by ON approval_requests(requested_by);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_current_approver ON approval_requests(current_approver);
+CREATE INDEX IF NOT EXISTS idx_approval_actions_request_id ON approval_actions(approval_request_id);
 
--- Approval sequence
-CREATE SEQUENCE IF NOT EXISTS approval_request_seq START 1;
+-- Insert default approval rules
+INSERT INTO approval_rules (rule_name, entity_type, condition_type, condition_value, approval_limit, description, approver_roles) VALUES
+('Employee Fund > 50M VND', 'employee_fund', 'amount_above', '{"currency": "VND", "amount": 50000000}', 1000000000, 'Auto-approve up to 1B VND, manager approval above', ARRAY((SELECT id FROM roles WHERE code = 'manager' LIMIT 1))),
+('Employee Fund > 100M VND', 'employee_fund', 'amount_above', '{"currency": "VND", "amount": 100000000}', 1000000000, 'Manager approval required for amounts > 100M VND', ARRAY((SELECT id FROM roles WHERE code = 'manager' LIMIT 1))),
+('Employee Fund > 500M VND', 'employee_fund', 'amount_above', '{"currency": "VND", "amount": 500000000}', 1000000000, 'Admin approval required for amounts > 500M VND', ARRAY((SELECT id FROM roles WHERE code = 'admin' LIMIT 1)))
+ON CONFLICT (rule_name) DO NOTHING;
 
--- Function to generate approval request number
-CREATE OR REPLACE FUNCTION generate_approval_request_number()
-RETURNS text AS $$
-BEGIN
-    RETURN 'AR-' || EXTRACT(YEAR FROM now()) || '-' ||
-           LPAD(nextval('approval_request_seq')::text, 5, '0');
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to check if approval is needed and create request if needed
-CREATE OR REPLACE FUNCTION create_approval_if_needed(
-    p_entity_type text,
-    p_entity_id uuid,
-    p_amount numeric(20,4),
-    p_currency_code text DEFAULT 'VND',
-    p_description text DEFAULT NULL,
-    p_requester_id uuid,
-    p_reference_data jsonb DEFAULT '{}'::jsonb
-) RETURNS TABLE(
-    requires_approval boolean,
-    approval_request_id uuid,
-    message text
-) AS $$
+-- Function to check if approval is required
+CREATE OR REPLACE FUNCTION check_approval_required(
+    p_entity_type VARCHAR(50),
+    p_amount DECIMAL(20,4),
+    p_currency VARCHAR(10) DEFAULT 'VND',
+    p_additional_conditions JSONB DEFAULT '{}'::jsonb
+)
+RETURNS JSON AS $$
 DECLARE
-    v_needs_approval boolean := false;
-    v_approval_request_id uuid;
-    v_request_number text;
-    v_expires_at timestamptz;
-    v_rule RECORD;
-    v_amount_vnd numeric(20,4);
-    v_exchange_rate numeric(10,6);
+    v_rule approval_rules%ROWTYPE;
+    v_approval_required BOOLEAN := false;
+    v_approver_roles UUID[];
 BEGIN
-    -- Convert amount to VND for comparison
-    IF p_currency_code = 'VND' THEN
-        v_amount_vnd := p_amount;
-    ELSE
-        -- Get exchange rate
-        SELECT rate INTO v_exchange_rate
-        FROM exchange_rates
-        WHERE from_currency = p_currency_code
-          AND to_currency = 'VND'
-          AND is_active = true
-        ORDER BY effective_date DESC
-        LIMIT 1;
+    -- Find the most restrictive applicable rule
+    SELECT * INTO v_rule
+    FROM approval_rules
+    WHERE entity_type = p_entity_type
+      AND is_active = true
+      AND (
+        (condition_type = 'amount_above' AND p_amount > (condition_value->>'amount')::DECIMAL)
+        OR (condition_type = 'amount_below' AND p_amount < (condition_value->>'amount')::DECIMAL)
+        OR (condition_type = 'amount_equals' AND p_amount = (condition_value->>'amount')::DECIMAL)
+        OR (condition_type = 'custom')
+      )
+      AND (condition_value->>'currency' = p_currency OR condition_value->>'currency' IS NULL)
+    ORDER BY
+        CASE condition_type
+            WHEN 'amount_above' THEN (condition_value->>'amount')::DECIMAL
+            ELSE 0
+        END DESC
+    LIMIT 1;
 
-        IF v_exchange_rate IS NULL THEN
-            v_exchange_rate := CASE p_currency_code
-                WHEN 'USD' THEN 24500
-                WHEN 'CNY' THEN 3400
-                ELSE 1
-            END;
-        END IF;
-
-        v_amount_vnd := p_amount * v_exchange_rate;
+    IF v_rule.id IS NOT NULL THEN
+        v_approval_required := true;
+        v_approver_roles := v_rule.approver_roles;
     END IF;
 
-    -- Check approval rules
-    FOR v_rule IN
-        SELECT * FROM approval_rules
-        WHERE entity_type = p_entity_type
-          AND is_active = true
-    LOOP
-        -- Check if rule applies
-        IF v_rule.condition_type = 'amount_above' THEN
-            IF (v_rule.condition_value->>'currency') = p_currency_code OR
-               (v_rule.condition_value->>'currency') = 'VND' THEN
-                IF v_amount_vnd > (v_rule.condition_value->>'amount')::numeric THEN
-                    v_needs_approval := true;
-                    EXIT;
-                END IF;
-            END IF;
-        END IF;
-    END LOOP;
-
-    -- Create approval request if needed
-    IF v_needs_approval THEN
-        v_request_number := generate_approval_request_number();
-        v_expires_at := now() + INTERVAL '72 hours'; -- Default 72 hours timeout
-
-        INSERT INTO approval_requests (
-            request_number, entity_type, entity_id, requester_id,
-            amount, currency_code, description, reference_data,
-            expires_at
-        ) VALUES (
-            v_request_number, p_entity_type, p_entity_id, p_requester_id,
-            p_amount, p_currency_code, p_description, p_reference_data,
-            v_expires_at
-        ) RETURNING id INTO v_approval_request_id;
-
-        RETURN QUERY SELECT
-            true,
-            v_approval_request_id,
-            'Approval request created: ' || v_request_number;
-    ELSE
-        RETURN QUERY SELECT
-            false,
-            NULL::uuid,
-            'No approval required';
-    END IF;
+    RETURN json_build_object(
+        'approval_required', v_approval_required,
+        'rule_id', COALESCE(v_rule.id, ''),
+        'rule_name', COALESCE(v_rule.rule_name, ''),
+        'approval_limit', COALESCE(v_rule.approval_limit, 0),
+        'approver_roles', COALESCE(v_approver_roles, ARRAY[]::UUID[])
+    );
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to approve a request
+-- Function to create approval request (FIXED)
+CREATE OR REPLACE FUNCTION create_approval_request(
+    p_entity_type VARCHAR(50),
+    p_entity_id UUID,
+    p_title VARCHAR(200),
+    p_description TEXT,
+    p_amount DECIMAL(20,4),
+    p_currency VARCHAR(10) DEFAULT 'VND',
+    p_request_data JSONB DEFAULT '{}'::jsonb,
+    p_priority VARCHAR(20) DEFAULT 'NORMAL',
+    p_expires_in_hours INTEGER DEFAULT 72
+)
+RETURNS UUID AS $$
+DECLARE
+    v_approval_request_id UUID;
+    v_rule_info JSON;
+    v_approver_id UUID;
+    v_expires_at TIMESTAMPTZ;
+BEGIN
+    -- Check if approval is required
+    v_rule_info := check_approval_required(p_entity_type, p_amount, p_currency);
+
+    -- If no approval required, return null
+    IF NOT (v_rule_info->>'approval_required')::BOOLEAN THEN
+        RETURN NULL;
+    END IF;
+
+    -- Find first available approver
+    SELECT p.id INTO v_approver_id
+    FROM profiles p
+    JOIN user_role_assignments ura ON p.id = ura.user_id
+    JOIN roles r ON ura.role_id = r.id
+    WHERE r.id = ANY((v_rule_info->'approver_roles')::UUID[])
+      AND p.status = 'active'
+    LIMIT 1;
+
+    IF v_approver_id IS NULL THEN
+        RAISE EXCEPTION 'No available approver found for the specified roles';
+    END IF;
+
+    -- Calculate expiration time
+    v_expires_at := now() + (p_expires_in_hours || ' hours')::INTERVAL;
+
+    -- Create approval request
+    INSERT INTO approval_requests (
+        entity_type, entity_id, title, description,
+        amount, currency_code, request_data,
+        approval_rule_id, requested_by, current_approver,
+        priority, expires_at, status
+    ) VALUES (
+        p_entity_type, p_entity_id, p_title, p_description,
+        p_amount, p_currency, p_request_data,
+        (v_rule_info->>'rule_id')::UUID, auth.uid(), v_approver_id,
+        p_priority, v_expires_at, 'PENDING'
+    ) RETURNING id INTO v_approval_request_id;
+
+    -- Create initial action record
+    INSERT INTO approval_actions (approval_request_id, action, actor_id, notes)
+    VALUES (v_approval_request_id, 'CREATED', auth.uid(), 'Approval request created');
+
+    RETURN v_approval_request_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to approve request
 CREATE OR REPLACE FUNCTION approve_request(
-    p_approval_request_id uuid,
-    p_approver_id uuid,
-    p_approval_notes text DEFAULT NULL
-) RETURNS TABLE(
-    success boolean,
-    message text
-) AS $$
+    p_approval_request_id UUID,
+    p_notes TEXT DEFAULT ''
+)
+RETURNS JSON AS $$
 DECLARE
-    v_request RECORD;
-    v_can_approve boolean := false;
+    v_request approval_requests%ROWTYPE;
+    v_can_approve BOOLEAN := false;
+    v_next_approver UUID;
+    v_result JSON;
 BEGIN
-    -- Get request details
-    SELECT ar.*, p.display_name as requester_name
-    INTO v_request
-    FROM approval_requests ar
-    JOIN profiles p ON ar.requester_id = p.id
-    WHERE ar.id = p_approval_request_id;
-
-    IF NOT FOUND THEN
-        RETURN QUERY SELECT FALSE, 'Approval request not found';
-        RETURN;
-    END IF;
-
-    -- Check if request is still pending
-    IF v_request.status != 'pending' THEN
-        RETURN QUERY SELECT FALSE, 'Request is not pending (status: ' || v_request.status || ')';
-        RETURN;
-    END IF;
-
-    -- Check if request has expired
-    IF v_request.expires_at < now() THEN
-        -- Mark as expired
-        UPDATE approval_requests
-        SET status = 'expired',
-            updated_at = now()
-        WHERE id = p_approval_request_id;
-
-        RETURN QUERY SELECT FALSE, 'Request has expired';
-        RETURN;
-    END IF;
-
-    -- Check if approver has authority
-    -- For now, any authenticated user can approve (can be enhanced later)
-    v_can_approve := true;
-
-    IF NOT v_can_approve THEN
-        RETURN QUERY SELECT FALSE, 'You do not have approval authority';
-        RETURN;
-    END IF;
-
-    -- Approve the request
-    UPDATE approval_requests
-    SET status = 'approved',
-        approver_id = p_approver_id,
-        approval_notes = p_approval_notes,
-        approved_at = now(),
-        updated_at = now()
-    WHERE id = p_approval_request_id;
-
-    -- Execute the approved action based on entity type
-    IF v_request.entity_type = 'employee_fund' THEN
-        -- Approve employee fund allocation
-        PERFORM approve_employee_fund_allocation(v_request.entity_id, p_approver_id);
-    END IF;
-
-    RETURN QUERY SELECT
-        TRUE,
-        'Request approved successfully by ' || (SELECT display_name FROM profiles WHERE id = p_approver_id);
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to reject a request
-CREATE OR REPLACE FUNCTION reject_request(
-    p_approval_request_id uuid,
-    p_approver_id uuid,
-    p_rejection_reason text
-) RETURNS TABLE(
-    success boolean,
-    message text
-) AS $$
-DECLARE
-    v_request RECORD;
-BEGIN
-    -- Get request details
+    -- Get the request
     SELECT * INTO v_request
     FROM approval_requests
     WHERE id = p_approval_request_id;
 
-    IF NOT FOUND THEN
-        RETURN QUERY SELECT FALSE, 'Approval request not found';
-        RETURN;
+    IF v_request.id IS NULL THEN
+        RETURN json_build_object('success', false, 'message', 'Approval request not found');
     END IF;
 
     -- Check if request is still pending
-    IF v_request.status != 'pending' THEN
-        RETURN QUERY SELECT FALSE, 'Request is not pending (status: ' || v_request.status || ')';
-        RETURN;
+    IF v_request.status != 'PENDING' THEN
+        RETURN json_build_object('success', false, 'message', 'Request is not pending: ' || v_request.status);
+    END IF;
+
+    -- Check if expired
+    IF v_request.expires_at < now() THEN
+        UPDATE approval_requests
+        SET status = 'EXPIRED', updated_at = now()
+        WHERE id = p_approval_request_id;
+
+        RETURN json_build_object('success', false, 'message', 'Approval request has expired');
+    END IF;
+
+    -- Check if current user can approve
+    v_can_approve := (
+        v_request.current_approver = auth.uid()
+        OR EXISTS(
+            SELECT 1 FROM roles r
+            JOIN user_role_assignments ura ON r.id = ura.role_id
+            WHERE ura.user_id = auth.uid()
+              AND r.code IN ('admin', 'manager')
+        )
+    );
+
+    IF NOT v_can_approve THEN
+        RETURN json_build_object('success', false, 'message', 'You do not have permission to approve this request');
+    END IF;
+
+    -- Process approval
+    IF v_request.current_level >= v_request.total_levels THEN
+        -- Final approval
+        UPDATE approval_requests
+        SET status = 'APPROVED',
+            approved_by = auth.uid(),
+            approved_at = now(),
+            updated_at = now()
+        WHERE id = p_approval_request_id;
+
+        -- Create approval action
+        INSERT INTO approval_actions (approval_request_id, action, actor_id, notes)
+        VALUES (p_approval_request_id, 'APPROVED', auth.uid(), p_notes);
+
+        v_result := json_build_object(
+            'success', true,
+            'message', 'Request approved successfully',
+            'status', 'APPROVED'
+        );
+
+    ELSE
+        -- Move to next level (simplified for now)
+        -- No more approvers, approve final
+        UPDATE approval_requests
+        SET status = 'APPROVED',
+            approved_by = auth.uid(),
+            approved_at = now(),
+            updated_at = now()
+        WHERE id = p_approval_request_id;
+
+        v_result := json_build_object(
+            'success', true,
+            'message', 'Request approved (final approval)',
+            'status', 'APPROVED'
+        );
+
+        -- Create approval action
+        INSERT INTO approval_actions (approval_request_id, action, actor_id, notes)
+        VALUES (p_approval_request_id, 'APPROVED', auth.uid(), p_notes);
+    END IF;
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to reject request
+CREATE OR REPLACE FUNCTION reject_request(
+    p_approval_request_id UUID,
+    p_rejection_reason TEXT
+)
+RETURNS JSON AS $$
+DECLARE
+    v_request approval_requests%ROWTYPE;
+    v_can_reject BOOLEAN := false;
+BEGIN
+    -- Get the request
+    SELECT * INTO v_request
+    FROM approval_requests
+    WHERE id = p_approval_request_id;
+
+    IF v_request.id IS NULL THEN
+        RETURN json_build_object('success', false, 'message', 'Approval request not found');
+    END IF;
+
+    -- Check if request is still pending
+    IF v_request.status != 'PENDING' THEN
+        RETURN json_build_object('success', false, 'message', 'Request is not pending: ' || v_request.status);
+    END IF;
+
+    -- Check if current user can reject
+    v_can_reject := (
+        v_request.current_approver = auth.uid()
+        OR EXISTS(
+            SELECT 1 FROM roles r
+            JOIN user_role_assignments ura ON r.id = ura.role_id
+            WHERE ura.user_id = auth.uid()
+              AND r.code IN ('admin', 'manager')
+        )
+    );
+
+    IF NOT v_can_reject THEN
+        RETURN json_build_object('success', false, 'message', 'You do not have permission to reject this request');
     END IF;
 
     -- Reject the request
     UPDATE approval_requests
-    SET status = 'rejected',
-        approver_id = p_approver_id,
+    SET status = 'REJECTED',
         rejection_reason = p_rejection_reason,
         updated_at = now()
     WHERE id = p_approval_request_id;
 
-    -- Reverse the pending action
-    IF v_request.entity_type = 'employee_fund' THEN
-        -- Delete the pending employee fund transaction
-        DELETE FROM employee_fund_transactions
-        WHERE id = v_request.entity_id;
-    END IF;
+    -- Create rejection action
+    INSERT INTO approval_actions (approval_request_id, action, actor_id, notes)
+    VALUES (p_approval_request_id, 'REJECTED', auth.uid(), p_rejection_reason);
 
-    RETURN QUERY SELECT
-        TRUE,
-        'Request rejected: ' || p_rejection_reason;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to approve employee fund allocation (internal function)
-CREATE OR REPLACE FUNCTION approve_employee_fund_allocation(
-    p_transaction_id uuid,
-    p_approved_by uuid
-) RETURNS void AS $$
-DECLARE
-    v_transaction RECORD;
-    v_fund_account_id uuid;
-    v_journal_entry_id uuid;
-    v_employee_fund_account_id uuid;
-BEGIN
-    -- Get transaction details
-    SELECT * INTO v_transaction
-    FROM employee_fund_transactions
-    WHERE id = p_transaction_id;
-
-    -- Get employee fund account
-    SELECT id INTO v_fund_account_id
-    FROM employee_fund_accounts
-    WHERE employee_id = v_transaction.employee_id
-      AND currency_code = v_transaction.currency_code;
-
-    -- Update transaction status
-    UPDATE employee_fund_transactions
-    SET approval_status = 'approved',
-        approved_by = p_approved_by,
-        approved_at = now()
-    WHERE id = p_transaction_id;
-
-    -- Update employee fund account balance
-    UPDATE employee_fund_accounts
-    SET current_balance = v_transaction.balance_after,
-        total_allocated = total_allocated + v_transaction.amount,
-        last_transaction_id = v_transaction_id,
-        last_transaction_at = now()
-    WHERE id = v_fund_account_id;
-
-    -- Get employee fund account from chart of accounts
-    SELECT id INTO v_employee_fund_account_id
-    FROM chart_of_accounts
-    WHERE account_code = '120' -- Employee Funds Receivable
-    LIMIT 1;
-
-    -- Create journal entry for accounting
-    INSERT INTO journal_entries (
-        entry_number, entry_date, description, reference_type, reference_id,
-        total_amount, currency_code, status, created_by
-    ) VALUES (
-        'JE-' || EXTRACT(YEAR FROM now()) || '-' ||
-        LPAD(nextval('journal_entry_seq')::text, 5, '0'),
-        CURRENT_DATE,
-        'Employee Fund Allocation: ' || v_transaction.description,
-        'employee_fund', v_transaction_id,
-        v_transaction.amount, v_transaction.currency_code, 'posted', p_approved_by
-    ) RETURNING id INTO v_journal_entry_id;
-
-    -- Create journal entry lines
-    -- Debit: Employee Funds Receivable (Asset increase)
-    INSERT INTO journal_entry_lines (
-        journal_entry_id, line_number, account_id, entity_type, entity_id,
-        debit_amount, description
-    ) VALUES (
-        v_journal_entry_id, 1, v_employee_fund_account_id, 'employee', v_transaction.employee_id,
-        v_transaction.amount, v_transaction.description
+    RETURN json_build_object(
+        'success', true,
+        'message', 'Request rejected successfully',
+        'status', 'REJECTED',
+        'rejection_reason', p_rejection_reason
     );
-
-    -- Credit: Cash/Bank (Asset decrease)
-    INSERT INTO journal_entry_lines (
-        journal_entry_id, line_number, account_id,
-        credit_amount, description
-    ) SELECT v_journal_entry_id, 2, id, v_transaction.amount, v_transaction.description
-    FROM chart_of_accounts
-    WHERE account_code = CASE v_transaction.currency_code
-        WHEN 'VND' THEN '101'
-        WHEN 'USD' THEN '102'
-        WHEN 'CNY' THEN '103'
-        ELSE '101'
-    END;
 END;
 $$ LANGUAGE plpgsql;
 
--- View for pending approvals
-CREATE OR REPLACE VIEW pending_approvals_view AS
+-- View for pending approvals dashboard
+CREATE OR REPLACE VIEW pending_approvals_dashboard AS
 SELECT
     ar.id,
-    ar.request_number,
     ar.entity_type,
+    ar.entity_id,
+    ar.title,
+    ar.description,
     ar.amount,
     ar.currency_code,
-    ar.description,
-    p1.display_name as requester_name,
-    ar.requested_at,
+    ar.priority,
+    ar.created_at,
     ar.expires_at,
-    -- Reference data for employee funds
-    eft.transaction_number as ef_transaction_number,
-    p2.display_name as ef_employee_name,
-    -- Reference data for journal entries
-    je.entry_number as je_entry_number
+    p_requester.display_name as requester_name,
+    p_approver.display_name as current_approver_name,
+    ar_rule.rule_name,
+    EXTRACT(HOURS FROM (ar.expires_at - now())) as hours_remaining,
+    CASE
+        WHEN ar.expires_at < now() THEN 'EXPIRED'
+        WHEN EXTRACT(HOURS FROM (ar.expires_at - now())) < 24 THEN 'URGENT'
+        WHEN EXTRACT(HOURS FROM (ar.expires_at - now())) < 48 THEN 'HIGH'
+        ELSE 'NORMAL'
+    END as urgency_level
 FROM approval_requests ar
-JOIN profiles p1 ON ar.requester_id = p1.id
-LEFT JOIN employee_fund_transactions eft ON ar.entity_type = 'employee_fund' AND ar.entity_id = eft.id
-LEFT JOIN profiles p2 ON eft.employee_id = p2.id
-LEFT JOIN journal_entries je ON ar.entity_type = 'journal_entry' AND ar.entity_id = je.id
-WHERE ar.status = 'pending'
-ORDER BY ar.requested_at;
+JOIN profiles p_requester ON ar.requested_by = p_requester.id
+JOIN profiles p_approver ON ar.current_approver = p_approver.id
+LEFT JOIN approval_rules ar_rule ON ar.approval_rule_id = ar_rule.id
+WHERE ar.status = 'PENDING'
+ORDER BY
+    CASE priority
+        WHEN 'URGENT' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'NORMAL' THEN 3
+        ELSE 4
+    END,
+    ar.created_at ASC;
 
--- Add comments for documentation
-COMMENT ON TABLE approval_rules IS 'Approval Rules - defines when financial transactions require approval';
-COMMENT ON TABLE approval_requests IS 'Approval Requests - tracks all approval requests for financial transactions';
-COMMENT ON VIEW pending_approvals_view IS 'Pending Approvals View - shows all requests awaiting approval';
-
--- Enable Row Level Security
-ALTER TABLE approval_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee_fund_transactions ENABLE ROW LEVEL SECURITY;
+SELECT 'Approval workflows migration completed successfully!' as success_message;
