@@ -13,7 +13,10 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "check-auth": "node .claude/pre-commit-check.js",
+    "enforce-rules": "node .claude/enforce-rules.js",
+    "pre-commit": "npm run check-auth && npm run enforce-rules"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",

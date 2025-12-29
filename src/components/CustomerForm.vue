@@ -569,7 +569,6 @@ const loadSuppliers = async (channelId: string) => {
     const suppliers = await loadSuppliersOrCustomersByChannel(channelId, 'supplier')
     supplierOptions.value = suppliers
   } catch (error) {
-    console.error('Error loading suppliers:', error)
     supplierOptions.value = []
   } finally {
     supplierLoading.value = false
@@ -588,7 +587,6 @@ const searchSuppliers = async (search: string) => {
     const suppliers = await searchSuppliersOrCustomers(search, channelId, 'supplier', props.gameCode)
     supplierOptions.value = suppliers
   } catch (error) {
-    console.error('Error searching suppliers:', error)
     supplierOptions.value = []
   } finally {
     supplierLoading.value = false
@@ -612,7 +610,6 @@ const createNewSupplier = async (name: string) => {
     )
     return newSupplier
   } catch (error) {
-    console.error('Error creating supplier:', error)
     return null
   }
 }
@@ -620,7 +617,9 @@ const createNewSupplier = async (name: string) => {
 // Function to load supplier data from database for form pre-filling
 const loadSupplierData = async (supplierName: string) => {
   try {
-    const supplierData = await loadPartyByNameType(supplierName, 'supplier')
+    const currentChannelId = supplierFormData.value?.channelId
+    // Load supplier data filtered by current channel
+    const supplierData = await loadPartyByNameType(supplierName, 'supplier', currentChannelId)
     if (supplierData) {
       // Auto-fill form with supplier data - using correct field mapping
       const current = props.supplierModelValue as any || {}
@@ -628,20 +627,22 @@ const loadSupplierData = async (supplierName: string) => {
         ...current,
         supplierName: supplierData.name,
         supplierContact: supplierData.contact_info?.contact || current?.supplierContact || '',
-        deliveryLocation: supplierData.contact_info?.gameTag || current?.deliveryLocation || '', // Load gameTag from parties.contact_info
-        channelId: supplierData.channel_id || current?.channelId
+        deliveryLocation: supplierData.contact_info?.gameTag || current?.deliveryLocation || '',
+        channelId: current?.channelId  // Keep current channel, don't override
       }
       emit('update:supplierModelValue', updated)
     }
   } catch (error) {
-    console.error('Error loading supplier data:', error)
+    // Silently fail - user can create a new supplier
   }
 }
 
 // Function to load customer data from database for form pre-filling
 const loadCustomerData = async (customerName: string) => {
   try {
-    const customerData = await loadPartyByNameType(customerName, 'customer')
+    const currentChannelId = customerFormData.value?.channelId
+    // Load customer data filtered by current channel
+    const customerData = await loadPartyByNameType(customerName, 'customer', currentChannelId)
     if (customerData) {
       // Auto-fill form with customer data - using correct field mapping
       const current = props.customerModelValue as any || {}
@@ -650,12 +651,12 @@ const loadCustomerData = async (customerName: string) => {
         customerName: customerData.name,
         deliveryInfo: customerData.contact_info?.deliveryInfo || current?.deliveryInfo || '',
         gameTag: customerData.contact_info?.gameTag || current?.gameTag || '',
-        channelId: customerData.channel_id || current?.channelId
+        channelId: current?.channelId  // Keep current channel, don't override
       }
       emit('update:customerModelValue', updated)
     }
   } catch (error) {
-    console.error('Error loading customer data:', error)
+    // Silently fail - user can create a new customer
   }
 }
 
@@ -671,7 +672,6 @@ const loadCustomers = async (channelId: string) => {
         const customers = await loadSuppliersOrCustomersByChannel(channelId, 'customer', props.gameCode)
         customerOptions.value = customers
   } catch (error) {
-    console.error('Error loading customers:', error)
     customerOptions.value = []
   } finally {
     customerLoading.value = false
@@ -690,7 +690,6 @@ const searchCustomers = async (search: string) => {
     const customers = await searchSuppliersOrCustomers(search, channelId, 'customer', props.gameCode)
     customerOptions.value = customers
   } catch (error) {
-    console.error('Error searching customers:', error)
     customerOptions.value = []
   } finally {
     customerLoading.value = false

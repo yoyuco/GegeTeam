@@ -2,7 +2,7 @@
   <div class="p-4">
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-4">
-        <h2 class="text-lg font-semibold">Phân công Account theo Ca</h2>
+        <h2 class="text-lg font-semibold">Phân công Nhân viên theo Ca</h2>
         <n-tag type="info" size="small">{{ assignments.length }} phân công</n-tag>
       </div>
       <n-button type="primary" @click="openModal">
@@ -15,12 +15,11 @@
 
     <!-- Filter Panel -->
     <FilterPanel
-      :show-game-filter="true"
+      :show-game-filter="false"
       :show-employee-filter="true"
       :show-channel-filter="true"
       :show-date-filter="true"
       :show-shift-filter="true"
-      :game-codes="['POE_1', 'POE_2', 'DIABLO_4']"
       @filter-change="handleFilterChange"
     />
 
@@ -59,31 +58,15 @@
               <span>Thông tin cơ bản</span>
             </div>
 
-            <n-grid :cols="2" :x-gap="16">
-              <n-gi>
-                <n-form-item label="Game Account" path="game_account_id">
-                  <n-select
-                    v-model:value="modal.form.game_account_id"
-                    :options="gameAccountOptions"
-                    placeholder="🎮 Chọn game account"
-                    filterable
-                    :loading="gameAccountOptions.length === 0"
-                  />
-                </n-form-item>
-              </n-gi>
-
-              <n-gi>
-                <n-form-item label="Nhân viên" path="employee_profile_id">
-                  <n-select
-                    v-model:value="modal.form.employee_profile_id"
-                    :options="employeeOptions"
-                    placeholder="👤 Chọn nhân viên"
-                    filterable
-                    :loading="employeeOptions.length === 0"
-                  />
-                </n-form-item>
-              </n-gi>
-            </n-grid>
+            <n-form-item label="Nhân viên" path="employee_profile_id">
+              <n-select
+                v-model:value="modal.form.employee_profile_id"
+                :options="employeeOptions"
+                placeholder="👤 Chọn nhân viên"
+                filterable
+                :loading="employeeOptions.length === 0"
+              />
+            </n-form-item>
           </div>
 
           <!-- Schedule Section -->
@@ -191,7 +174,7 @@
               size="large"
               @click="saveAssignment"
               :loading="modal.saving"
-              :disabled="!modal.form.game_account_id || !modal.form.employee_profile_id || !modal.form.shift_id || !modal.form.channels_id"
+              :disabled="!modal.form.employee_profile_id || !modal.form.shift_id || !modal.form.channels_id"
             >
               <template #icon>
                 <n-icon>
@@ -208,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, h, computed, watch } from 'vue'
+import { ref, reactive, onMounted, h, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   NButton,
@@ -266,8 +249,6 @@ const emit = defineEmits<{
 
 interface ShiftAssignment {
   id: string
-  game_account_id: string
-  game_account_name: string
   employee_profile_id: string
   employee_name: string
   shift_id: string
@@ -285,11 +266,6 @@ interface Employee {
   display_name: string
 }
 
-interface GameAccount {
-  id: string
-  account_name: string
-  purpose: string
-}
 
 const message = useMessage()
 const dialog = useDialog()
@@ -297,7 +273,6 @@ const loading = ref(false)
 const assignments = ref<ShiftAssignment[]>([])
 const allAssignments = ref<ShiftAssignment[]>([])
 const employeeOptions = ref<Array<{label: string, value: string}>>([])
-const gameAccountOptions = ref<Array<{label: string, value: string}>>([])
 const shiftOptions = ref<Array<{label: string, value: string}>>([])
 const channelOptions = ref<Array<{label: string, value: string}>>([])
 const currencyOptions = ref<Array<{label: string, value: string}>>([])
@@ -311,7 +286,6 @@ const modal = reactive({
   editingId: null as string | null,
   saving: false,
   form: {
-    game_account_id: '',
     employee_profile_id: '',
     shift_id: '',
     channels_id: '',
@@ -328,9 +302,6 @@ const pagination = reactive({
 })
 
 const rules: FormRules = {
-  game_account_id: [
-    { required: true, message: 'Vui lòng chọn game account', trigger: ['change', 'blur'] }
-  ],
   employee_profile_id: [
     { required: true, message: 'Vui lòng chọn nhân viên', trigger: ['change', 'blur'] }
   ],
@@ -346,13 +317,6 @@ const rules: FormRules = {
 }
 
 const columns: DataTableColumns<ShiftAssignment> = [
-  {
-    title: 'Game Account',
-    key: 'game_account_name',
-    render(row) {
-      return h('span', row.game_account_name)
-    }
-  },
   {
     title: 'Nhân viên',
     key: 'employee_name',
@@ -460,40 +424,6 @@ async function loadEmployees() {
   }
 }
 
-async function loadGameAccounts() {
-  try {
-    // Try RPC function first to bypass RLS issues
-    const { data, error } = await supabase.rpc('get_all_game_accounts_direct')
-
-    if (error) {
-      // Fallback to direct query
-      console.warn('RPC failed, falling back to direct query:', error)
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('game_accounts')
-        .select('id, account_name')
-        .eq('is_active', true)
-        .eq('purpose', 'INVENTORY')
-        .order('account_name')
-
-      if (fallbackError) throw fallbackError
-      gameAccountOptions.value = (fallbackData as GameAccount[] || [])
-        .filter((account: GameAccount) => account.purpose === 'INVENTORY')
-        .map((account: GameAccount) => ({
-          label: account.account_name,
-          value: account.id
-        }))
-    } else {
-      gameAccountOptions.value = (data as GameAccount[] || [])
-        .filter((account: GameAccount) => account.purpose === 'INVENTORY')
-        .map((account: GameAccount) => ({
-          label: account.account_name,
-          value: account.id
-        }))
-    }
-  } catch (error: any) {
-    message.error(error.message || 'Không thể tải danh sách game accounts')
-  }
-}
 
 async function loadShifts() {
   try {
@@ -605,7 +535,7 @@ async function loadAssignments() {
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from('shift_assignments')
         .select('*')
-        .order('game_account_id, shift_id')
+        .order('employee_profile_id, shift_id')
 
       if (assignmentsError) throw assignmentsError
 
@@ -615,20 +545,17 @@ async function loadAssignments() {
       }
 
       // Get related data separately
-      const [gameAccountsRes, profilesRes, workShiftsRes, channelsRes] = await Promise.all([
-        supabase.from('game_accounts').select('id, account_name').in('id', [...new Set(assignmentsData.map(a => a.game_account_id))]),
+      const [profilesRes, workShiftsRes, channelsRes] = await Promise.all([
         supabase.from('profiles').select('id, display_name').in('id', [...new Set(assignmentsData.map(a => a.employee_profile_id))]),
         supabase.from('work_shifts').select('id, name, start_time, end_time').in('id', [...new Set(assignmentsData.map(a => a.shift_id))]),
         supabase.from('channels').select('id, name').in('id', [...new Set(assignmentsData.map(a => a.channels_id))])
       ])
 
-      if (gameAccountsRes.error) throw gameAccountsRes.error
       if (profilesRes.error) throw profilesRes.error
       if (workShiftsRes.error) throw workShiftsRes.error
       if (channelsRes.error) throw channelsRes.error
 
       // Create lookup maps
-      const gameAccountMap = new Map((gameAccountsRes.data || []).map(acc => [acc.id, acc.account_name]))
       const profileMap = new Map((profilesRes.data || []).map(profile => [profile.id, profile.display_name]))
       const workShiftMap = new Map((workShiftsRes.data || []).map(shift => [shift.id, shift]))
       const channelMap = new Map((channelsRes.data || []).map(channel => [channel.id, channel.name]))
@@ -638,8 +565,6 @@ async function loadAssignments() {
         const workShift = workShiftMap.get(item.shift_id)
         return {
           id: item.id,
-          game_account_id: item.game_account_id,
-          game_account_name: gameAccountMap.get(item.game_account_id) || 'Unknown',
           employee_profile_id: item.employee_profile_id,
           employee_name: profileMap.get(item.employee_profile_id) || 'Unknown',
           shift_id: item.shift_id,
@@ -658,8 +583,6 @@ async function loadAssignments() {
       // Use RPC data with combined information
       allAssignments.value = (data || []).map((item: any) => ({
         id: item.id,
-        game_account_id: item.game_account_id,
-        game_account_name: item.game_account_name,
         employee_profile_id: item.employee_profile_id,
         employee_name: item.employee_name,
         shift_id: item.shift_id,
@@ -696,28 +619,10 @@ function applyFilters() {
   if (props.searchQuery) {
     const searchLower = props.searchQuery.toLowerCase()
     filtered = filtered.filter(assignment =>
-      assignment.game_account_name.toLowerCase().includes(searchLower) ||
       assignment.employee_name.toLowerCase().includes(searchLower) ||
       assignment.shift_name.toLowerCase().includes(searchLower) ||
       assignment.channel_name.toLowerCase().includes(searchLower)
     )
-  }
-
-  // Game filter (handle both single string and array) - filter by game account name
-  if (currentFilters.value.game) {
-    if (Array.isArray(currentFilters.value.game)) {
-      if (currentFilters.value.game.length > 0) {
-        filtered = filtered.filter(assignment =>
-          currentFilters.value.game.some((game: string) =>
-            assignment.game_account_name.toLowerCase().includes(game.toLowerCase())
-          )
-        )
-      }
-    } else {
-      filtered = filtered.filter(assignment =>
-        assignment.game_account_name.toLowerCase().includes(currentFilters.value.game.toLowerCase())
-      )
-    }
   }
 
   // Employee filter (handle both single string and array)
@@ -798,7 +703,6 @@ watch(() => props.refreshTrigger, () => {
 function openModal() {
   modal.editingId = null as string | null
   modal.form = {
-    game_account_id: '',
     employee_profile_id: '',
     shift_id: '',
     channels_id: '',
@@ -811,7 +715,6 @@ function openModal() {
 function editAssignment(assignment: ShiftAssignment) {
   modal.editingId = assignment.id
   modal.form = {
-    game_account_id: assignment.game_account_id,
     employee_profile_id: assignment.employee_profile_id,
     shift_id: assignment.shift_id,
     channels_id: assignment.channels_id,
@@ -829,10 +732,19 @@ function deleteAssignment(assignment: ShiftAssignment) {
     negativeText: 'Hủy',
     onPositiveClick: async () => {
       try {
-        // Use RPC function to bypass RLS
-        const { data, error } = await supabase.rpc('delete_shift_assignment_direct', {
-          p_assignment_id: assignment.id
-        })
+        // Get current user profile ID for audit trail
+      const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+      if (profileError || !profileData) {
+        message.error('Không thể lấy thông tin người dùng hiện tại')
+        return
+      }
+
+      // Use RPC function to bypass RLS
+      const { data, error } = await supabase.rpc('delete_shift_assignment_direct', {
+        p_user_id: profileData,
+        p_assignment_id: assignment.id
+      })
 
         if (error) throw error
 
@@ -860,8 +772,16 @@ async function saveAssignment() {
 
   modal.saving = true
   try {
+    // Get current user profile ID
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    if (profileError || !profileData) {
+      message.error('Không thể lấy thông tin người dùng hiện tại')
+      modal.saving = false
+      return
+    }
+
     const assignmentData = {
-      p_game_account_id: modal.form.game_account_id,
       p_employee_profile_id: modal.form.employee_profile_id,
       p_shift_id: modal.form.shift_id,
       p_channels_id: modal.form.channels_id,
@@ -874,13 +794,17 @@ async function saveAssignment() {
     if (modal.editingId) {
       // Use RPC function to update existing assignment
       const { error: updateError } = await supabase.rpc('update_shift_assignment_direct', {
+        p_user_id: profileData,
         p_assignment_id: modal.editingId,
         ...assignmentData
       })
       error = updateError
     } else {
       // Use RPC function to create new assignment
-      const { error: createError } = await supabase.rpc('create_shift_assignment_direct', assignmentData)
+      const { error: createError } = await supabase.rpc('create_shift_assignment_direct', {
+        p_user_id: profileData,
+        ...assignmentData
+      })
       error = createError
     }
 
@@ -888,6 +812,8 @@ async function saveAssignment() {
 
     message.success(modal.editingId ? 'Cập nhật phân công thành công!' : 'Thêm phân công thành công!')
     modal.open = false
+    // Add small delay to ensure database transaction is committed
+    await new Promise(resolve => setTimeout(resolve, 300))
     await loadAssignments()
   } catch (error: any) {
     message.error(error.message || 'Không thể lưu phân công')
@@ -899,7 +825,6 @@ async function saveAssignment() {
 onMounted(async () => {
   await Promise.all([
     loadEmployees(),
-    loadGameAccounts(),
     loadShifts(),
     loadChannels(),
     loadCurrencies(),

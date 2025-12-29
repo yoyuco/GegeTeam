@@ -472,11 +472,10 @@ import CustomerForm from '@/components/CustomerForm.vue'
 import SimpleProofUpload from '@/components/SimpleProofUpload.vue'
 import { useCurrency } from '@/composables/useCurrency.js'
 import { useGameContext } from '@/composables/useGameContext.js'
-import { loadPartyByNameType, createSupplierOrCustomer } from '@/composables/useSupplierCustomer'
-import { useAuth } from '@/stores/auth'
+import { createSupplierOrCustomer } from '@/composables/useSupplierCustomer'
 import { NButton, NInput, NRadio, NRadioGroup, useMessage } from 'naive-ui'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { supabase, uploadFile } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import type { Currency } from '@/types/composables.d'
 
 // Load currencies for current game
@@ -578,7 +577,6 @@ const loadCurrencyCodesData = async () => {
     const codes = await loadCurrencyCodes()
     currencyCodes.value = codes
   } catch (err) {
-    console.error('Error loading currency codes:', err)
     currencyCodes.value = []
   } finally {
     currencyCodesLoading.value = false
@@ -604,7 +602,6 @@ const filteredCurrencies = computed(() => {
 })
 // UI State
 const message = useMessage()
-const auth = useAuth()
 const isInventoryOpen = ref(false)
 const saving = ref(false)
 const currencyFormRef = ref()
@@ -814,7 +811,6 @@ const loadData = async () => {
     // Log auto-selection results after setting
     // Auto-selection completed successfully
   } catch (error) {
-    console.error('Error loading data:', error)
     message.error('Không thể tải dữ liệu')
   } finally {
     isDataLoading.value = false
@@ -1132,21 +1128,6 @@ const getExchangeTypeExample = () => {
       return 'VD: Ring name'
   }
 }
-// Get exchange type label in Vietnamese
-const getExchangeTypeLabel = (type: string) => {
-  switch (type) {
-    case 'items':
-      return 'Vật phẩm'
-    case 'service':
-      return 'Dịch vụ'
-    case 'farmer':
-      return 'Farmer'
-    case 'currency':
-      return 'Tiền tệ'
-    default:
-      return type
-  }
-}
 // Currency form methods
 const handleCurrencyFormSubmit = async () => {
   
@@ -1225,14 +1206,12 @@ const handleCurrencyFormSubmit = async () => {
 
       // Validate customer data
       if (!customerFormData.value.customerName || !customerFormData.value.gameTag) {
-        console.error('Missing customer data in handleCurrencyFormSubmit:', customerFormData.value)
         message.error('Vui lòng điền đầy đủ thông tin khách hàng')
         return
       }
 
       // Validate server selection - required for all games
       if (!currentServer.value) {
-        console.error('Missing server selection in handleCurrencyFormSubmit:', currentServer.value)
         message.error(
           `Vui lòng chọn server cho ${currentGame.value === 'DIABLO_4' ? 'Diablo 4' : currentGame.value === 'POE_1' ? 'Path of Exile 1' : 'Path of Exile 2'}`
         )
@@ -1243,8 +1222,6 @@ const handleCurrencyFormSubmit = async () => {
       await saveSale()
     }
   } catch (error) {
-    console.error('Error in handleCurrencyFormSubmit:', error)
-
     const errorMessage =
       activeTab.value === 'purchase'
         ? 'Đã có lỗi xảy ra khi tạo đơn mua'
@@ -1369,20 +1346,13 @@ const saveSale = async () => {
           customerPartyId = customerParty.id
           // Customer party processed successfully
         } else {
-          console.warn('Failed to create or retrieve customer party for:', customerName)
+          // Failed to create or retrieve customer party
         }
       } catch (error) {
-        console.error('Error processing customer party:', error)
         throw new Error(`Không thể xử lý thông tin khách hàng: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
 
-    // Dynamic currency detection for sale
-    const saleCostCurrency = formData.unitPriceUsd && formData.unitPriceUsd > 0 ? 'USD' : 'VND'
-    const saleCostAmount =
-      saleCostCurrency === 'USD' && formData.unitPriceUsd
-        ? formData.unitPriceUsd
-        : formData.unitPriceVnd || 0
     // Prepare payload for create_currency_sell_order_draft
     // Note: Function parameters order was changed to fix stock validation
     const payload: any = {
@@ -1431,7 +1401,6 @@ const saveSale = async () => {
       if (validExchangeTypes.includes(exchangeTypeValue)) {
         payload.p_exchange_type = exchangeTypeValue
       } else {
-        console.warn(`Invalid exchange type: ${exchangeTypeValue}, defaulting to 'items'`)
         payload.p_exchange_type = 'items'
       }
       payload.p_exchange_details = {
@@ -1443,7 +1412,6 @@ const saveSale = async () => {
     const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
 
     if (profileError) {
-      console.error('Profile RPC error:', profileError)
       throw new Error(`Lỗi khi lấy profile ID: ${profileError.message}`)
     }
 
@@ -1458,14 +1426,11 @@ const saveSale = async () => {
     // Note: Inventory validation will be handled by backend during assignment phase
         const { data, error } = await supabase.rpc('create_currency_sell_order_draft', payload)
     if (error) {
-      console.error('Backend error:', error)
       throw new Error(`Không thể tạo đơn bán draft: ${error.message}`)
     }
 
     // Check if draft was created successfully
     if (data && data.length > 0) {
-      // Debug: Log response to see actual structure
-      console.log('Function response:', data[0])
 
       // Extract order info from response structure
       let orderId, orderNumber
@@ -1549,13 +1514,11 @@ const saveSale = async () => {
         })
 
         if (assignmentError) {
-          console.error('Assignment error:', assignmentError)
           message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công: ${assignmentError.message}`)
         }
 
         // Check assignment result
         if (assignmentResult && assignmentResult.length > 0 && !assignmentResult[0].success) {
-          console.error('Assignment failed:', assignmentResult[0].message)
 
           // Check if it's an inventory-related error
           const errorMsg = assignmentResult[0].message.toLowerCase()
@@ -1571,7 +1534,6 @@ const saveSale = async () => {
           }
         }
       } catch (assignError: any) {
-        console.error('Assignment failed:', assignError)
         message.error(`❌ Lỗi khi phân công đơn #${orderNumber}: ${assignError.message}`)
       }
 
@@ -1621,7 +1583,6 @@ const saveSale = async () => {
     }
   }
   } catch (error) {
-    console.error('Sell order creation error:', error)
     message.error(`Đã có lỗi xảy ra khi tạo đơn bán: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
   } finally {
     saving.value = false
@@ -1768,21 +1729,7 @@ const validatePurchaseForm = () => {
 
 
 
-// Auto assign purchase order to employee
-const autoAssignPurchaseOrder = async (orderId: string): Promise<void> => {
-  try {
-    const { error } = await supabase.rpc('assign_purchase_order', {
-      p_purchase_order_id: orderId
-    })
-
-    if (error) {
-      throw new Error(`Failed to auto-assign purchase order: ${error.message}`)
-    }
-  } catch (err) {
-    console.error('Error auto-assigning purchase order:', err)
-    throw err
-  }
-}
+// Auto-assignment removed - purchase orders will be assigned manually
 
 // Simple cache for buy orders
 interface BuyOrder {
@@ -1849,142 +1796,6 @@ const loadBuyOrders = async (forceRefresh = false) => {
   }
 }
 
-// Check server availability and employee shift before creating order
-const checkOrderFeasibility = async (
-  gameCode: string,
-  serverCode: string,
-  channelId: string,
-  currencyCode: string // Add currency type parameter
-): Promise<{
-  feasible: boolean,
-  serverAvailable: boolean,
-  employeeAvailable: boolean,
-  message: string
-}> => {
-  try {
-    // Database is already GMT+7, no conversion needed
-    const currentTime = new Date().toTimeString().slice(0, 5)
-
-    const { data: activeShifts, error: shiftError } = await supabase
-      .from('work_shifts')
-      .select('*')
-      .eq('is_active', true)
-
-    if (shiftError) {
-      return {
-        feasible: false,
-        serverAvailable: false,
-        employeeAvailable: false,
-        message: `Lỗi hệ thống khi kiểm tra giờ làm việc. Vui lòng thử lại hoặc liên hệ admin.`
-      }
-    }
-
-    if (!activeShifts || activeShifts.length === 0) {
-      return {
-        feasible: false,
-        serverAvailable: false,
-        employeeAvailable: false,
-        message: `Không có ca làm việc nào đang active tại thời gian hiện tại. Vui lòng thử lại sau.`
-      }
-    }
-
-    let activeShift = null
-    for (const shift of activeShifts) {
-      const shiftStart = shift.start_time.slice(0, 5)
-      const shiftEnd = shift.end_time.slice(0, 5)
-
-      let isOnShift = false
-      if (shift.start_time <= shift.end_time) {
-        isOnShift = currentTime >= shiftStart && currentTime <= shiftEnd
-      } else {
-        isOnShift = currentTime >= shiftStart || currentTime <= shiftEnd
-      }
-
-      if (isOnShift) {
-        activeShift = shift
-        break
-      }
-    }
-
-    if (!activeShift) {
-      return {
-        feasible: false,
-        serverAvailable: false,
-        employeeAvailable: false,
-        message: `Hiện tại đang ngoài giờ làm việc (${currentTime}). Ca làm việc: ${activeShift.name} (${activeShift.start_time} - ${activeShift.end_time}).`
-      }
-    }
-
-    
-    const { data: availableAccounts, error: serverError } = await supabase.rpc('get_available_game_accounts', {
-      p_game_code: gameCode,
-      p_server_attribute_code: serverCode,
-      p_limit: 10
-    })
-
-    if (serverError || !availableAccounts || availableAccounts.length === 0) {
-      const serverText = serverCode ? `server: ${serverCode}` : 'global accounts'
-      return {
-        feasible: false,
-        serverAvailable: false,
-        employeeAvailable: false,
-        message: `Hiện tại không có tài khoản game nào available cho ${gameCode} ${serverText === 'global accounts' ? '' : '(' + serverText + ')'}.`
-      }
-    }
-
-    const { data: shiftAssignments, error: assignmentError } = await supabase
-      .from('shift_assignments')
-      .select(`
-        *,
-        profiles!inner (
-          display_name,
-          status
-        ),
-        game_accounts!inner (
-          account_name,
-          game_code,
-          server_attribute_code
-        ),
-        work_shifts!inner (
-          name,
-          start_time,
-          end_time
-        )
-      `)
-      .eq('channels_id', channelId)
-      .eq('currency_code', currencyCode)
-      .eq('shift_id', activeShift.id)
-      .eq('is_active', true)
-      .eq('profiles.status', 'active')
-      .eq('game_accounts.is_active', true)
-
-    if (assignmentError || !shiftAssignments || shiftAssignments.length === 0) {
-      return {
-        feasible: false,
-        serverAvailable: true,
-        employeeAvailable: false,
-        message: `Hiện tại không có nhân viên nào phù hợp để xử lý đơn hàng này (Loại currency: ${currencyCode}). Vui lòng thử lại sau hoặc liên hệ admin để được hỗ trợ.`
-      }
-    }
-
-    const assignment = shiftAssignments[0]
-    return {
-      feasible: true,
-      serverAvailable: true,
-      employeeAvailable: true,
-      message: `✅ Sẵn sàng tạo đơn! Đơn hàng sẽ được tự động phân công cho ${assignment.profiles.display_name}.`
-    }
-
-  } catch (error) {
-    return {
-      feasible: false,
-      serverAvailable: false,
-      employeeAvailable: false,
-      message: `Lỗi hệ thống khi kiểm tra điều kiện tạo đơn. Vui lòng thử lại hoặc liên hệ admin.`
-    }
-  }
-}
-
 // Handle purchase submit for purchase tab
 const _handlePurchaseSubmit = async () => {
   // Prevent double-click / multiple submissions
@@ -2004,23 +1815,12 @@ const _handlePurchaseSubmit = async () => {
       throw new Error('Vui lòng chọn game và server')
     }
 
-    // NEW: Comprehensive feasibility check (server + employee shift)
+    // Feasibility check removed - purchase orders will be assigned manually
 
     if (!supplierFormData.value.channelId) {
       throw new Error('Vui lòng chọn kênh mua hàng')
     }
 
-    const feasibilityCheck = await checkOrderFeasibility(
-      currentGame.value,
-      currentServer.value,
-      supplierFormData.value.channelId,
-      purchaseCostCurrency.value // Add currency type parameter
-    )
-
-    if (!feasibilityCheck.feasible) {
-      throw new Error(feasibilityCheck.message)
-    }
-    
     // Use comprehensive validation
     const validation = validatePurchaseForm()
     if (!validation.isValid) {
@@ -2047,12 +1847,22 @@ const _handlePurchaseSubmit = async () => {
         if (supplierParty && supplierParty.id) {
           // Supplier party processed successfully
         } else {
-          console.warn('Failed to create or retrieve supplier party for:', supplierName)
+          // Failed to create or retrieve supplier party
         }
       } catch (error) {
-        console.error('Error processing supplier party:', error)
         throw new Error(`Không thể xử lý thông tin nhà cung cấp: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
+    }
+
+    // Get current profile ID for authentication (MUST use RPC, not auth.profile)
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    if (profileError) {
+      throw new Error(`Lỗi khi lấy profile ID: ${profileError.message}`)
+    }
+
+    if (!profileData) {
+      throw new Error('Không thể lấy profile ID của người dùng. Vui lòng đảm bảo bạn đã đăng nhập và có profile hợp lệ.')
     }
 
     // NEW WORKFLOW: Create order draft first
@@ -2080,7 +1890,7 @@ const _handlePurchaseSubmit = async () => {
         return parts.join(' | ')
       })(), // Notes | Thông tin liên hệ nếu có
       p_priority_level: 3, // Default priority level
-      p_user_id: auth.profile?.id // Proper authentication: pass profiles.id from frontend
+      p_user_id: profileData // Proper authentication: use get_current_profile_id() RPC result
     })
 
     if (draftError) {
@@ -2122,15 +1932,9 @@ const _handlePurchaseSubmit = async () => {
       throw new Error(`Cập nhật bằng chứng thất bại: ${updateResult[0].message}`)
     }
 
-    
-    // Auto assign purchase order to suitable employee (should succeed based on pre-check)
-    try {
-            await autoAssignPurchaseOrder(orderUuid)
-    } catch (assignError) {
-            console.error('Assignment error:', assignError)
-      // This should rarely happen due to pre-check, but handle gracefully
-      message.warning(`⚠️ Đơn #${orderNumber} cần phân công thủ công`)
-    }
+  
+    // NOTE: Auto-assignment removed - purchase orders will be assigned manually
+    // Order remains in 'pending' status after creation
 
     // Single success message
     message.success(`✅ Đơn mua #${orderNumber} đã được tạo thành công!`)
@@ -2194,45 +1998,7 @@ const resetPurchaseForm = () => {
   }
 }
 
-// New function to upload local files directly with order ID
-const uploadFilesDirectly = async (files: FileInfo[], orderNumber: string, proofType: string) => {
-  const uploadResults = []
-
-  for (const file of files) {
-    try {
-      // Check if file has actual File object (not already uploaded)
-      if (file.file instanceof File) {
-        const timestamp = Date.now()
-        const randomString = Math.random().toString(36).substring(2, 8)
-        const filename = `${timestamp}-${randomString}-${file.name}`
-
-        // Upload to correct order folder path
-        const filePath = `currency/purchase/${orderNumber}/${proofType}/${filename}`
-
-        
-        const uploadResult = await uploadFile(file.file, filePath, 'work-proofs')
-
-        if (uploadResult.success) {
-          uploadResults.push({
-            url: uploadResult.publicUrl,
-            path: uploadResult.path,
-            filename: file.name,
-            type: proofType,
-            uploaded_at: new Date().toISOString()
-          })
-        } else {
-          throw new Error(uploadResult.error || 'Upload failed')
-        }
-      } else {
-        // File is not a File object, skip
-      }
-    } catch (error) {
-      throw new Error(`Failed to upload ${proofType} file: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  return uploadResults
-}
+// File upload handled by SimpleProofUpload component - no need for separate upload function
 </script>
 <style scoped>
 .layout-wrapper {

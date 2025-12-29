@@ -634,22 +634,21 @@ const handleCompleteOrder = async () => {
           })
         }
 
-        // Merge new payment proofs with existing proofs
-        const allProofs = [...props.order.proofs || [], ...uploadedProofs]
+        // Get current user profile for completed_by
+        const { data: currentProfileId } = await supabase.rpc('get_current_profile_id')
 
-        // Update order with new proofs and change status to completed
-        const { error: updateError } = await supabase
-          .from('currency_orders')
-          .update({
-            proofs: allProofs,
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', props.order.id)
+        // Use RPC function to complete purchase order (bypasses enum transform issue)
+        const finalProofs = uploadedProofs.map(p => p.url)
 
-        if (updateError) {
-          throw updateError
+        const { data: rpcData, error: rpcError } = await supabase.rpc('complete_purchase_order_wac', {
+          p_order_id: props.order.id,
+          p_completed_by: currentProfileId,
+          p_proofs: finalProofs.length > 0 ? finalProofs : null,
+          p_channel_id: props.order.channel_id
+        })
+
+        if (rpcError) {
+          throw rpcError
         }
 
         message.success(`✅ Đã hoàn tất đơn mua #${props.order.order_number} với ${uploadedProofs.length} bằng chứng thanh toán`)

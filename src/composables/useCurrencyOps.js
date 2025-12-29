@@ -390,12 +390,15 @@ export function useCurrencyOps() {
 
       console.log(`📋 Completing ${order_type} order with channel: ${channel_id}`)
 
+      // Get current profile for completed_by (needed for purchase deduction)
+      const { data: profileId } = await supabase.rpc('get_current_profile_id')
+
       // Route to appropriate function based on order type
       if (order_type === 'PURCHASE') {
         // Use WAC function for purchase orders with inventory pool creation
         const { data, error: rpcError } = await supabase.rpc('complete_purchase_order_wac', {
           p_order_id: orderId,
-          p_completed_by: null, // Will use current profile
+          p_completed_by: profileId, // Pass current profile for deduction tracking
           p_proofs: completionData.proofUrls,
           p_channel_id: channel_id // Pass actual channel from order
         })

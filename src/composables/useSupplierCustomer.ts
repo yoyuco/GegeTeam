@@ -55,7 +55,6 @@ export async function loadSuppliersOrCustomersByChannel(
     const { data, error } = await query
 
     if (error) {
-      console.error(`Error loading ${type}s by channel:`, error)
       return []
     }
 
@@ -65,7 +64,6 @@ export async function loadSuppliersOrCustomersByChannel(
       data: party
     }))
   } catch (error) {
-    console.error(`Error in loadSuppliersOrCustomersByChannel:`, error)
     return []
   }
 }
@@ -109,7 +107,6 @@ export async function searchSuppliersOrCustomers(
     const { data, error } = await query
 
     if (error) {
-      console.error(`Error searching ${type}s:`, error)
       return []
     }
 
@@ -119,7 +116,6 @@ export async function searchSuppliersOrCustomers(
       data: party
     }))
   } catch (error) {
-    console.error(`Error in searchSuppliersOrCustomers:`, error)
     return []
   }
 }
@@ -194,14 +190,11 @@ export async function createSupplierOrCustomer(
       .single()
 
     if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
-      console.error(`Error checking existing ${type}:`, checkError)
       return null
     }
 
     // If party exists, update and return it
     if (existingParty) {
-      console.log(`${type} "${name}" already exists, updating with new information`)
-
       // Build updated contact_info JSON, preserve existing data if not provided
       const updatedContactInfo: any = {
         ...existingParty.contact_info,
@@ -237,11 +230,9 @@ export async function createSupplierOrCustomer(
         .single()
 
       if (updateError) {
-        console.error(`Error updating existing ${type}:`, updateError)
         return existingParty // Return original if update fails
       }
 
-      console.log(`Successfully updated existing ${type}:`, updatedParty)
       return updatedParty
     }
 
@@ -273,38 +264,37 @@ export async function createSupplierOrCustomer(
       .single()
 
     if (error) {
-      console.error(`Error creating ${type}:`, error)
       return null
     }
 
-    console.log(`Successfully created new ${type}:`, data)
     return data
   } catch (error) {
-    console.error(`Error in createSupplierOrCustomer:`, error)
     return null
   }
 }
 
 /**
  * Load existing party data by name and type for form pre-filling
+ * Now with optional channel_id filter to prevent cross-channel data contamination
  */
 export async function loadPartyByNameType(
   name: string,
-  type: 'supplier' | 'customer'
+  type: 'supplier' | 'customer',
+  channelId?: string | null
 ): Promise<SupplierCustomer | null> {
   if (!name) {
     return null
   }
 
   try {
-    // Use the new RPC function
+    // Use the updated RPC function with channel filter
     const { data, error } = await supabase.rpc('get_party_by_name_type', {
       p_name: name,
-      p_type: type
+      p_type: type,
+      p_channel_id: channelId || null  // Filter by channel if provided
     })
 
     if (error) {
-      console.error(`Error loading ${type} data:`, error)
       return null
     }
 
@@ -323,7 +313,6 @@ export async function loadPartyByNameType(
 
     return null
   } catch (error) {
-    console.error(`Error in loadPartyByNameType:`, error)
     return null
   }
 }
@@ -354,7 +343,6 @@ export async function updatePartyInfo(
     })
 
     if (error) {
-      console.error('Error updating party info:', error)
       return { success: false, message: error.message }
     }
 
@@ -368,7 +356,6 @@ export async function updatePartyInfo(
 
     return { success: false, message: 'Unknown error occurred' }
   } catch (error) {
-    console.error('Error in updatePartyInfo:', error)
     return { success: false, message: 'Failed to update party information' }
   }
 }

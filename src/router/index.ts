@@ -51,6 +51,18 @@ const routes = [
     component: () => import('@/pages/CurrencyOps.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/my-wallet',
+    name: 'my-wallet',
+    component: () => import('@/pages/MyWallet.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finance',
+    name: 'finance',
+    component: () => import('@/pages/Finance.vue'),
+    meta: { requiresAuth: true },
+  },
     { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

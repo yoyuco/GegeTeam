@@ -941,27 +941,8 @@ const loadDeliveryOrders = async () => {
       foreign_currency_attribute: order.foreign_currency_attribute
     }))
 
-    // SORTING RULE: Delivery tab - active orders first, delivered at bottom
-    // Priority order: assigned → preparing → delivering → ready (active), then delivered
-    const statusPriority = {
-      'assigned': 1,
-      'preparing': 2,
-      'delivering': 3,
-      'ready': 4,
-      'delivered': 5
-    }
-
-    formattedOrders.sort((a: any, b: any) => {
-      const priorityA = statusPriority[a.status as keyof typeof statusPriority] || 999
-      const priorityB = statusPriority[b.status as keyof typeof statusPriority] || 999
-
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB
-      }
-
-      // Within same status priority, sort by created_at (newest first)
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+    // NOTE: Sorting now handled by backend with status priority (pending → assigned → preparing → delivering → ready → delivered)
+    // No need for client-side sorting anymore - reduces egress and improves performance
 
     // Handle pagination: for first page, replace; for subsequent pages, append
     if (pagination.currentPage === 1) {
@@ -986,7 +967,42 @@ const handleDeliveryExport = () => {
 
 const handleDeliveryViewDetail = async (order: any) => {
   try {
-    // Only update status if order is currently 'assigned'
+    // Get current profile ID for authentication (MUST use RPC)
+    const { data: profileData, error: profileError } = await supabase.rpc('get_current_profile_id')
+
+    if (profileError || !profileData) {
+      message.error('Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.')
+      return
+    }
+
+    // Try auto-assign for pending or assigned orders with trader2 role
+    if (order.status === 'pending' || order.status === 'assigned') {
+      const { data: assignResult, error: assignError } = await supabase.rpc(
+        'auto_assign_currency_order_on_view',
+        {
+          p_order_id: order.id,
+          p_user_id: profileData
+        }
+      )
+
+      if (!assignError && assignResult && assignResult.length > 0) {
+        const result = assignResult[0]
+        if (result.success) {
+          message.success(result.message)
+          // Reload data to reflect the assignment and status change
+          await loadDeliveryOrders()
+          return
+        } else {
+          // Auto-assign failed but we have a reason - show it
+          message.info(result.message || 'Không thể tự động phân công đơn hàng')
+        }
+      } else if (assignError) {
+        console.error('Auto-assign error:', assignError)
+        // Continue with fallback logic
+      }
+    }
+
+    // Fallback: Only update status if order is currently 'assigned' (original logic)
     if (order.status === 'assigned') {
       // Update order status to 'preparing' when viewing details
       const { error } = await supabase
@@ -999,14 +1015,14 @@ const handleDeliveryViewDetail = async (order: any) => {
         .eq('id', order.id)
 
       if (error) {
-
         message.warning(`Xem chi tiết đơn #${order.order_number} nhưng không thể cập nhật trạng thái`)
       } else {
         message.success(`✅ Đã xem chi tiết và chuyển đơn #${order.order_number} sang trạng thái "Đang chuẩn bị"`)
         // Reload data to reflect the status change
         await loadDeliveryOrders()
       }
-    } else {
+    } else if (order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'delivering') {
+      // Only show info message for non-processing statuses
       message.info(`Xem chi tiết đơn #${order.order_number} (trạng thái: ${getStatusLabel(order.status, order.order_type)})`)
     }
 
@@ -1014,7 +1030,7 @@ const handleDeliveryViewDetail = async (order: any) => {
     // TODO: Implement view detail modal here
 
   } catch (error) {
-
+    console.error('View detail error:', error)
     message.error(`Có lỗi xảy ra khi xem chi tiết đơn #${order.order_number}`)
   }
 }
@@ -1602,40 +1618,36 @@ const setupRealtimeSubscription = () => {
         table: 'currency_orders'
       },
       async (payload) => {
-        console.log('Currency order change detected:', payload)
-
-        // Determine which data to reload based on the change
+        // SMART REALTIME: Only reload when necessary to reduce egress
         const { eventType, new: newRecord, old: oldRecord } = payload
+        const record = (newRecord || oldRecord) as { status?: string; order_number?: string } | null
 
-        // For delivery orders - reload if status matches delivery criteria
-        if (eventType === 'INSERT' || eventType === 'UPDATE') {
-          const record = newRecord || oldRecord
+        // Early exit: ignore events without proper data
+        if (!record) return
 
-          // Check if this affects delivery orders
-          const deliveryStatuses = ['draft', 'pending', 'assigned', 'preparing', 'ready', 'delivering']
-          if (deliveryStatuses.includes(record?.status)) {
-            console.log('Reloading delivery orders due to change')
+        // SMART FILTER: Only reload if event affects current tab
+        if (activeTab.value === 'delivery') {
+          // Delivery tab statuses: pending, assigned, preparing, delivering, ready, delivered
+          const deliveryStatuses = ['pending', 'assigned', 'preparing', 'delivering', 'ready', 'delivered']
+
+          if (record.status && deliveryStatuses.includes(record.status)) {
+            // SMART REFRESH: Only reload if this affects current view
+            console.log(`[Realtime] Delivery order ${record.order_number} changed to ${record.status}`)
+
+            // Check if user should see this order (basic check - server will handle full filtering)
+            // Reload delivery orders with current pagination
             await loadDeliveryOrders()
           }
+        } else if (activeTab.value === 'history') {
+          // History tab statuses: completed, cancelled
+          const historyStatuses = ['completed', 'cancelled']
 
-          // Check if this affects history orders
-          const historyStatuses = ['completed', 'cancelled', 'delivered', 'failed']
-          if (historyStatuses.includes(record?.status)) {
-            console.log('Reloading transaction history due to change')
-            if (activeTab.value === 'history') {
-              await loadTransactionHistory()
-            }
-          }
-        }
-
-        // For DELETE events, reload both to be safe
-        if (eventType === 'DELETE') {
-          console.log('Order deleted, reloading both datasets')
-          await loadDeliveryOrders()
-          if (activeTab.value === 'history') {
+          if (record.status && historyStatuses.includes(record.status)) {
+            console.log(`[Realtime] History order ${record.order_number} changed to ${record.status}`)
             await loadTransactionHistory()
           }
         }
+        // Exchange tab doesn't need reloading (shows form only)
       }
     )
     .subscribe((status) => {

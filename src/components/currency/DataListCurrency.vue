@@ -571,6 +571,26 @@
             </div>
           </div>
 
+          <!-- Account/Pool Selection Dropdown -->
+          <div v-if="selectedItem && (selectedItem.order_type === 'PURCHASE' || selectedItem.order_type === 'SALE')" class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              {{ selectedItem?.order_type === 'PURCHASE' ? 'Chọn Account để lưu hàng' : 'Chọn Kho để xuất hàng' }}
+              <span class="text-red-500">*</span>
+            </label>
+            <n-select
+              v-model:value="selectedAccountOrPoolId"
+              :options="accountOrPoolOptions"
+              :loading="loadingAccountsOrPools"
+              :placeholder="selectedItem?.order_type === 'PURCHASE' ? 'Chọn Account...' : 'Chọn Kho...'"
+              filterable
+              clearable
+              size="large"
+            />
+            <p v-if="selectedItem?.order_type === 'PURCHASE'" class="text-xs text-gray-500 mt-1">
+              Số lượng trong ngoặc là tồn kho hiện tại của account đó
+            </p>
+          </div>
+
           <!-- SimpleProofUpload Component -->
           <div class="mt-4">
             <SimpleProofUpload
@@ -792,6 +812,11 @@ const cancelReason = ref('')
 const cancelProofFiles = ref<any[]>([])
 const cancelConfirmed = ref(false)
 const cancellingOrder = ref(false)
+
+// Account/Pool selection state for delivery confirmation
+const selectedAccountOrPoolId = ref<string | null>(null)
+const availableAccountsOrPools = ref<any[]>([])
+const loadingAccountsOrPools = ref(false)
 
 const filters = ref<{
   status: string | null
@@ -1256,6 +1281,11 @@ const canConfirmDelivery = computed(() => {
   // Only allow confirmation for specific statuses
   const allowedStatuses = ['assigned', 'preparing', 'ready', 'delivering']
   if (!allowedStatuses.includes(selectedItem.value.status)) {
+    return false
+  }
+
+  // Check if account/pool is selected
+  if (!selectedAccountOrPoolId.value) {
     return false
   }
 
@@ -1879,6 +1909,11 @@ const onViewDetail = (item: any) => {
     }
   })
 
+  // Load available accounts/pools for this order
+  if (item.id && (item.order_type === 'PURCHASE' || item.order_type === 'SALE')) {
+    loadAvailableAccountsOrPools(item.id)
+  }
+
   // Fix aria-hidden warning by focusing modal content after it opens
   nextTick(() => {
     const modalElement = document.querySelector('[role="dialog"]')
@@ -1949,6 +1984,87 @@ const handleCopyNotes = async () => {
 // Legacy function for backward compatibility
 const handleCopyDeliveryInfo = handleCopyNotes
 
+// Load available game_accounts (for PURCHASE) or inventory_pools (for SALE) for an order
+const loadAvailableAccountsOrPools = async (orderId: string) => {
+  loadingAccountsOrPools.value = true
+  selectedAccountOrPoolId.value = null
+  availableAccountsOrPools.value = []
+
+  try {
+    const { data, error } = await supabase.rpc('get_available_accounts_or_pools_for_order', {
+      p_order_id: orderId
+    })
+
+    if (error) throw error
+
+    let results = data || []
+
+    // For PURCHASE orders: fetch inventory pool quantities for each game_account
+    if (results.length > 0 && results[0].type === 'game_account') {
+      // Get order details to find currency and game info
+      const { data: orderData } = await supabase
+        .from('currency_orders')
+        .select('currency_attribute_id, game_code, server_attribute_code')
+        .eq('id', orderId)
+        .single()
+
+      if (orderData) {
+        // Fetch inventory pools for this game + server + currency
+        const { data: pools } = await supabase
+          .from('inventory_pools')
+          .select('game_account_id, quantity, reserved_quantity')
+          .eq('currency_attribute_id', orderData.currency_attribute_id)
+          .eq('game_code', orderData.game_code)
+
+        if (pools && pools.length > 0) {
+          // Create a map of game_account_id -> total available quantity
+          const poolQuantities = new Map<string, number>()
+          for (const pool of pools) {
+            const available = (pool.quantity || 0) - (pool.reserved_quantity || 0)
+            poolQuantities.set(
+              pool.game_account_id,
+              (poolQuantities.get(pool.game_account_id) || 0) + available
+            )
+          }
+
+          // Update results with pool quantities
+          results = results.map((item: any) => ({
+            ...item,
+            available_quantity: poolQuantities.get(item.id) || 0
+          }))
+        }
+      }
+    }
+
+    availableAccountsOrPools.value = results
+
+    // Auto-select first suitable pool if exists (for SALE orders)
+    const firstSuitable = availableAccountsOrPools.value.find((item: any) => item.is_suitable)
+    if (firstSuitable) {
+      selectedAccountOrPoolId.value = firstSuitable.id
+    }
+  } catch (error) {
+    console.error('Error loading accounts/pools:', error)
+    message.error('Không thể tải danh sách kho')
+  } finally {
+    loadingAccountsOrPools.value = false
+  }
+}
+
+// Computed: Format options for n-select
+const accountOrPoolOptions = computed(() => {
+  return availableAccountsOrPools.value.map(item => {
+    // Format: Account name (available_quantity)
+    const availableQty = item.available_quantity || 0
+    const label = `${item.account_name} (${availableQty})`
+
+    return {
+      value: item.id,
+      label
+    }
+  })
+})
+
 
 
 
@@ -1969,7 +2085,12 @@ const handleConfirmDelivery = async () => {
       throw new Error('Dữ liệu đơn hàng không hợp lệ')
     }
 
-  
+    // Validate account/pool selection
+    if (!selectedAccountOrPoolId.value) {
+      const accountType = order.order_type === 'PURCHASE' ? 'Account' : 'Kho'
+      throw new Error(`Vui lòng chọn ${accountType} để xử lý đơn hàng`)
+    }
+
     // Upload files manually (work-proofs is bucket name, not part of path)
     const uploadPath = order.order_type === 'PURCHASE'
       ? `currency/purchase/${order.order_number}/delivery`
@@ -2049,11 +2170,12 @@ const handleConfirmDelivery = async () => {
   
     // Process PURCHASE orders - update proofs then handle inventory
     if (order.order_type === 'PURCHASE' && ['assigned', 'delivering', 'ready', 'preparing'].includes(order.status)) {
-      // Update proofs in database first
+      // Update proofs in database first, along with game_account_id
       const { error: proofUpdateError } = await supabase
         .from('currency_orders')
         .update({
           proofs: finalProofs,
+          game_account_id: selectedAccountOrPoolId.value,
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id)
@@ -2065,6 +2187,7 @@ const handleConfirmDelivery = async () => {
       // Update local state
       if (selectedItem.value) {
         selectedItem.value.proofs = finalProofs
+        selectedItem.value.game_account_id = selectedAccountOrPoolId.value
       }
 
       message.success(`Đã tải lên bằng chứng cho đơn ${orderNumber}`)
@@ -2072,7 +2195,7 @@ const handleConfirmDelivery = async () => {
       // Emit inventory processing event with updated proofs
       const operationId = `delivery_${order.id}_${Date.now()}`
       emit('process-inventory', {
-        order: { ...order, proofs: finalProofs, operationId },
+        order: { ...order, proofs: finalProofs, game_account_id: selectedAccountOrPoolId.value, operationId },
         currentStatus: order.status,
         targetStatus: 'delivered'
       })

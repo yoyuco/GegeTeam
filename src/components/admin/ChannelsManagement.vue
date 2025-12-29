@@ -685,6 +685,8 @@ const handleSubmit = async () => {
 
     message.success(editingChannel.value ? 'Cập nhật kênh giao dịch thành công' : 'Tạo kênh giao dịch thành công')
     closeModal()
+    // Add small delay to ensure database transaction is committed
+    await new Promise(resolve => setTimeout(resolve, 300))
     await loadChannels()
     emit('refreshed', 'channels')
   } catch (error) {

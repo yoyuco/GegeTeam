@@ -68,6 +68,12 @@
                   <n-icon><SettingsIcon /></n-icon><span>Quản lý Tổ chức</span>
                 </RouterLink>
                 <RouterLink
+                  to="/finance"
+                  class="menu-item"
+                >
+                  <n-icon><WalletIcon /></n-icon><span>Tài chính</span>
+                </RouterLink>
+                <RouterLink
                   v-if="auth.hasPermission('reports:view')"
                   to="/reports"
                   class="menu-item"
@@ -118,6 +124,39 @@
                   </div>
                 </div>
 
+                <!-- Wallet Balance Card -->
+                <div class="mb-3 p-3 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg border border-blue-100">
+                  <div class="flex items-center gap-2 mb-2">
+                    <n-icon :component="WalletIcon" color="#3b82f6" :size="16" />
+                    <span class="text-xs font-semibold text-neutral-600">Ví của tôi</span>
+                  </div>
+
+                  <n-spin :show="walletLoading" size="small">
+                    <div class="space-y-1">
+                      <!-- Display each currency with balance -->
+                      <div v-for="balance in activeBalances" :key="balance.currency_code" class="pb-2">
+                        <div class="flex items-center gap-1 text-xs text-neutral-500 mb-1">
+                          <n-icon :component="TrendingUpOutline" :size="12" color="#0ea5e9" />
+                          <span>Mua {{ balance.currency_code }}</span>
+                        </div>
+                        <div class="font-bold text-blue-600 text-sm">
+                          {{ balance.purchase_balance.toLocaleString() }}
+                        </div>
+                        <div v-if="balance.sales_balance !== 0" class="flex items-center gap-1 text-xs text-neutral-500 mt-1">
+                          <n-icon :component="CardOutline" :size="12" color="#10b981" />
+                          <span>Bán {{ balance.currency_code }}</span>
+                        </div>
+                        <div v-if="balance.sales_balance !== 0" class="font-bold text-green-600 text-sm">
+                          {{ balance.sales_balance.toLocaleString() }}
+                        </div>
+                      </div>
+                      <div v-if="activeBalances.length === 0" class="text-xs text-neutral-400 py-2">
+                        Chưa có số dư
+                      </div>
+                    </div>
+                  </n-spin>
+                </div>
+
                 <button
                   class="flex items-center gap-2 text-red-600 hover:underline text-sm"
                   @click="logout"
@@ -141,6 +180,7 @@
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { useAuth } from '@/stores/auth'
 import { usePermissions } from '@/composables/usePermissions'
+import { useWalletBalance } from '@/composables/useWalletBalance'
 import {
   AnalyticsOutline as AnalyticsIcon,
   ArchiveOutline as ArchiveIcon,
@@ -157,12 +197,16 @@ import {
   SettingsOutline as SettingsIcon,
   ShieldCheckmarkOutline,
   SparklesOutline,
+  WalletOutline as WalletIcon,
+  TrendingUpOutline,
+  CardOutline,
 } from '@vicons/ionicons5'
 import {
   NConfigProvider,
   NDialogProvider,
   NIcon,
   NMessageProvider,
+  NSpin,
   createDiscreteApi,
 } from 'naive-ui'
 import type { Component } from 'vue'
@@ -172,6 +216,9 @@ const router = useRouter()
 const auth = useAuth()
 const permissions = usePermissions()
 const { message } = createDiscreteApi(['message'])
+
+// Wallet balance with realtime updates
+const { loading: walletLoading, activeBalances } = useWalletBalance()
 
 
 const roleDisplay: Record<string, { icon: Component; color: string }> = {

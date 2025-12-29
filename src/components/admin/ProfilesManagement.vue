@@ -35,6 +35,8 @@
         :row-key="(row: Profile) => row.id"
         striped
         size="medium"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
       />
     </n-card>
 
@@ -948,6 +950,16 @@ const filterProfiles = () => {
 
 const handleFilterChange = (filters: any) => {
   currentFilters.value = filters
+}
+
+// Pagination handlers
+const handlePageChange = (page: number) => {
+  pagination.value.page = page
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.value.pageSize = pageSize
+  pagination.value.page = 1  // Reset to first page when changing page size
 }
 
 const openEditModal = (profile: Profile) => {
