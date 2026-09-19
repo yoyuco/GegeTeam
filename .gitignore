@@ -98,3 +98,6 @@ production_full_backup.sql
 
 # Staging schema exports
 staging-schema-export/
+
+# Local MCP server config (may contain project refs/tokens)
+.mcp.json
