@@ -52,20 +52,47 @@ console.log(`Mốc thời gian: ${CHI_MO_COI ? '(bỏ qua, chỉ lấy mồ côi
 console.log(`Chế độ:        ${THUC_THI ? '*** XOÁ THẬT ***' : 'chạy thử (không xoá gì)'}`)
 console.log()
 
+// Lấy danh sách theo trang. PostgREST có thể tự giới hạn số dòng trả về
+// (db-max-rows), nên KHÔNG được gọi một phát rồi tin là đã đủ — như vậy sẽ âm
+// thầm xoá thiếu. Đọc từng trang cho tới khi trang cuối ngắn hơn kích thước trang.
+const TRANG = 1000
 console.log('Đang lấy danh sách từ database...')
-const { data: ds, error: loi } = await sb.rpc('storage_cleanup_candidates', {
-  p_bucket: BUCKET,
-  p_older_than: CHI_MO_COI ? '100 years' : MOC,
-  p_include_orphans: true,
-})
 
-if (loi) {
-  console.error('Không gọi được storage_cleanup_candidates:', loi.message)
-  process.exit(1)
+const ds = []
+for (let tu = 0; ; tu += TRANG) {
+  const { data, error } = await sb
+    .rpc('storage_cleanup_candidates', {
+      p_bucket: BUCKET,
+      p_older_than: CHI_MO_COI ? '100 years' : MOC,
+      p_include_orphans: true,
+    })
+    .range(tu, tu + TRANG - 1)
+
+  if (error) {
+    console.error('Không gọi được storage_cleanup_candidates:', error.message)
+    process.exit(1)
+  }
+  if (!data?.length) break
+
+  ds.push(...data)
+  process.stdout.write(`\r  đã đọc ${ds.length} bản ghi...   `)
+  if (data.length < TRANG) break
 }
-if (!ds?.length) {
+console.log()
+
+if (!ds.length) {
   console.log('Không có file nào cần dọn.')
   process.exit(0)
+}
+
+// Chốt chặn: trùng đường dẫn nghĩa là phân trang bị lệch, dừng lại còn hơn xoá sai.
+const soDuongDanKhacNhau = new Set(ds.map((f) => f.duong_dan)).size
+if (soDuongDanKhacNhau !== ds.length) {
+  console.error(
+    `\nLỗi phân trang: ${ds.length} bản ghi nhưng chỉ ${soDuongDanKhacNhau} đường dẫn khác nhau.`
+  )
+  console.error('Đã dừng, không xoá gì. Hãy báo lại để kiểm tra.')
+  process.exit(1)
 }
 
 const theoLyDo = {}
