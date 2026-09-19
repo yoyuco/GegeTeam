@@ -1242,6 +1242,7 @@ import {
   type SessionOutputRow,
 } from '@/lib/progress'
 import { supabase } from '@/lib/supabase'
+import { giaiQuyetUrl } from '@/utils/localBlobCache'
 import { useAuth } from '@/stores/auth'
 import {
   BookOutline,
@@ -4175,7 +4176,7 @@ watch(
         id: `proof-${index}-${url}`,
         name: `Bằng chứng ${index + 1}`,
         status: 'finished',
-        url: url,
+        url: giaiQuyetUrl(url),
         isSaved: true,
       }))
     } else {

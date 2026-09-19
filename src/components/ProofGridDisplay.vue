@@ -68,7 +68,7 @@
         <div class="flex-1 flex items-center justify-center p-4">
           <img
             v-if="selectedProof && isImageFile(selectedProof)"
-            :src="selectedProof.url"
+            :src="giaiQuyetUrl(selectedProof.url)"
             :alt="selectedProof.filename"
             class="object-contain"
             :style="imageStyle"
@@ -103,6 +103,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NModal, NButton, NUpload } from 'naive-ui'
+import { giaiQuyetUrl } from '@/utils/localBlobCache'
 
 interface Proof {
   id?: string
@@ -131,8 +132,10 @@ const displayFileList = computed(() => {
     id: proof.id || `proof-${index}`,
     name: proof.filename || `proof-${index}`,
     status: 'finished' as const,
+    // url giữ nguyên bản thật để handlePreview còn khớp được và để tải về đúng file.
     url: proof.url,
-    thumbUrl: proof.url
+    // thumbUrl ưu tiên blob cục bộ nếu vừa upload xong, khỏi tải lại từ server.
+    thumbUrl: giaiQuyetUrl(proof.url)
   }))
 })
 

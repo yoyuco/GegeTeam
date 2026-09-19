@@ -80,6 +80,7 @@
 import { ref, watch, computed } from 'vue'
 import { NUpload, useMessage, type UploadFileInfo, type UploadCustomRequestOptions } from 'naive-ui'
 import { uploadFile } from '@/lib/supabase'
+import { giaiQuyetUrl } from '@/utils/localBlobCache'
 import { sanitizeFilename } from '@/utils/filenameUtils'
 
 interface FileInfo {
@@ -87,6 +88,8 @@ interface FileInfo {
   file?: File
   name: string
   url?: string
+  /** Ảnh để hiển thị. Có thể là blob URL cục bộ; KHÔNG bao giờ lưu xuống database. */
+  thumbUrl?: string
   path?: string
   status: 'pending' | 'uploading' | 'finished' | 'error'
   error?: string
@@ -290,6 +293,8 @@ const handleCustomUpload = async (options: UploadCustomRequestOptions) => {
         file: actualFile,
         name: actualFile.name,
         url: uploadResult.publicUrl,
+        // Hiển thị từ blob cục bộ, khỏi tải lại ảnh vừa gửi lên.
+        thumbUrl: giaiQuyetUrl(uploadResult.publicUrl),
         path: uploadResult.path,
         status: 'finished',
       }
@@ -475,6 +480,7 @@ const uploadFiles = async () => {
           // Update file info
           fileInfo.status = 'finished'
           fileInfo.url = uploadResult.publicUrl
+          fileInfo.thumbUrl = giaiQuyetUrl(uploadResult.publicUrl)
           fileInfo.path = uploadResult.path
 
           uploadResults.push({
