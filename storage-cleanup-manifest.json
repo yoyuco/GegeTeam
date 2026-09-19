@@ -1,0 +1,28 @@
+{
+  "bucket": "work-proofs",
+  "moc": "3 months",
+  "chi_mo_coi": false,
+  "tao_luc": "2026-09-19T17:19:24.249Z",
+  "tong_file": 3,
+  "tong_bytes": 2733622,
+  "files": [
+    {
+      "duong_dan": "e6de3d8a-5f4e-49ae-bc30-ee77ad358b93/f9c43ba0-c4f3-49c5-aad8-9deb1285c65e/bf6e2715-6bce-4903-b7ef-83fb1763b09c/end.png",
+      "kich_thuoc": 259895,
+      "ngay_tao": "2026-06-20T00:17:50.372012+07:00",
+      "ly_do": "cu_hon_moc"
+    },
+    {
+      "duong_dan": "e6de3d8a-5f4e-49ae-bc30-ee77ad358b93/completion/1781889481114_myg305grod.png",
+      "kich_thuoc": 259895,
+      "ngay_tao": "2026-06-20T00:18:01.404657+07:00",
+      "ly_do": "cu_hon_moc"
+    },
+    {
+      "duong_dan": "be06cea3-6bf4-405b-b6b8-b89d158fedf3/677203f3-a578-4a03-ac12-a75f88776cb6/79c48714-e98e-4c5e-918b-49de6239cf02/start.png",
+      "kich_thuoc": 2213832,
+      "ngay_tao": "2026-09-20T00:16:43.77746+07:00",
+      "ly_do": "mo_coi"
+    }
+  ]
+}

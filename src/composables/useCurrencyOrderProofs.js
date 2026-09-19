@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { supabase } from '@/lib/supabase'
+import { supabase, uploadNenAnh } from '@/lib/supabase'
 
 export function useCurrencyOrderProofs() {
   const proofs = ref({})
@@ -55,15 +55,7 @@ export function useCurrencyOrderProofs() {
       for (const file of files) {
         const fileName = `${orderId}/${stage}/${category}/${Date.now()}_${file.name}`
 
-        const { error } = await supabase.storage
-          .from('currency-order-proofs')
-          .upload(fileName, file)
-
-        if (error) throw error
-
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from('currency-order-proofs').getPublicUrl(fileName)
+        const { publicUrl } = await uploadNenAnh('currency-order-proofs', fileName, file)
 
         uploadedFiles.push({
           url: publicUrl,
