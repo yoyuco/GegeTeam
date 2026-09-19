@@ -1241,7 +1241,7 @@ import {
   type ActivityRow,
   type SessionOutputRow,
 } from '@/lib/progress'
-import { supabase } from '@/lib/supabase'
+import { supabase, uploadNenAnh } from '@/lib/supabase'
 import { giaiQuyetUrl } from '@/utils/localBlobCache'
 import { useAuth } from '@/stores/auth'
 import {
@@ -2847,16 +2847,13 @@ async function uploadProof(
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
   const path = `${lineId}/${sessionId}/${itemId}/${phase}.${ext}`
 
-  const { error, data } = await supabase.storage
-    .from('work-proofs')
-    .upload(path, file, { upsert: true })
-
-  if (error) {
-    throw new Error(`Lỗi upload bằng chứng cho ${itemId}: ${error.message}`)
+  try {
+    const { publicUrl } = await uploadNenAnh('work-proofs', path, file, { upsert: true })
+    return publicUrl || null
+  } catch (e) {
+    const err = e as Error
+    throw new Error(`Lỗi upload bằng chứng cho ${itemId}: ${err.message}`)
   }
-
-  const { data: pub } = supabase.storage.from('work-proofs').getPublicUrl(data.path)
-  return pub?.publicUrl || null
 }
 
 async function uploadActionProof(
@@ -2868,10 +2865,12 @@ async function uploadActionProof(
   const fileExt = file.name.split('.').pop()
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`
   const filePath = `${lineId}/${action}/${fileName}`
-  const { data, error } = await supabase.storage.from('work-proofs').upload(filePath, file)
-  if (error) throw new Error(`Lỗi upload bằng chứng: ${error.message}`)
-  const { data: publicURL } = supabase.storage.from('work-proofs').getPublicUrl(data.path)
-  return publicURL.publicUrl
+  try {
+    const { publicUrl } = await uploadNenAnh('work-proofs', filePath, file)
+    return publicUrl
+  } catch (e) {
+    throw new Error(`Lỗi upload bằng chứng: ${(e as Error).message}`)
+  }
 }
 
 function handlePaste(event: ClipboardEvent, row: WsRow, phase: 'start' | 'end') {
@@ -3540,11 +3539,12 @@ async function uploadOverrunProof(file: File, lineId: string, sessionId: string)
   // Tạo đường dẫn file có cấu trúc rõ ràng
   const filePath = `${lineId}/${sessionId}/overrun/${fileName}`
 
-  const { data, error } = await supabase.storage.from('work-proofs').upload(filePath, file)
-  if (error) throw new Error(`Lỗi upload bằng chứng vượt chỉ tiêu: ${error.message}`)
-
-  const { data: publicURL } = supabase.storage.from('work-proofs').getPublicUrl(data.path)
-  return publicURL.publicUrl
+  try {
+    const { publicUrl } = await uploadNenAnh('work-proofs', filePath, file)
+    return publicUrl
+  } catch (e) {
+    throw new Error(`Lỗi upload bằng chứng vượt chỉ tiêu: ${(e as Error).message}`)
+  }
 }
 
 async function startSession() {

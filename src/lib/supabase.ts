@@ -70,6 +70,34 @@ export const uploadFile = async (file: File, path: string, bucket = 'uploads') =
   }
 }
 
+// Upload có nén dùng chung.
+//
+// Dùng cho các chỗ gọi thẳng supabase.storage.upload() thay vì qua uploadFile().
+// Ném lỗi khi thất bại, khớp với cách các hàm gọi nó vẫn xử lý.
+//
+// Lưu ý: nếu ảnh được nén thì đuôi đường dẫn đổi sang .webp, nên giá trị trả về
+// mới là đường dẫn thật — đừng tự dựng lại URL từ tham số path truyền vào.
+export const uploadNenAnh = async (
+  bucket: string,
+  path: string,
+  file: File,
+  options?: { upsert?: boolean }
+): Promise<{ path: string; publicUrl: string }> => {
+  const ketQua = await nenAnh(file)
+  const fileGui = ketQua.file
+  const duongDan = ketQua.daNen ? doiDuoiSangWebp(path) : path
+
+  const { data, error } = await supabase.storage.from(bucket).upload(duongDan, fileGui, options)
+  if (error) throw error
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(bucket).getPublicUrl(data.path)
+
+  ghiNhoBlob(publicUrl, fileGui)
+  return { path: data.path, publicUrl }
+}
+
 // Work proofs upload helper - specialized for currency proof files
 export const uploadWorkProof = async (
   file: File,
