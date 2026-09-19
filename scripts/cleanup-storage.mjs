@@ -33,6 +33,27 @@ if (!URL_SB || !KEY) {
   process.exit(1)
 }
 
+// Project này đã TẮT khoá API kiểu cũ. Khoá JWT service_role (bắt đầu bằng
+// "eyJ") sẽ bị từ chối với thông báo "Legacy API keys are disabled" mãi tận lúc
+// gọi RPC — rất khó đoán nguyên nhân. Bắt ngay từ đầu cho rõ ràng.
+if (KEY.startsWith('eyJ')) {
+  console.error('Khoá đang dùng là JWT kiểu cũ (bắt đầu bằng "eyJ"), project này đã tắt loại đó.')
+  console.error('')
+  console.error('Cần khoá kiểu mới dạng sb_secret_...')
+  console.error('Lấy tại: Dashboard > Project Settings > API Keys > mục "Secret keys"')
+  console.error('Nếu chưa có thì bấm "Generate new secret key".')
+  process.exit(1)
+}
+
+if (!KEY.startsWith('sb_secret_')) {
+  console.error(`Khoá không đúng định dạng. Cần khoá bắt đầu bằng "sb_secret_".`)
+  console.error(`Khoá hiện tại bắt đầu bằng: "${KEY.slice(0, 12)}..."`)
+  console.error('')
+  console.error('Lưu ý: sb_publishable_... là khoá công khai, KHÔNG dùng được cho script này')
+  console.error('vì nó không bỏ qua được RLS và không gọi được storage_cleanup_candidates.')
+  process.exit(1)
+}
+
 const args = process.argv.slice(2)
 const THUC_THI = args.includes('--execute')
 const CHI_MO_COI = args.includes('--orphans-only')
