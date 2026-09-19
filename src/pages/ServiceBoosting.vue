@@ -3589,16 +3589,9 @@ async function startSession() {
     message.destroyAll()
     message.success('Bắt đầu phiên làm việc thành công!')
 
-    // Refresh materialized view BEFORE reloading, so the board picks up the new
-    // farmer assignment. When this ran after loadOrders() the row showed a stale
-    // assignee until the next realtime-triggered reload.
-    try {
-      await supabase.rpc('refresh_active_farmers')
-    } catch (error) {
-      console.warn('Failed to refresh materialized view:', error)
-    }
-
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately.
+    // get_boosting_orders_v4 now derives active farmers straight from work_sessions,
+    // so there is no materialized view left to refresh first.
     await loadOrders(true) // Force refresh to bypass cache after session operations
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
@@ -3746,16 +3739,9 @@ async function finishSession() {
     ws2.value.selectedIds = []
     ws2.value.sessionId = null
 
-    // Refresh materialized view BEFORE reloading, so the board picks up the new
-    // farmer assignment. When this ran after loadOrders() the row showed a stale
-    // assignee until the next realtime-triggered reload.
-    try {
-      await supabase.rpc('refresh_active_farmers')
-    } catch (error) {
-      console.warn('Failed to refresh materialized view:', error)
-    }
-
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately.
+    // get_boosting_orders_v4 now derives active farmers straight from work_sessions,
+    // so there is no materialized view left to refresh first.
     await loadOrders(true) // Force refresh to bypass cache after session operations
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
