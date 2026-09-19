@@ -3589,18 +3589,17 @@ async function startSession() {
     message.destroyAll()
     message.success('Bắt đầu phiên làm việc thành công!')
 
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
-    await loadOrders(true) // Force refresh to bypass cache after session operations
-
-    // Refresh materialized view to ensure latest farmer assignments
+    // Refresh materialized view BEFORE reloading, so the board picks up the new
+    // farmer assignment. When this ran after loadOrders() the row showed a stale
+    // assignee until the next realtime-triggered reload.
     try {
       await supabase.rpc('refresh_active_farmers')
     } catch (error) {
       console.warn('Failed to refresh materialized view:', error)
     }
 
-    // Add small delay to ensure database consistency before reopening detail
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    await loadOrders(true) // Force refresh to bypass cache after session operations
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
@@ -3747,18 +3746,17 @@ async function finishSession() {
     ws2.value.selectedIds = []
     ws2.value.sessionId = null
 
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
-    await loadOrders(true) // Force refresh to bypass cache after session operations
-
-    // Refresh materialized view to ensure latest farmer assignments
+    // Refresh materialized view BEFORE reloading, so the board picks up the new
+    // farmer assignment. When this ran after loadOrders() the row showed a stale
+    // assignee until the next realtime-triggered reload.
     try {
       await supabase.rpc('refresh_active_farmers')
     } catch (error) {
       console.warn('Failed to refresh materialized view:', error)
     }
 
-    // Add small delay to ensure database consistency before reopening detail
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    await loadOrders(true) // Force refresh to bypass cache after session operations
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
