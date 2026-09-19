@@ -1,6 +1,7 @@
 // path: src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js'
 import { nenAnh, doiDuoiSangWebp } from '@/utils/imageCompression'
+import { ghiNhoBlob } from '@/utils/localBlobCache'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -52,6 +53,9 @@ export const uploadFile = async (file: File, path: string, bucket = 'uploads') =
     const {
       data: { publicUrl },
     } = supabase.storage.from(bucket).getPublicUrl(data.path)
+
+    // Giữ bytes cục bộ để hiển thị ngay, khỏi tải lại ảnh vừa gửi lên.
+    ghiNhoBlob(publicUrl, fileGui)
 
     return {
       success: true,
