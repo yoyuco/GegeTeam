@@ -1,5 +1,6 @@
 // path: src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js'
+import { nenAnh, doiDuoiSangWebp } from '@/utils/imageCompression'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -24,9 +25,25 @@ export const supabase = createClient(url, anon, {
 export { createClient }
 
 // File upload helper
+//
+// Ảnh PNG/JPEG được nén sang WebP trước khi gửi đi. Bucket work-proofs từng đạt
+// 83 GB vì upload ảnh chụp màn hình thô; WebP nhỏ hơn khoảng 13 lần. Nếu nén
+// không thành công thì file gốc vẫn được upload như cũ.
 export const uploadFile = async (file: File, path: string, bucket = 'uploads') => {
   try {
-    const { data, error } = await supabase.storage.from(bucket).upload(path, file)
+    const ketQua = await nenAnh(file)
+    const fileGui = ketQua.file
+    const duongDan = ketQua.daNen ? doiDuoiSangWebp(path) : path
+
+    if (ketQua.daNen) {
+      const giam = Math.round((1 - ketQua.byteSau / ketQua.byteGoc) * 100)
+      console.info(
+        `[uploadFile] nén ${Math.round(ketQua.byteGoc / 1024)}kB -> ` +
+          `${Math.round(ketQua.byteSau / 1024)}kB (giảm ${giam}%)`
+      )
+    }
+
+    const { data, error } = await supabase.storage.from(bucket).upload(duongDan, fileGui)
 
     if (error) {
       throw error
