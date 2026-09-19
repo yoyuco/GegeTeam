@@ -1,271 +1,218 @@
-# Database Schema Documentation - GegeTeam
+# Database Schema — GegeTeam
 
-> Auto-generated from migration: `20251002052515_remote_schema.sql`
-> Project: Staging (gpmllykxombndvseriph)
+> **Project: PRODUCTION `susuoambmzdmcygovkea`**
+> Trạng thái ghi nhận: 2026-09-19. Đối chiếu trực tiếp từ database thật, không phải từ file migration.
 
----
-
-## 📊 Database Overview
-
-### Custom Types (Enums)
-
-1. **account_type_enum**: `btag`, `login`
-2. **app_role**: `admin`, `mod`, `manager`, `trader_manager`, `farmer_manager`, `leader`, `trader_leader`, `farmer_leader`, `trader1`, `trader2`, `farmer`, `trial`, `accountant`
-3. **order_side_enum**: `BUY`, `SELL`
-4. **product_type_enum**: `SERVICE`, `ITEM`, `CURRENCY`
+> ⚠️ Bản trước của tài liệu này mô tả project **staging** `gpmllykxombndvseriph` và đã lỗi thời 9 tháng:
+> ghi 28 bảng / 36 hàm trong khi thực tế là 40 bảng / 215 hàm, bỏ sót toàn bộ mảng
+> currency, inventory và ca kíp. Nếu bạn từng đọc bản cũ, hãy quên nó đi.
 
 ---
 
-## 📋 Tables (28 tables)
+## Tổng quan
 
-### Core Tables
+| Hạng mục | Số lượng |
+|---|---|
+| Bảng (`BASE TABLE`) | **40** |
+| Materialized view | 1 (`mv_active_farmers`, đang trong quá trình loại bỏ) |
+| Hàm / thủ tục | **220 chữ ký** (215 tên, 5 hàm có overload) |
+| Enum | **7** |
+| Extension | **10** |
 
-1. **profiles** - User profiles
-2. **roles** - System roles
-3. **permissions** - System permissions
-4. **user_role_assignments** - User to role mapping
-5. **role_permissions** - Role to permission mapping
-
-### Order Management
-
-6. **orders** - Main orders table
-7. **order_lines** - Order line items
-8. **order_service_items** - Service items per order
-9. **order_reviews** - Customer reviews
-
-### Product Catalog
-
-10. **products** - Products catalog
-11. **product_variants** - Product variants
-12. **product_variant_attributes** - Variant attributes
-13. **attributes** - Product attributes
-14. **attribute_relationships** - Attribute relationships
-
-### Customer & Party
-
-15. **parties** - Customers/Parties
-16. **customer_accounts** - Customer accounts (btag/login)
-
-### Service Operations
-
-17. **work_sessions** - Work sessions tracking
-18. **work_session_outputs** - Session output items
-19. **service_reports** - Service issue reports
-
-### Reference Data
-
-20. **channels** - Sales channels
-21. **currencies** - Currency codes
-22. **level_exp** - Game level/exp lookup
-
-### System
-
-23. **audit_logs** - Audit trail
-24. **debug_log** - Debug logs
+Mọi bảng đều đã bật RLS.
 
 ---
 
-## 🔧 RPC Functions (36 functions)
+## Bảng
 
-### Admin Functions
+Số dòng là ước lượng của planner (`pg_class.reltuples`); `-1` nghĩa là chưa từng được ANALYZE.
 
-- `admin_get_all_users()` - Get all users
-- `admin_get_roles_and_permissions()` - Get roles & permissions
-- `admin_update_permissions_for_role(role_id, permission_ids[])` - Update role permissions
-- `admin_update_user_assignments(user_id, assignments)` - Update user roles
-- `admin_update_user_status(user_id, new_status)` - Update user status
-- `admin_rebase_item_progress_v1(item_id, done_qty, params, reason)` - Rebase item progress
-
-### Order Management
-
-- `create_service_order_v1(...)` - Create service order (main entry point)
-- `get_boosting_orders_v2()` - Get all boosting orders
-- `get_boosting_order_detail_v1(line_id)` - Get order detail
-- `update_order_details_v1(line_id, ...)` - Update order details
-- `update_order_line_machine_info_v1(line_id, machine_info)` - Update machine info
-- `cancel_order_line_v1(line_id, proofs, reason)` - Cancel order
-- `complete_order_line_v1(line_id, proofs, reason)` - Complete order
-- `mark_order_as_delivered_v1(order_id, is_delivered)` - Mark as delivered
-- `update_action_proofs_v1(line_id, urls)` - Update action proofs
-
-### Work Session Management
-
-- `start_work_session_v1(line_id, start_state, note)` - Start work session
-- `finish_work_session_idem_v1(session_id, outputs, activities, ...)` - Finish session (idempotent)
-- `cancel_work_session_v1(session_id)` - Cancel session
-- `get_session_history_v1(line_id)` - Get session history (v1)
-- `get_session_history_v2(line_id)` - Get session history (v2)
-- `get_last_item_proof_v1(item_ids[])` - Get last proofs for items
-
-### Reviews & Reports
-
-- `submit_order_review_v1(line_id, rating, comment, proofs)` - Submit review
-- `get_reviews_for_order_line_v1(line_id)` - Get reviews
-- `create_service_report_v1(item_id, description, proofs)` - Create report
-- `get_service_reports_v1(status)` - Get reports by status
-- `resolve_service_report_v1(report_id, notes)` - Resolve report
-
-### Authorization
-
-- `get_user_auth_context_v1()` - Get user roles & permissions
-- `has_permission(permission_code, context)` - Check permission
-- `get_my_assignments()` - Get current user assignments
-- `current_user_id()` - Get current user UUID
-- `get_current_profile_id()` - Get current profile UUID
-
-### Utilities
-
-- `get_customers_by_channel_v1(channel_code)` - Get customers
-- `try_uuid(text)` - Safe UUID conversion
-- `audit_ctx_v1()` - Get audit context
-- `audit_diff_v1(old_row, new_row)` - Calculate diff
-- `add_vault_secret(name, secret)` - Add secret to vault
-
-### Triggers
-
-- `handle_new_user_with_trial_role()` - Auto-assign trial role
-- `handle_orders_updated_at()` - Update timestamp
-- `tr_audit_row_v1()` - Audit trigger
-- `tr_check_all_items_completed_v1()` - Check completion
+| Bảng | Cột | ~Số dòng | Policy | Nhóm |
+|---|---:|---:|---:|---|
+| `orders` | 15 | 7.652 | 7 | Đơn hàng dịch vụ |
+| `order_lines` | 15 | 8.119 | 7 | Đơn hàng dịch vụ |
+| `order_service_items` | 6 | 9.107 | 7 | Đơn hàng dịch vụ |
+| `order_reviews` | 7 | 23 | 5 | Đơn hàng dịch vụ |
+| `work_sessions` | 11 | 12.066 | 9 | Vận hành |
+| `work_session_outputs` | 10 | 9.849 | 4 | Vận hành |
+| `service_reports` | 13 | 0 | 4 | Vận hành |
+| `assignment_trackers` | 17 | 51 | 1 | Vận hành |
+| `shift_assignments` | 10 | 19 | 1 | Ca kíp |
+| `work_shifts` | 8 | 2 | 4 | Ca kíp |
+| `employee_channels` | 6 | -1 | 1 | Ca kíp |
+| `currency_orders` | **46** | 972 | 3 | Currency |
+| `currency_transactions` | 16 | 1.036 | 3 | Currency |
+| `currencies` | 10 | -1 | 6 | Currency |
+| `inventory_pools` | 12 | 45 | 4 | Currency |
+| `game_accounts` | 8 | -1 | 1 | Currency |
+| `exchange_rates` | 12 | **39.744** | 2 | Tỷ giá |
+| `exchange_rate_api_log` | 8 | 10.936 | 2 | Tỷ giá |
+| `exchange_rate_config` | 14 | 1 | 1 | Tỷ giá |
+| `exchange_rate_trigger` | 3 | -1 | 3 | Tỷ giá |
+| `business_processes` | 11 | -1 | 2 | Phí & quy trình |
+| `fees` | 10 | -1 | 2 | Phí & quy trình |
+| `process_fees_map` | 3 | -1 | 1 | Phí & quy trình |
+| `parties` | 9 | 4.668 | 5 | Khách hàng |
+| `customer_accounts` | 11 | 5.327 | 4 | Khách hàng |
+| `products` | 3 | -1 | 4 | Danh mục |
+| `product_variants` | 5 | 4 | 5 | Danh mục |
+| `product_variant_attributes` | 2 | -1 | 4 | Danh mục |
+| `attributes` | 6 | 469 | 6 | Danh mục |
+| `attribute_relationships` | 2 | 407 | 5 | Danh mục |
+| `channels` | 11 | 10 | 4 | Danh mục |
+| `level_exp` | 2 | 300 | 1 | Danh mục |
+| `profiles` | 8 | 30 | 5 | Phân quyền |
+| `roles` | 3 | -1 | 4 | Phân quyền |
+| `permissions` | 5 | 37 | 2 | Phân quyền |
+| `role_permissions` | 2 | 144 | 4 | Phân quyền |
+| `user_role_assignments` | 5 | 48 | 4 | Phân quyền |
+| `profile_status_logs` | 7 | -1 | 4 | Phân quyền |
+| `audit_logs` | 13 | -1 | 4 | Hệ thống |
+| `debug_log` | 3 | -1 | 1 | Hệ thống |
 
 ---
 
-## 🔒 Row Level Security (RLS)
+## Enum
 
-### Permission-Based Policies
-
-- **Admin only**: `admin:manage_roles`, `system:view_audit_logs`
-- **Report management**: `reports:view`, `reports:resolve`
-- **Order reviews**: `orders:add_review`, `orders:view_reviews`
-
-### Read Policies
-
-Most tables allow authenticated read:
-
-- ✅ `orders`, `order_lines`, `order_service_items`
-- ✅ `products`, `product_variants`, `attributes`
-- ✅ `channels`, `currencies`, `parties`
-- ✅ `work_sessions`, `work_session_outputs`
-- ✅ `roles`, `permissions`
-
-### Write Protection
-
-Most reference/operational tables **block direct writes**:
-
-- ❌ Block inserts: `orders`, `products`, `channels`, etc.
-- ❌ Block updates: Same tables
-- ❌ Block deletes: Same tables
-- ✅ **Use RPC functions instead** for safe operations
-
-### User-Scoped Policies
-
-- `user_role_assignments`: Users see their own + admins see all
-- `service_reports`: Reporter sees own + managers see all
-- `profiles`: All authenticated can read
+| Tên | Giá trị |
+|---|---|
+| `account_type_enum` | `btag`, `login` |
+| `app_role` | `admin`, `mod`, `manager`, `trader_manager`, `farmer_manager`, `leader`, `trader_leader`, `farmer_leader`, `trader1`, `trader2`, `farmer`, `trial`, `accountant` |
+| `order_side_enum` | `BUY`, `SELL` |
+| `product_type_enum` | `SERVICE`, `ITEM`, `CURRENCY` |
+| `currency_order_type_enum` | `PURCHASE`, `SALE`, `EXCHANGE` |
+| `currency_order_status_enum` | `draft`, `pending`, `assigned`, `preparing`, `ready`, `delivering`, `delivered`, `completed`, `cancelled`, `failed` |
+| `currency_exchange_type_enum` | `none`, `items`, `service`, `farmer`, `currency` |
 
 ---
 
-## 🎯 Key Workflows
+## Extension
 
-### 1. Create Order
+`btree_gin` · `pg_cron` 1.6.4 · `pg_net` 0.19.5 · `pg_stat_statements` 1.11 · `pg_trgm` 1.6 ·
+`pgcrypto` · `pgsodium` 3.1.8 · `plpgsql` · `supabase_vault` 0.3.1 · `uuid-ossp`
+
+`pg_graphql` **không** được cài (bản tài liệu cũ ghi sai).
+
+### Cron job
+
+| Tên | Lịch | Chạy dưới role | Lệnh |
+|---|---|---|---|
+| `half-hourly-pilot-reset` | `*/30 * * * *` | `postgres` | `SELECT public.reset_eligible_pilot_cycles()` |
+| `exchange-rate-update-60min` | `0 * * * *` | `postgres` | `SELECT simple_exchange_rate_cron()` |
+
+### Edge function
+
+`fetch-exchange-rates` (`verify_jwt = true`)
+
+---
+
+## Hàm
+
+220 chữ ký, quá nhiều để liệt kê hết ở đây. Lấy danh sách hiện thời bằng:
 
 ```sql
-SELECT create_service_order_v1(
-  p_channel_code := 'DISCORD',
-  p_service_type := 'Selfplay',
-  p_customer_name := 'Customer Name',
-  p_deadline := '2025-10-05'::timestamptz,
-  p_price := 100,
-  p_currency_code := 'USD',
-  p_package_type := 'BASIC',
-  p_package_note := 'Notes...',
-  p_customer_account_id := NULL,
-  p_new_account_details := '{"type":"btag", "btag":"Player#1234"}'::jsonb,
-  p_game_code := 'DIABLO_4',
-  p_service_items := '[{...}]'::jsonb
-);
+SELECT p.oid::regprocedure AS chu_ky,
+       p.prosecdef        AS security_definer,
+       has_function_privilege('anon', p.oid, 'EXECUTE')          AS anon_goi_duoc,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_goi_duoc
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.prokind IN ('f','p')
+ORDER BY p.proname;
 ```
 
-### 2. Start Work Session
+Phân bố:
+
+| | Số lượng |
+|---|---:|
+| `SECURITY DEFINER` | 206 |
+| `SECURITY INVOKER` | 14 |
+| Hàm trigger (không gọi qua API) | 21 |
+| `anon` gọi được | 159 |
+| `authenticated` gọi được | 220 |
+
+Quy ước đặt tên hay gặp: hậu tố `_v1`/`_v2`/`_v3`/`_v4` là phiên bản (bản cũ thường vẫn còn
+trong database dù không ai gọi nữa — `get_boosting_orders_v3` là ví dụ); hậu tố `_direct`
+là các hàm CRUD cho màn hình quản trị; tiền tố `tr_` và `handle_` là hàm trigger.
+
+---
+
+## Vấn đề đã biết (tính đến 2026-09-19)
+
+Ghi lại để người đọc sau không tưởng nhầm schema này đã sạch.
+
+### 🔴 Policy "Block" không chặn được gì
+
+Trên `orders`, `order_lines`, `order_service_items`, `work_sessions` và `currencies` có các
+policy tên `Block updates` / `Block inserts` / `Block deletes` với điều kiện `false`, nhưng
+**song song tồn tại policy permissive khác với điều kiện `true`**:
+
+```
+Block updates                PERMISSIVE  authenticated  USING false
+authenticated_update_orders  PERMISSIVE  authenticated  USING true
+```
+
+Policy permissive được OR với nhau, `false OR true = true`, nên lệnh chặn vô tác dụng. Bất kỳ
+tài khoản đã đăng nhập nào cũng UPDATE thẳng được các bảng này qua REST API, bỏ qua toàn bộ
+các hàm RPC. Riêng `work_sessions` hở cả INSERT, UPDATE lẫn DELETE.
+
+Trên `currencies` còn một biến thể khác: policy `Allow service role full access` dùng
+`pg_has_role(SESSION_USER, 'service_role', 'MEMBER')`. PostgREST luôn kết nối bằng role
+`authenticator`, mà `authenticator` **là thành viên của `service_role`**, nên biểu thức này
+luôn đúng với mọi request — kể cả `anon`.
+
+### 🟡 `authenticated` gọi được toàn bộ 220 hàm
+
+Kể cả `add_vault_secret` và các hàm `delete_*_direct`. Một tài khoản vai trò `trial` vẫn gọi
+được. Ngày 2026-09-19 đã chặn `anon` khỏi 61 hàm vừa ghi dữ liệu vừa không kiểm tra quyền
+(xem `migrations/20260919_0030_*`), nhưng `authenticated` thì chưa. Sửa triệt để là thêm
+`has_permission(...)` vào trong từng hàm.
+
+### 🟡 Frontend gọi 3 bảng không tồn tại
+
+`customers`, `employee_shift_assignments`, `shift_account_access` không có trong database.
+Các lời gọi `.from()` tới chúng ở `src/pages/Customers.vue` và `src/utils/assignmentHelper.ts`
+chắc chắn luôn lỗi.
+
+### 🟡 Nhiều bảng chưa từng được ANALYZE
+
+Các bảng có `~Số dòng = -1` ở bảng trên. Ngày 2026-09-19 đã ANALYZE 10 bảng nóng sau khi phát
+hiện planner ước lượng sai tới 18 lần gây timeout 8s. Nên đặt lịch ANALYZE định kỳ qua pg_cron.
+
+---
+
+## Quy ước
+
+1. **Ghi dữ liệu phải qua hàm RPC**, không INSERT/UPDATE thẳng — nhưng xem mục 🔴 ở trên,
+   hiện tại quy ước này *không* được RLS cưỡng chế.
+2. `audit_logs` được ghi tự động bằng trigger.
+3. Các thao tác có thể lặp dùng khoá idempotency (ví dụ `finish_work_session_idem_v1`).
+4. Thêm tính năng mới: viết migration trong `supabase/migrations/`, tạo hàm RPC, thêm RLS
+   policy, **cập nhật lại file này**, rồi deploy theo quy trình trong `CONTRIBUTING.md`.
+
+---
+
+## Cách tạo lại tài liệu này
+
+Đừng chép tay. Các truy vấn dùng để dựng file này:
 
 ```sql
-SELECT start_work_session_v1(
-  p_order_line_id := '...',
-  p_start_state := '[{"item_id":"...", "start_value":1, "start_exp":0}]'::jsonb,
-  p_initial_note := 'Starting work...'
-);
+-- Bảng
+SELECT c.relname,
+       (SELECT count(*) FROM information_schema.columns ic
+         WHERE ic.table_schema='public' AND ic.table_name=c.relname) AS so_cot,
+       c.reltuples::bigint AS uoc_so_dong, c.relrowsecurity,
+       (SELECT count(*) FROM pg_policies pp
+         WHERE pp.schemaname='public' AND pp.tablename=c.relname) AS so_policy
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relkind='r' ORDER BY c.relname;
+
+-- Enum
+SELECT t.typname, string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder)
+FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+JOIN pg_namespace n ON n.oid=t.typnamespace
+WHERE n.nspname='public' GROUP BY t.typname ORDER BY t.typname;
+
+-- Extension / cron
+SELECT extname, extversion FROM pg_extension ORDER BY extname;
+SELECT jobid, jobname, schedule, username, command FROM cron.job ORDER BY jobid;
 ```
-
-### 3. Finish Work Session
-
-```sql
-CALL finish_work_session_idem_v1(
-  p_session_id := '...',
-  p_outputs := '[{...}]'::jsonb,
-  p_activity_rows := '[{...}]'::jsonb,
-  p_overrun_reason := NULL,
-  p_idem_key := 'unique-key',
-  p_overrun_type := NULL,
-  p_overrun_proof_urls := NULL
-);
-```
-
-### 4. Get User Context
-
-```sql
-SELECT get_user_auth_context_v1();
--- Returns: {"roles": [...], "permissions": [...]}
-```
-
-### 5. Check Permission
-
-```sql
-SELECT has_permission(
-  'orders:create',
-  '{"game_code":"DIABLO_4", "business_area_code":"SERVICE"}'::jsonb
-);
-```
-
----
-
-## 🔍 Search Path
-
-- Default: `public` schema
-- Extensions: `extensions`, `graphql`, `vault`
-
----
-
-## 📦 Extensions Installed
-
-- `pg_graphql` - GraphQL support
-- `pg_stat_statements` - Query stats
-- `pgcrypto` - Crypto functions
-- `supabase_vault` - Secrets vault
-- `uuid-ossp` - UUID generation
-
----
-
-## 💡 Best Practices
-
-1. **Always use RPC functions** for writes - never direct INSERT/UPDATE
-2. **Check permissions** before showing UI elements
-3. **Use transactions** for multi-table operations
-4. **Audit logs** are automatic via triggers
-5. **Idempotency keys** prevent duplicate operations (e.g., finish_work_session_idem_v1)
-
----
-
-## 🚀 Next Steps for Development
-
-When adding new features:
-
-1. **Add migration** in `supabase/migrations/`
-2. **Create RPC function** for business logic
-3. **Add RLS policy** for security
-4. **Update this doc** with new functions
-5. **Test locally** with `supabase db reset`
-6. **Deploy** with `supabase db push`
-
----
-
-_Last updated: 2025-10-02_
