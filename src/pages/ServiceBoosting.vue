@@ -3589,18 +3589,10 @@ async function startSession() {
     message.destroyAll()
     message.success('Bắt đầu phiên làm việc thành công!')
 
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately.
+    // get_boosting_orders_v4 now derives active farmers straight from work_sessions,
+    // so there is no materialized view left to refresh first.
     await loadOrders(true) // Force refresh to bypass cache after session operations
-
-    // Refresh materialized view to ensure latest farmer assignments
-    try {
-      await supabase.rpc('refresh_active_farmers')
-    } catch (error) {
-      console.warn('Failed to refresh materialized view:', error)
-    }
-
-    // Add small delay to ensure database consistency before reopening detail
-    await new Promise(resolve => setTimeout(resolve, 500))
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
@@ -3747,18 +3739,10 @@ async function finishSession() {
     ws2.value.selectedIds = []
     ws2.value.sessionId = null
 
-    // Manual reload because SECURITY DEFINER may not trigger realtime immediately
+    // Manual reload because SECURITY DEFINER may not trigger realtime immediately.
+    // get_boosting_orders_v4 now derives active farmers straight from work_sessions,
+    // so there is no materialized view left to refresh first.
     await loadOrders(true) // Force refresh to bypass cache after session operations
-
-    // Refresh materialized view to ensure latest farmer assignments
-    try {
-      await supabase.rpc('refresh_active_farmers')
-    } catch (error) {
-      console.warn('Failed to refresh materialized view:', error)
-    }
-
-    // Add small delay to ensure database consistency before reopening detail
-    await new Promise(resolve => setTimeout(resolve, 500))
 
     const currentRow = rows.value.find((r) => r.id === detail.id)
     if (currentRow) {
@@ -4224,10 +4208,12 @@ function debouncedReload() {
     clearTimeout(reloadDebounceTimer)
   }
 
-  // Optimized realtime debouncing: 300ms instead of 500ms
+  // 1000ms debounce. One session action writes to work_sessions + order_lines +
+  // orders, so a short window let each event through as its own board reload.
+  // Note this only coalesces within one client; every open tab still reloads.
   reloadDebounceTimer = window.setTimeout(() => {
     loadOrders() // Will use cache if recent
-  }, 300)
+  }, 1000)
 }
 
 function setupRealtimeSubscriptions() {
@@ -4262,13 +4248,15 @@ function cleanupRealtimeSubscriptions() {
 
 function startBackgroundPoll() {
   stopBackgroundPoll()
-  // Optimized polling: every 15s instead of 30s with client-side caching
+  // 60s background poll. Realtime already pushes changes; this is only a safety
+  // net for missed events, so it does not need to be aggressive. At 15s it fired
+  // just as the 15s client cache expired, guaranteeing a refetch every interval.
   // Only poll when tab is active (user is watching)
   backgroundPollTimer = window.setInterval(() => {
     if (!document.hidden) {
       loadOrders() // Will use cache if available
     }
-  }, 15000)
+  }, 60000)
 }
 
 function stopBackgroundPoll() {
